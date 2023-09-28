@@ -3,7 +3,7 @@ from methods import rand_connected_graph, plot_graph
 import networkx as nx
 from threading import Thread
 import time
-import scipy
+import scipy.optimize
 
 class Auction(object):
     def __init__(self, n_agents, n_tasks, benefits=None, graph=None):
