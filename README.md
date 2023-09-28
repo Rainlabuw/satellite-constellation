@@ -8,25 +8,27 @@ Within these are project/topic directories of various projects at the RAIN lab. 
 
 Here is what our repo should look like:
 
+```
 .
-├── /active_project/ \
-│   └── /project_1/ \
-│       ├── /scripts/ \
-│       │   ├── /paper_1/ \
-│       │   │   ├── /script1.py \
-│       │   │   ├── /script2.h \
-│       │   │   └── /script2.cpp \
-│       │   └── /paper_2/ \
-│       │       └── /script3.py \
-│       └── /literature/ \
-│           ├── /paper1.pdf \
-│           └── /paper2.pdf \
-└── /inactive_projects/ \
-    └── /project_2/ \
-        ├── /scripts/ \
-        │   ├── /script4.py \
-        │   └── /script5.m \
-        └── /literature/ \
-            └── /paper3.pdf \
+├── /active_project/
+│   └── /project_1/
+│       ├── /scripts/
+│       │   ├── /paper_1/
+│       │   │   ├── /script1.py
+│       │   │   ├── /script2.h
+│       │   │   └── /script2.cpp
+│       │   └── /paper_2/
+│       │       └── /script3.py
+│       └── /literature/
+│           ├── /paper1.pdf
+│           └── /paper2.pdf
+└── /inactive_projects/
+    └── /project_2/
+        ├── /scripts/
+        │   ├── /script4.py
+        │   └── /script5.m
+        └── /literature/
+            └── /paper3.pdf
+```
 
 Note how /project_2/scripts does not have any sub-directories for papers since the creator only worked on one paper. 
