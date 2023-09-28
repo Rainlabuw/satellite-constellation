@@ -31,4 +31,6 @@ Here is what our repo should look like:
             └── /paper3.pdf
 ```
 
-Note how /project_2/scripts does not have any sub-directories for papers since the creator only worked on one paper. 
+Note how /project_2/scripts does not have any sub-directories for papers since the creator only worked on one paper.
+
+Create a separate markdown for Math
