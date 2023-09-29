@@ -1,7 +1,7 @@
 # satellite-constellation
 
 ## Contents:
-* `bertsekas_auction_algo.py` is an implementation of Bertsekas' auction algorithm
+* `bertsekas_symmetric_auction_algo.py` is an implementation of Bertsekas' auction algorithm when num_agents = num_tasks
 * `spencer_dist_auction.py` is an implementation of Zavalnos' distributed auction algorithm
 * `dist_auction_algo_josh.py` is an object oriented implementation of Zavalnos' distributed auction algorithm
 

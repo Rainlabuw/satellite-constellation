@@ -5,24 +5,23 @@ import scipy.optimize
 import random
 from itertools import product
 
-"""In this script, I implement Bertsekas' auction algorithm. I assume every 
-agent can assume every task, and that the number of agents equals the number of 
-tasks."""
+"""In this script, I implement Bertsekas' auction algorithm for symmetric 
+instances. That is, the number of agents equals the number of tasks."""
 
-n = 5
+n = 50
 num_agents = n
 num_tasks = n
 
 # the assignment
 assignment = dict()
 unassigned_agents = {i for i in range(num_agents)}
-benefits = np.random.randint(0, 10, (num_agents,num_tasks))
+benefits = np.random.randn(num_agents,num_tasks)
 epsilon = 1e-3 # min bid increment
 prices = np.zeros(num_tasks) # task prices
 
 util_hist = []
 while True:
-    print(assignment)
+    print(np.round(prices,2))
     if len(unassigned_agents) == 0:
         break
     bids = dict() # bids is kept in a dict for ease 
