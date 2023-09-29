@@ -1,11 +1,11 @@
 # satellite-constellation
 
-Contents:
+## Contents:
 * `bertsekas_auction_algo.py` is an implementation of Bertsekas' auction algorithm
 * `spencer_dist_auction.py` is an implementation of Zavalnos' distributed auction algorithm
 
 
-Instructions on getting access to repo.
+## Instructions on getting access to repo.
 
 1. Find a location in your compute for the repo
 2. Type `git clone https://github.com/Rainlabuw/satellite-constellation.git`
