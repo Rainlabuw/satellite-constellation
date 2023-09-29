@@ -1,6 +1,6 @@
 import numpy as np 
 import matplotlib.pyplot as plt
-from methods import rand_connected_graph, plot_graph
+import methods
 import scipy.optimize
 import random
 from itertools import product
@@ -9,15 +9,16 @@ from itertools import product
 agent can assume every task, and that the number of agents equals the number of 
 tasks."""
 
-num_agents = 5
-num_tasks = num_agents
+n = 5
+num_agents = n
+num_tasks = n
 
 # the assignment
 assignment = dict()
 unassigned_agents = {i for i in range(num_agents)}
-benefits = np.random.randint(0,10,(num_agents,num_tasks))
+benefits = np.random.randint(0, 10, (num_agents,num_tasks))
 epsilon = 1e-3 # min bid increment
-prices = np.zeros(num_agents) # task prices
+prices = np.zeros(num_tasks) # task prices
 
 util_hist = []
 while True:
@@ -63,3 +64,6 @@ for i, j in assignment.items():
     print(f"agent {i} is assigned to task {j}")
     cost += benefits[i,j]
 print(cost)
+
+# centeralized comptuation 
+print(methods.optimal_assignment(benefits))
