@@ -4,8 +4,6 @@ from methods import rand_connected_graph, plot_graph
 import scipy.optimize
 import random
 
-
-
 num_agents = 5
 num_tasks = 7
 G = rand_connected_graph(num_agents)

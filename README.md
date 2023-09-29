@@ -1,5 +1,10 @@
 # satellite-constellation
 
+Contents:
+* `bertsekas_auction_algo.py` is an implementation of Bertsekas' auction algorithm
+* `spencer_dist_auction.py` is an implementation of Zavalnos' distributed auction algorithm
+
+
 Instructions on getting access to repo.
 
 1. Find a location in your compute for the repo
@@ -10,5 +15,3 @@ Instructions on getting access to repo.
     **Note:** This command will never mess up any work you've done locally. 
 4. Type `git merge origin/main main`
     **Warning:** This command can mess up any work you've done locally. This command merges your special hidden `origin/main` branch with your local `main` branch. If there are conflicts, this command will fail and you'll have to resolve them. 
-
-WIP
