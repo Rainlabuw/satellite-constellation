@@ -6,7 +6,8 @@ import random
 from itertools import product
 
 """In this script, I implement Bertsekas' auction algorithm for symmetric 
-instances. That is, the number of agents equals the number of tasks."""
+instances. That is, the number of agents equals the number of tasks. I assume 
+all agent-task pairs are assignable."""
 
 n = 50
 num_agents = n
@@ -19,11 +20,7 @@ benefits = np.random.randn(num_agents,num_tasks)
 epsilon = 1e-3 # min bid increment
 prices = np.zeros(num_tasks) # task prices
 
-util_hist = []
-while True:
-    print(np.round(prices,2))
-    if len(unassigned_agents) == 0:
-        break
+while len(unassigned_agents) > 0:
     bids = dict() # bids is kept in a dict for ease 
     for i in unassigned_agents:
         # bidding process
@@ -34,29 +31,17 @@ while True:
 
     for j in range(num_tasks):
         # assignment process
-        P_j = []
-        for pair in bids.keys():
-            if pair[1] == j:
-                P_j.append(pair[0])
+        P_j = [pair[0] for pair in bids.keys() if pair[1] == j]
         if len(P_j) > 0:
             prices[j] = max({bids[i,j] for i in P_j})
             i_j = P_j[0]
-            for i in [i for i,v in assignment.items() if v == j]:
+            remove = [k for k,v in assignment.items() if v == j]
+            for i in remove:
                 unassigned_agents.add(i)
                 del assignment[i]
             assignment[i_j] = j
             unassigned_agents.remove(i_j)
 
-
-def solve_centralized(self):
-        row_ind, col_ind = scipy.optimize.linear_sum_assignment(self.benefits, maximize=True)
-        if self.verbose:
-            print("Centralized solution")
-            for row, col in zip(row_ind, col_ind):
-                print(f"Agent {row} chose task {col_ind[row]} with benefit {self.benefits[row, col]}")
-            print(f"Total benefit: {self.benefits[row_ind, col_ind].sum()}")
-
-        return row_ind, col_ind
 
 cost = 0
 for i, j in assignment.items():
