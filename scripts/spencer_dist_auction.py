@@ -5,33 +5,16 @@ import scipy.optimize
 import random
 
 num_agents = 5
-num_tasks = 7
-G = methods.rand_connected_graph(num_agents)
-benefits = np.random.rand(num_agents, num_tasks)
+num_tasks = 8
 
-
-
-
-"""
 beta = np.random.rand(num_agents, num_tasks)
 p = np.zeros((num_agents, num_tasks))
 alpha = np.arange(0, num_agents, 1).astype('int')
 b = np.zeros((num_agents, num_tasks)).astype('int')
-epsilon = .0001
+epsilon = .01
 next_p = np.zeros((num_agents, num_tasks))
 next_b = np.zeros((num_agents, num_tasks)).astype('int')
 next_alpha = np.zeros(num_agents)
-
-
-def solve_centralized(beta):
-    row_ind, col_ind = scipy.optimize.linear_sum_assignment(beta, maximize=True)
-    print("centeralized:", col_ind)
-    out = 0
-    for i in row_ind:
-        out += beta[i,col_ind[i]]
-    return out
-
-
 
 tol = 1e-5
 cost = []
@@ -78,4 +61,3 @@ print(out)
 plt.plot(cost)
 plt.grid()
 plt.show()
-"""

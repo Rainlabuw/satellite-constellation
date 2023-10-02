@@ -1,3 +1,16 @@
+# Latex commands
+$\newcommand{\inner}[1]{\langle #1 \rangle}$
+$\newcommand{\mat}[1]{\begin{bmatrix} #1 \end{bmatrix}}$
+$\newcommand{\bb}[1]{\mathbb{#1}}$
+$\newcommand{\cal}[1]{\mathcal{#1}}$
+$\newcommand{\tr}{\text{tr}}$
+$\newcommand{\E}{\bb{E}}$
+$\newcommand{\Bern}{\text{Bernoulli}}$
+$\newcommand{\R}{\mathbb{R}}$
+$\newcommand{\C}{\mathbb{C}}$
+$\newcommand{\ad}{\text{ad}}$
+$\newcommand{\diag}{\text{diag}}$
+$\newcommand{\spec}{\text{spec}}$
 
 
 # Journal
