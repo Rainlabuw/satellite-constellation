@@ -1,4 +1,4 @@
-from auction import Auction, AuctionAgent
+from dist_auction_algo_josh import Auction, AuctionAgent
 import numpy as np
 import matplotlib.pyplot as plt
 
