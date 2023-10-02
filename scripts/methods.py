@@ -1,6 +1,7 @@
 import numpy as np 
 import networkx as nx
 import matplotlib.pyplot as plt
+import scipy.optimize
 
 def rand_connected_graph(num_nodes):
     G = nx.Graph()
@@ -19,3 +20,7 @@ def rand_connected_graph(num_nodes):
 def plot_graph(G: nx.classes.graph.Graph) -> None:
     nx.draw(G, with_labels=True, node_color='lightblue', font_weight='bold')
     plt.show()
+
+def optimal_assignment(benefits):
+    row_ind, col_ind = scipy.optimize.linear_sum_assignment(benefits, maximize=True)
+    return benefits[row_ind, col_ind].sum()

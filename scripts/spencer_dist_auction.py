@@ -1,14 +1,18 @@
 import numpy as np 
 import matplotlib.pyplot as plt
-from methods import rand_connected_graph, plot_graph
+import methods
 import scipy.optimize
 import random
 
-
-
 num_agents = 5
 num_tasks = 7
-G = rand_connected_graph(num_agents)
+G = methods.rand_connected_graph(num_agents)
+benefits = np.random.rand(num_agents, num_tasks)
+
+
+
+
+"""
 beta = np.random.rand(num_agents, num_tasks)
 p = np.zeros((num_agents, num_tasks))
 alpha = np.arange(0, num_agents, 1).astype('int')
@@ -74,3 +78,4 @@ print(out)
 plt.plot(cost)
 plt.grid()
 plt.show()
+"""
