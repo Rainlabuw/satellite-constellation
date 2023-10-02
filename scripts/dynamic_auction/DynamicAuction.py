@@ -89,14 +89,14 @@ class DynamicAuction(object):
 
     def run_auction(self):
         self.n_iterations = 0
-        while sum([agent.agent_prices_stable for agent in self.agents]) < self.n_agents:
+        while sum([agent.agent_tasks_stable for agent in self.agents]) < self.n_agents:
             for agent in self.agents:
-                agent.update_agent_prices_bids()
+                agent.update_agent_tasks_bids()
 
             self.total_benefit_hist.append(self.calc_total_benefit())
 
             for agent in self.agents:
-                agent.publish_agent_prices_bids()
+                agent.publish_agent_info()
             
             self.n_iterations += 1
 
