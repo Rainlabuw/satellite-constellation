@@ -73,10 +73,6 @@ class AuctionAgent(object):
         self.neighbors = neighbors
         self.choice = np.argmax(benefits)
 
-        #Random amount of time to wait
-        #self.dt = np.random.randint(1,10)
-        self.dt = np.random.rand()
-
         self.eps = 0.01
 
         self._prices = np.zeros_like(benefits) #private prices
