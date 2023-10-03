@@ -74,6 +74,6 @@ for i, j in assignment.items():
 print(cost)
 
 # centeralized comptuation 
-print(methods.optimal_assignment(benefits))
+print(methods.cost(benefits, assignment))
 
 

@@ -35,5 +35,5 @@ def cost(benefits: np.ndarray, assignment: dict) -> float:
     """
     out = 0
     for i, j in assignment.items():
-        cost += benefits[i,j]
-    print(cost)
+        out += benefits[i,j]
+    return out
