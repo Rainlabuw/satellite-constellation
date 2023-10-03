@@ -7,6 +7,9 @@ import random
 num_agents = 5
 num_tasks = 8
 
+
+
+"""
 beta = np.random.rand(num_agents, num_tasks)
 p = np.zeros((num_agents, num_tasks))
 alpha = np.arange(0, num_agents, 1).astype('int')
@@ -61,3 +64,4 @@ print(out)
 plt.plot(cost)
 plt.grid()
 plt.show()
+"""
