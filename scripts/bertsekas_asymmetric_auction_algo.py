@@ -9,36 +9,35 @@ from itertools import product
 instances. I assume all agent-task pairs are assignable. """
 
 
-num_agents = 50
-num_tasks = 100
+num_agents = 3000
+num_tasks = 3000
 
 # the assignment
-assignment = dict()
-unassigned_agents = {i for i in range(num_agents)}
+assignment = [-1]*num_agents
 unassigned_tasks = {j for j in range(num_tasks)}
 benefits = np.random.randn(num_agents, num_tasks)
 epsilon = 1e-3 # min bid increment
 prices = np.zeros(num_tasks)
 profits = np.max(benefits, axis=1)
 lamb = 0
-while len(unassigned_agents) > 0:
+while sum(j == -1 for j in assignment) > 0:
+    print(sum(j == -1 for j in assignment))
     # forward iteration
     bids = dict() # bids is kept in a dict for ease 
     for i in range(num_agents):
-        if i in unassigned_agents:
-            values_i = benefits[i,:] - prices
-            j_i = np.argmax(values_i)
-            w_i = np.sort(values_i)[-2]
-            prices[j_i] = max(lamb, benefits[i,j_i] - w_i + epsilon)
-            profits[i] = w_i - epsilon
-            if lamb <= benefits[i, j_i] - w_i + epsilon:
-                remove = {k for (k,v) in assignment.items() if v == j_i}
-                for k in remove:
-                    del assignment[k]
-                    unassigned_agents.add(k)
-                assignment[i] = j_i
-                unassigned_agents.remove(i)
-                unassigned_tasks.discard(j_i)
+        if i in range(num_agents):
+            if assignment[i] == -1:
+                values_i = benefits[i,:] - prices
+                j_i = np.argmax(values_i)
+                w_i = np.sort(values_i)[-2]
+                prices[j_i] = max(lamb, benefits[i,j_i] - w_i + epsilon)
+                profits[i] = w_i - epsilon
+                if lamb <= benefits[i, j_i] - w_i + epsilon:
+                    remove = {k for (k,j) in enumerate(assignment) if j == j_i}
+                    for k in remove:
+                        assignment[k] = -1
+                    assignment[i] = j_i
+                    unassigned_tasks.discard(j_i)
 
     # backward iteration
     for j in range(num_tasks): 
@@ -51,13 +50,11 @@ while len(unassigned_agents) > 0:
             if beta_j >= lamb + epsilon:
                 prices[j] = max(lamb, gamma_j - epsilon)
                 profits[i_j] = benefits[i_j, j] - max(lamb, gamma_j - epsilon)
-                remove = {k for (k,v) in assignment.items() if k == i_j}
                 if assignment[i_j] != j:
                     j_prime = assignment[i_j]
-                    del assignment[i_j]
+                    assignment[i_j] = -1
                     unassigned_tasks.add(j_prime)
                 assignment[i_j] = j
-                unassigned_agents.discard(i_j)
                 unassigned_tasks.remove(j)
             else:
                 prices[j] = beta_j - epsilon
@@ -68,12 +65,12 @@ while len(unassigned_agents) > 0:
 
 
 cost = 0
-for i, j in assignment.items():
+for i, j in enumerate(assignment):
     print(f"agent {i} is assigned to task {j}")
     cost += benefits[i,j]
 print(cost)
 
 # centeralized comptuation 
-print(methods.cost(benefits, assignment))
-
+opt_assignment = methods.solve_centralized(benefits)
+print(methods.cost(benefits, opt_assignment))
 

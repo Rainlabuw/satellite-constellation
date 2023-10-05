@@ -21,7 +21,7 @@ def plot_graph(G: nx.classes.graph.Graph) -> None:
     nx.draw(G, with_labels=True, node_color='lightblue', font_weight='bold')
     plt.show()
 
-def cost(benefits: np.ndarray, assignment: dict) -> float:
+def cost(benefits: np.ndarray, assignment: list) -> float:
     """Returns the sum of each agent's benefit under the given assignment.
 
     assignment: (dict) a map from agent index to task index. We use dict instead
@@ -34,6 +34,10 @@ def cost(benefits: np.ndarray, assignment: dict) -> float:
     out: (float) the cost
     """
     out = 0
-    for i, j in assignment.items():
+    for i, j in enumerate(assignment):
         out += benefits[i,j]
     return out
+
+def solve_centralized(benefits):
+        _, col_ind = scipy.optimize.linear_sum_assignment(benefits, maximize=True)
+        return col_ind
