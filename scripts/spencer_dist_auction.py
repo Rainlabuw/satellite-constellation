@@ -3,21 +3,21 @@ import matplotlib.pyplot as plt
 import methods
 import networkx as nx
 
-num_agents = 100
-num_tasks = 200
+num_agents = 50
+num_tasks = 100
 G = methods.rand_connected_graph(num_agents)
 Delta = nx.diameter(G)
-print(Delta)
 benefits = np.random.rand(num_agents, num_tasks)
 prices = np.zeros((num_agents, num_tasks))
 assignment = [i for i in range(num_agents)]
 
 bidders = [[-1]*num_tasks]*num_agents
-epsilon = 1e-5/num_agents
+tol = 1e-5
+epsilon = 1e-5/num_agents**2
 next_prices = prices
 next_bidders = bidders
 next_assignment = [0]*num_agents
-tol = 1e-5
+
 unchanged_prices_count = 0
 rounds_count = 0
 while unchanged_prices_count < Delta:
@@ -60,13 +60,9 @@ while unchanged_prices_count < Delta:
     prices = next_prices
     bidders = next_bidders
     rounds_count += 1
-    print(rounds_count, unchanged_prices_count)
+    print(rounds_count)
 
 # centeralized comptuation 
-opt_assignment = methods.solve_centralized(benefits)
-print("opt: ", np.round(methods.cost(benefits, opt_assignment), 3))
-print("dist: ", np.round(methods.cost(benefits, assignment), 3))
-
-# plt.plot(cost)
-# plt.grid()
-# plt.show()
+opt_assignment = methods.solve_centralized(benefits).tolist()
+print("cent. computed assignment: \n", assignment, np.round(methods.cost(benefits, opt_assignment), 3))
+print("dist. computed assignment: \n", opt_assignment, np.round(methods.cost(benefits, assignment), 3))
