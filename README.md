@@ -18,3 +18,12 @@ instances.
     **Note:** This command will never mess up any work you've done locally. 
 4. Type `git merge origin/main main`
     **Warning:** This command can mess up any work you've done locally. This command merges your special hidden `origin/main` branch with your local `main` branch. If there are conflicts, this command will fail and you'll have to resolve them. 
+
+## Starlink simulation steps
+### Colab (Easy)
+1. Go to this website "https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle" to get the latest TLE for Starlink, and replace the old TLE file in the simulation folder called "starlink_tle.txt"
+2. Change the path location of TLE file to your google drive location when hinted
+3. Run the simulation step by step, should not encounter any package related error
+
+### Local (Hard)
+Take time to write but long story short its hard
