@@ -80,6 +80,8 @@ class AuctionAgent(object):
 
         self._high_bidders = np.zeros_like(benefits) #private bidders
         self.public_high_bidders = np.zeros_like(benefits)
+        self._high_bidders[self.choice] = self.id
+        self.public_high_bidders[self.choice] = self.id
 
         self.agent_prices_stable = False
     
@@ -140,10 +142,26 @@ if __name__ == "__main__":
     #                 [0.07692341, 0.15046442, 0.34058061, 0.93558144, 0.785595,   0.30242082],
     #                 [0.53182682, 0.92819657, 0.79620561, 0.71194428, 0.8427648,  0.11332127]])
     b = None
-    a = Auction(8,8, benefits=b)
+    b = np.array([[0.1, 0.1, 101, 100],
+                  [0.2, 0.15, 100, 101]])
+    a = Auction(2,4, benefits=b, verbose=True)
+
+    a.agents[0].public_prices = np.array([0,0,1000,1000])
+    a.agents[1].public_prices = np.array([0,0,1000,1000])
+
+    # a.agents[0].choice = -1
+    # a.agents[1].choice = -1
+
+    # for agent in a.agents:
+    #     agent.eps = 1001
+
+    # a.agents[0].public_high_bidders = np.array([0,0,0,1])
+    # a.agents[1].public_high_bidders = np.array([0,0,0,1])
 
     print("Benefits:")
     print(a.benefits)
 
     a.run_auction()
+    print(a.agents[0].public_prices)
+    print(a.agents[1].public_prices)
     a.solve_centralized()
