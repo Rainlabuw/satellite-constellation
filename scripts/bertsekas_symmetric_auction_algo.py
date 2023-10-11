@@ -9,9 +9,9 @@ from itertools import product
 instances. That is, the number of agents equals the number of tasks. I assume 
 all agent-task pairs are assignable."""
 
-n = 50
+n = 10
 num_agents = n
-num_tasks = n
+num_tasks = 2*n
 
 # the assignment
 assignment = [-1]*num_agents
@@ -40,13 +40,7 @@ while sum(j == -1 for j in assignment) > 0:
                 assignment[i] = -1
             assignment[i_j] = j
 
-print(assignment)
-cost = 0
-for i, j in enumerate(assignment):
-    print(f"agent {i} is assigned to task {j}")
-    cost += benefits[i,j]
-print(cost)
-
 # centeralized comptuation 
-opt_assignment = methods.solve_centralized(benefits)
-print(methods.cost(benefits, opt_assignment))
+opt_assignment = methods.solve_centralized(benefits).tolist()
+print("cent. computed assignment: \n", assignment, np.round(methods.cost(benefits, assignment), 3))
+print("dist. computed assignment: \n", opt_assignment, np.round(methods.cost(benefits, opt_assignment), 3))
