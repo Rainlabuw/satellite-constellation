@@ -4,11 +4,23 @@ import networkx as nx
 import scipy.optimize
 
 class Auction(object):
-    def __init__(self, n_agents, n_tasks, benefits=None, graph=None, verbose=False):
+    def __init__(self, n_agents, n_tasks, benefits=None, prices=None, graph=None, verbose=False):
         if benefits is not None:
             self.benefits = benefits
         else:
             self.benefits = np.random.rand(n_agents, n_tasks)
+
+        if prices is not None:
+            if prices.shape == (n_agents, n_tasks):
+                self.prices = prices
+            elif prices.shape == (n_tasks,):
+                self.prices = np.tile(prices, (n_agents,1))
+            else:
+                print("Invalid prices shape")
+                raise ValueError
+            self.prices = self.prices.astype(float)
+        else:
+            self.prices = np.zeros((n_agents, n_tasks))
 
         if graph != None:
             self.graph = graph
@@ -21,7 +33,7 @@ class Auction(object):
         self.n_tasks = n_tasks
 
         #Initialize agents with ID, benefits and neighbors
-        self.agents = [AuctionAgent(self, i, self.benefits[i,:], list(self.graph.neighbors(i))) for i in range(n_agents)]
+        self.agents = [AuctionAgent(self, i, self.benefits[i,:], self.prices[i,:], list(self.graph.neighbors(i))) for i in range(n_agents)]
 
         self.n_iterations = 0
         self.total_benefit_hist = []
@@ -65,21 +77,22 @@ class Auction(object):
             print(f"Total benefit: {sum([agent.benefits[agent.choice] for agent in self.agents])}")
 
 class AuctionAgent(object):
-    def __init__(self, auction, id, benefits, neighbors):
+    def __init__(self, auction, id, benefits, prices, neighbors):
         self.auction = auction
         self.id = id
         self.benefits = benefits
 
         self.neighbors = neighbors
-        self.choice = np.argmax(benefits)
+        self.choice = np.argmax(benefits-prices)
+        print(f"Agent {self.id} chose task {self.choice} with benefit {self.benefits[self.choice]} and price {prices[self.choice]}")
 
         self.eps = 0.01
 
-        self._prices = np.zeros_like(benefits) #private prices
-        self.public_prices = np.zeros_like(benefits)
+        self._prices = prices #private prices
+        self.public_prices = prices
 
-        self._high_bidders = np.zeros_like(benefits) #private bidders
-        self.public_high_bidders = np.zeros_like(benefits)
+        self._high_bidders = -1*np.ones_like(benefits) #private bidders
+        self.public_high_bidders = -1*np.ones_like(benefits)
         self._high_bidders[self.choice] = self.id
         self.public_high_bidders[self.choice] = self.id
 
@@ -111,7 +124,7 @@ class AuctionAgent(object):
             second_best_net_value = np.partition(self.benefits - max_prices, -2)[-2] #https://stackoverflow.com/questions/33181350/quickest-way-to-find-the-nth-largest-value-in-a-numpy-matrix
 
             self.choice = np.argmax(self.benefits-max_prices) #choose the task with the highest benefit to the agent
-            
+
             self._high_bidders[self.choice] = self.id
             
             inc = best_net_value - second_best_net_value + self.eps
@@ -123,6 +136,10 @@ class AuctionAgent(object):
             #based on the new info from other agents.
             self._prices = max_prices
 
+        print(f"Agent {self.id}")
+        print(self._high_bidders)
+        print(self._prices)
+
     def publish_agent_prices_bids(self):
         #Determine if prices and bids have changed since the last iteration.
         if np.array_equal(self._prices, self.public_prices) and np.array_equal(self._high_bidders, self.public_high_bidders):
@@ -131,9 +148,25 @@ class AuctionAgent(object):
             self.agent_prices_stable = False
 
         self.public_prices = np.copy(self._prices)
-        self.public_high_bidders = np.copy(self._high_bidders)
+        self.public_high_bidders = np.copy(self._high_bidders)  
 
+def checkAlmostEquilibrium(auction):
+    max_eps = -np.inf
+    for agent in auction.agents:
+        max_net_value = -np.inf
+
+        curr_ben = agent.benefits[agent.choice] - agent.public_prices[agent.choice]
+        for j in range(auction.n_tasks):
+            net_ben = agent.benefits[j] - agent.public_prices[j]
+
+            if net_ben > max_net_value:
+                max_net_value = net_ben
         
+        eps = max_net_value - curr_ben
+        if eps > max_eps:
+            max_eps = eps
+
+    return eps
 
 if __name__ == "__main__":
     #Benefit array which can show proof of suboptimality by epsilon
@@ -141,27 +174,40 @@ if __name__ == "__main__":
     #                 [0.19934895, 0.89260454, 0.18748017, 0.96584496, 0.37879552, 0.20749475],
     #                 [0.07692341, 0.15046442, 0.34058061, 0.93558144, 0.785595,   0.30242082],
     #                 [0.53182682, 0.92819657, 0.79620561, 0.71194428, 0.8427648,  0.11332127]])
-    b = None
-    b = np.array([[0.1, 0.1, 101, 100],
-                  [0.2, 0.15, 100, 101]])
-    a = Auction(2,4, benefits=b, verbose=True)
+    # b = None
+    # b = np.array([[0.15, 0.05, 101, 100],
+    #               [0.2, 0.15, 100, 101]])
+    
+    # p = np.array([0,0,1000,1000])
 
-    a.agents[0].public_prices = np.array([0,0,1000,1000])
-    a.agents[1].public_prices = np.array([0,0,1000,1000])
+    # a = Auction(2,4, benefits=b, prices=p, verbose=True)
+    # for ag in a.agents:
+    #     ag.eps = 0.005
+    # eps = checkAlmostEquilibrium(a)
+    # print(f"eps eq before: {eps}")
+    # # a.agents[0].choice = 2
+    # # a.agents[1].choice = 3
 
-    # a.agents[0].choice = -1
-    # a.agents[1].choice = -1
+    # # a.agents[0].public_high_bidders = np.array([-1,-1,0,-1])
+    # # a.agents[1].public_high_bidders = np.array([-1,-1,-1,1])
 
-    # for agent in a.agents:
-    #     agent.eps = 1001
+    # a.run_auction()
+    # eps = checkAlmostEquilibrium(a)
+    # print(f"eps eq after: {eps}")
+    # print(a.agents[0].public_prices)
+    # print(a.agents[1].public_prices)
+    # a.solve_centralized()
 
-    # a.agents[0].public_high_bidders = np.array([0,0,0,1])
-    # a.agents[1].public_high_bidders = np.array([0,0,0,1])
+    b = np.array([[100.0, 10, 1],
+                  [100, 10, 1]])
+    
+    p = np.array([1000.0, 0, 0])
 
-    print("Benefits:")
-    print(a.benefits)
-
+    a = Auction(2,3, benefits=b, prices=p, verbose=True)
+    # for ag in a.agents:
+    #     ag.eps = 0.005
+    eps = checkAlmostEquilibrium(a)
+    print(f"eps eq before: {eps}")
     a.run_auction()
-    print(a.agents[0].public_prices)
-    print(a.agents[1].public_prices)
-    a.solve_centralized()
+    eps = checkAlmostEquilibrium(a)
+    print(f"eps eq after: {eps}")
