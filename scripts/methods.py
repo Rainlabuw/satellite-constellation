@@ -41,3 +41,21 @@ def cost(benefits: np.ndarray, assignment: list) -> float:
 def solve_centralized(benefits):
         _, col_ind = scipy.optimize.linear_sum_assignment(benefits, maximize=True)
         return col_ind
+
+def check_almost_equilibrium(auction):
+    max_eps = -np.inf
+    for agent in auction.agents:
+        max_net_value = -np.inf
+
+        curr_ben = agent.benefits[agent.choice] - agent.public_prices[agent.choice]
+        for j in range(auction.n_tasks):
+            net_ben = agent.benefits[j] - agent.public_prices[j]
+
+            if net_ben > max_net_value:
+                max_net_value = net_ben
+        
+        eps = max_net_value - curr_ben
+        if eps > max_eps:
+            max_eps = eps
+
+    return eps
