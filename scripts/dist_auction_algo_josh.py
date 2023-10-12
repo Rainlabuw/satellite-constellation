@@ -100,10 +100,6 @@ class Auction(object):
         #Remove unassigned tasks which cannot be undervalued
         #(i.e. their price is below the minimum price for any assigned task)
         potentially_undervalued_tasks = [uat for uat in unassigned_tasks if prices[uat] > lambda_]
-        
-        print(f"Initial potentially undervalued tasks: {potentially_undervalued_tasks}")
-        print(f"Initial prices: {prices}")
-        print(f"Initial profits: {profits}")
 
         while len(potentially_undervalued_tasks) > 0:
             reverse_iterations += 1
@@ -127,8 +123,8 @@ class Auction(object):
                 continue
 
             # Determine how much you're willing to lower the price.
-            # The first term indicates that you don't want to lower the price below
-            # lambda, or else we might think this task is no longer undervalued.
+            # The first term ensures that if we're lowering the prices a lot, we just lower
+            # them to exactly lambda (for convenience?)
             # The second term indicates that you're only willing to lower the price enough
             # so that the second best agent would be willing to pay for the task.
             delta = min(best_profit - lambda_, best_profit-second_best_profit+self.eps)
@@ -160,7 +156,7 @@ class AuctionAgent(object):
 
         self.neighbors = neighbors
         self.choice = np.argmax(benefits-prices)
-        print(f"Agent {self.id} chose task {self.choice} with benefit {self.benefits[self.choice]} and price {prices[self.choice]}")
+        # print(f"Agent {self.id} chose task {self.choice} with benefit {self.benefits[self.choice]} and price {prices[self.choice]}")
 
         self.eps = eps
 
@@ -230,25 +226,25 @@ if __name__ == "__main__":
     #                 [0.07692341, 0.15046442, 0.34058061, 0.93558144, 0.785595,   0.30242082],
     #                 [0.53182682, 0.92819657, 0.79620561, 0.71194428, 0.8427648,  0.11332127]])
     # b = None
-    b = np.array([[0.15, 0.05, 101, 100],
-                  [0.2, 0.15, 100, 101]])
+    # b = np.array([[0.15, 0.05, 101, 100],
+    #               [0.2, 0.15, 100, 101]])
     
-    p = np.array([0,0,1000,1000])
+    # p = np.array([0,0,1000,1000])
 
-    a = Auction(2,4, benefits=b, prices=p, verbose=True)
-    for ag in a.agents:
-        ag.eps = 0.01
-    eps = check_almost_equilibrium(a)
-    print(f"eps eq before: {eps}")
+    # a = Auction(2,4, benefits=b, prices=p, verbose=True)
+    # for ag in a.agents:
+    #     ag.eps = 0.01
+    # eps = check_almost_equilibrium(a)
+    # print(f"eps eq before: {eps}")
 
-    a.run_auction()
-    eps = check_almost_equilibrium(a)
-    print(f"eps eq after: {eps}")
-    print("Final Prices:")
-    print(a.agents[0].public_prices)
+    # a.run_auction()
+    # eps = check_almost_equilibrium(a)
+    # print(f"eps eq after: {eps}")
+    # print("Final Prices:")
+    # print(a.agents[0].public_prices)
 
-    a.run_reverse_auction_for_asymmetric()
-    a.solve_centralized()
+    # a.run_reverse_auction_for_asymmetric()
+    # a.solve_centralized()
 
     # b = np.array([[101.0, 10, 1],
     #               [100, 10, 1]])
@@ -265,3 +261,22 @@ if __name__ == "__main__":
 
     # a.run_reverse_auction_for_asymmetric()
     # a.solve_centralized()
+
+    for i in range(1000):
+        print(i, end='\r')
+        n_agents = 10
+        n_tasks = 20
+        b = np.random.rand(n_agents, n_tasks)
+
+        p = np.random.choice([0, 0.5, 10], n_tasks)
+        a = Auction(n_agents, n_tasks, benefits=b, prices=p, verbose=False)
+
+        a.run_auction()
+        a.run_reverse_auction_for_asymmetric()
+        auct_benefit = sum([agent.benefits[agent.choice] for agent in a.agents])
+
+        r, c = a.solve_centralized()
+        opt_benefit = b[r,c].sum()
+
+        if opt_benefit > auct_benefit + n_agents*a.eps:
+            print("NON OPTIMAL DETECTED")
