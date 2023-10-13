@@ -45,13 +45,13 @@ class Auction(object):
 
     def solve_centralized(self):
         row_ind, col_ind = scipy.optimize.linear_sum_assignment(self.benefits, maximize=True)
+        total_benefit = self.benefits[row_ind, col_ind].sum()
         if self.verbose:
-            print("Centralized solution")
-            for row, col in zip(row_ind, col_ind):
-                print(f"Agent {row} chose task {col_ind[row]} with benefit {self.benefits[row, col]}")
-            print(f"Total benefit: {self.benefits[row_ind, col_ind].sum()}")
+            print("Centralized solution:")
+            print(f"\tAssignments: {[a.choice for a in self.agents]}")
+            print(f"\tTotal benefit: {total_benefit}")
 
-        return row_ind, col_ind
+        return row_ind, col_ind, total_benefit
 
     def calc_total_benefit(self):
         total_benefit = 0
@@ -74,9 +74,10 @@ class Auction(object):
 
         if self.verbose:
             print(f"Auction results ({self.n_iterations} iterations):")
-            for agent in self.agents:
-                print(f"Agent {agent.id} chose task {agent.choice} with benefit {agent.benefits[agent.choice]} and price {agent.public_prices[agent.choice]}")
-            print(f"Total benefit: {sum([agent.benefits[agent.choice] for agent in self.agents])}")
+            print(f"\tAssignments: {[a.choice for a in self.agents]}")
+            print(f"\tTotal benefit: {sum([agent.benefits[agent.choice] for agent in self.agents])}")
+
+        return self.calc_total_benefit()
 
     def run_reverse_auction_for_asymmetric(self):
         reverse_iterations = 0
@@ -142,11 +143,13 @@ class Auction(object):
             #Remove the task from the list of potentially undervalued tasks
             potentially_undervalued_tasks.remove(puv_task)
 
+        total_benefit = sum([agent.benefits[agent.choice] for agent in self.agents])
         if self.verbose:
             print(f"Reverse auction results ({reverse_iterations} iterations):")
-            for agent in self.agents:
-                print(f"Agent {agent.id} chose task {agent.choice} with benefit {agent.benefits[agent.choice]} and price {agent.public_prices[agent.choice]}")
-            print(f"Total benefit: {sum([agent.benefits[agent.choice] for agent in self.agents])}")
+            print(f"\tAssignments: {[a.choice for a in self.agents]}")
+            print(f"\tTotal benefit: {total_benefit}")
+    
+        return total_benefit
 
 class AuctionAgent(object):
     def __init__(self, auction, id, eps, benefits, prices, neighbors):
