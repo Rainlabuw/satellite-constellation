@@ -8,7 +8,7 @@ def rand_connected_graph(num_nodes):
     G.add_nodes_from(range(num_nodes))
     for i in range(num_nodes - 1):
         G.add_edge(i, i + 1)
-    num_additional_edges = 5
+    num_additional_edges = int(num_nodes**(1.3))
     for _ in range(num_additional_edges):
         node1 = np.random.randint(0, num_nodes)
         node2 = np.random.randint(0, num_nodes)
@@ -59,3 +59,11 @@ def check_almost_equilibrium(auction):
             max_eps = eps
 
     return eps
+
+def calc_distance_btwn_solutions(agents1, agents2):
+    dist = 0
+    for agent1, agent2 in zip(agents1, agents2):
+        if agent1.choice != agent2.choice:
+            dist += 1
+
+    return dist

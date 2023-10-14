@@ -7,7 +7,7 @@ def rand_connected_graph(num_nodes):
     G.add_nodes_from(range(num_nodes))
     for i in range(num_nodes - 1):
         G.add_edge(i, i + 1)
-    num_additional_edges = 5
+    num_additional_edges = num_nodes**2
     for _ in range(num_additional_edges):
         node1 = np.random.randint(0, num_nodes)
         node2 = np.random.randint(0, num_nodes)
