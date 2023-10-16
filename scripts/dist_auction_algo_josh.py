@@ -1,7 +1,8 @@
 import numpy as np
-from methods import rand_connected_graph, plot_graph, check_almost_equilibrium
+from methods import *
 import networkx as nx
 import scipy.optimize
+from multiprocessing import Pool, cpu_count
 
 class Auction(object):
     def __init__(self, n_agents, n_tasks, eps=0.01, benefits=None, prices=None, graph=None, verbose=False):
@@ -220,21 +221,22 @@ class AuctionAgent(object):
 
         self.public_prices = np.copy(self._prices)
         self.public_high_bidders = np.copy(self._high_bidders)
-        
+
 
 if __name__ == "__main__":
     #Benefit array which can show proof of suboptimality by epsilon
-    # b = np.array([[0.58171674, 0.16394833, 0.9471958,  0.67933512, 0.75647097, 0.96396759],
-    #                 [0.19934895, 0.89260454, 0.18748017, 0.96584496, 0.37879552, 0.20749475],
-    #                 [0.07692341, 0.15046442, 0.34058061, 0.93558144, 0.785595,   0.30242082],
-    #                 [0.53182682, 0.92819657, 0.79620561, 0.71194428, 0.8427648,  0.11332127]])
+    b = np.array([[0.58171674, 0.16394833, 0.9471958,  0.67933512, 0.75647097, 0.96396759],
+                    [0.19934895, 0.89260454, 0.18748017, 0.96584496, 0.37879552, 0.20749475],
+                    [0.07692341, 0.15046442, 0.34058061, 0.93558144, 0.785595,   0.30242082],
+                    [0.53182682, 0.92819657, 0.79620561, 0.71194428, 0.8427648,  0.11332127]])
     # b = None
     # b = np.array([[0.15, 0.05, 101, 100],
     #               [0.2, 0.15, 100, 101]])
     
     # p = np.array([0,0,1000,1000])
-
-    # a = Auction(2,4, benefits=b, prices=p, verbose=True)
+    p = None
+    a = Auction(4,6, benefits=b, prices=p, verbose=True)
+    a.run_auction()
     # for ag in a.agents:
     #     ag.eps = 0.01
     # eps = check_almost_equilibrium(a)
@@ -265,21 +267,21 @@ if __name__ == "__main__":
     # a.run_reverse_auction_for_asymmetric()
     # a.solve_centralized()
 
-    for i in range(1000):
-        print(i, end='\r')
-        n_agents = 10
-        n_tasks = 20
-        b = np.random.rand(n_agents, n_tasks)
+    # for i in range(1000):
+    #     print(i, end='\r')
+    #     n_agents = 10
+    #     n_tasks = 20
+    #     b = np.random.rand(n_agents, n_tasks)
 
-        p = np.random.choice([0, 0.5, 10], n_tasks)
-        a = Auction(n_agents, n_tasks, benefits=b, prices=p, verbose=False)
+    #     p = np.random.choice([0, 0.5, 10], n_tasks)
+    #     a = Auction(n_agents, n_tasks, benefits=b, prices=p, verbose=False)
 
-        a.run_auction()
-        a.run_reverse_auction_for_asymmetric()
-        auct_benefit = sum([agent.benefits[agent.choice] for agent in a.agents])
+    #     a.run_auction()
+    #     a.run_reverse_auction_for_asymmetric()
+    #     auct_benefit = sum([agent.benefits[agent.choice] for agent in a.agents])
 
-        r, c = a.solve_centralized()
-        opt_benefit = b[r,c].sum()
+    #     r, c = a.solve_centralized()
+    #     opt_benefit = b[r,c].sum()
 
-        if opt_benefit > auct_benefit + n_agents*a.eps:
-            print("NON OPTIMAL DETECTED")
+    #     if opt_benefit > auct_benefit + n_agents*a.eps:
+    #         print("NON OPTIMAL DETECTED")

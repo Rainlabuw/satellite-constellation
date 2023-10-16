@@ -106,13 +106,13 @@ def run_2var_test():
 
 def run_1var_test():
     eps = 0.01
-    n = "Variable"
-    m = "n"
+    n = 100
+    m = "variable"
     pert_scale = 0.05
 
     independent_variable = np.arange(1,2,0.05)
-    independent_variable = np.arange(10, 100, 5)
-    ind_label = "N agents"
+    # independent_variable = np.arange(10, 100, 5)
+    ind_label = "m mult"
 
     fig, axes = plt.subplots(nrows=3, ncols=1)
     
@@ -124,8 +124,7 @@ def run_1var_test():
     dsts = []
     for i, ind in enumerate(independent_variable):
         print(f"{i}/{len(independent_variable)}", end='\r')
-        n = ind
-        sb, usb, si, usi, dst = run_perturbed_auction(n, n, pert_scale, eps)
+        sb, usb, si, usi, dst = run_perturbed_auction(n, int(n*ind), pert_scale, eps)
         sbs.append(sb)
         usbs.append(usb)
         sis.append(si)
