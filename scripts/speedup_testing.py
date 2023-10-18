@@ -12,7 +12,7 @@ def run_perturbed_auction(n, m, pert_scale, eps):
     graph = rand_connected_graph(n)
     auction = Auction(n, m, graph=graph, eps=0.01)
     auction.run_auction()
-    prices_init = auction.agents[0].public_prices
+    prices_init = auction.agents[0].public_prices/2
 
     #Perturb the benefits
     perturbed_benefits = auction.benefits + np.random.normal(scale=pert_scale, size=(n, m))
