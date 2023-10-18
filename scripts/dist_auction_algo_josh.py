@@ -9,7 +9,10 @@ class Auction(object):
         if benefits is not None:
             self.benefits = benefits
         else:
-            self.benefits = np.random.rand(n_agents, n_tasks)
+            zeros_ones = np.random.randint(2, size=(n_agents, n_tasks))
+            bens = np.random.normal(1, 0.1, (n_agents, n_tasks))
+
+            self.benefits = zeros_ones * bens
 
         if prices is not None:
             if prices.shape == (n_agents, n_tasks):
@@ -243,12 +246,64 @@ if __name__ == "__main__":
                     [0.19934895, 0.89260454, 0.18748017, 0.96584496, 0.37879552, 0.20749475],
                     [0.07692341, 0.15046442, 0.34058061, 0.93558144, 0.785595,   0.30242082],
                     [0.53182682, 0.92819657, 0.79620561, 0.71194428, 0.8427648,  0.11332127]])
-    # b = None
+    b = None
     # b = np.array([[0.15, 0.05, 101, 100],
     #               [0.2, 0.15, 100, 101]])
     
     # p = np.array([0,0,1000,1000])
     p = None
-    a = Auction(10,15, benefits=b, prices=p, verbose=True)
+    a = Auction(100,150, benefits=b, prices=p, verbose=True)
+    print(a.benefits)
     a.run_auction()
+    choices = [ag.choice for ag in a.agents]
+    num_dups = len(choices) - len(set(choices))
+    print(f"Number of duplicate choices: {num_dups}")
+
+    # for ag in a.agents:
+    #     ag.eps = 0.01
+    # eps = check_almost_equilibrium(a)
+    # print(f"eps eq before: {eps}")
+
+    # a.run_auction()
+    # eps = check_almost_equilibrium(a)
+    # print(f"eps eq after: {eps}")
+    # print("Final Prices:")
+    # print(a.agents[0].public_prices)
+
+    # a.run_reverse_auction_for_asymmetric()
+    # a.solve_centralized()
+
+    # b = np.array([[101.0, 10, 1],
+    #               [100, 10, 1]])
     
+    # p = np.array([1000.0, 0, 0])
+
+    # a = Auction(2,3, benefits=b, prices=p, verbose=True)
+
+    # eps = check_almost_equilibrium(a)
+    # print(f"eps eq before: {eps}")
+    # a.run_auction()
+    # eps = check_almost_equilibrium(a)
+    # print(f"eps eq after: {eps}")
+
+    # a.run_reverse_auction_for_asymmetric()
+    # a.solve_centralized()
+
+    # for i in range(1000):
+    #     print(i, end='\r')
+    #     n_agents = 10
+    #     n_tasks = 20
+    #     b = np.random.rand(n_agents, n_tasks)
+
+    #     p = np.random.choice([0, 0.5, 10], n_tasks)
+    #     a = Auction(n_agents, n_tasks, benefits=b, prices=p, verbose=False)
+
+    #     a.run_auction()
+    #     a.run_reverse_auction_for_asymmetric()
+    #     auct_benefit = sum([agent.benefits[agent.choice] for agent in a.agents])
+
+    #     r, c = a.solve_centralized()
+    #     opt_benefit = b[r,c].sum()
+
+    #     if opt_benefit > auct_benefit + n_agents*a.eps:
+    #         print("NON OPTIMAL DETECTED")

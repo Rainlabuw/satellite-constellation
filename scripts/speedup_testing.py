@@ -12,11 +12,11 @@ def run_perturbed_auction(n, m, pert_scale, eps):
     graph = rand_connected_graph(n)
     auction = Auction(n, m, graph=graph, eps=0.01)
     auction.run_auction()
-    prices_init = auction.agents[0].public_prices
+    prices_init = auction.agents[0].public_prices/2
 
     #Perturb the benefits
     perturbed_benefits = auction.benefits + np.random.normal(scale=pert_scale, size=(n, m))
-    perturbed_benefits = np.clip(perturbed_benefits, 0, 1)
+    # perturbed_benefits = np.clip(perturbed_benefits, 0, 1)
 
     #Run seeded auction
     seeded_auction = Auction(n, m, graph=graph, benefits=perturbed_benefits, prices=prices_init, eps=eps)
@@ -104,15 +104,17 @@ def run_2var_test():
     plt.show()
     plt.savefig("mesh.png")
 
-def run_1var_test():
+def run_1var_test(num_auctions_per_pt=5):
     eps = 0.01
-    n = 100
-    m = "variable"
+    n = 50
+    m = "n"
     pert_scale = 0.05
 
-    independent_variable = np.arange(1,2,0.05)
-    # independent_variable = np.arange(10, 100, 5)
-    ind_label = "m mult"
+    # independent_variable = np.arange(1,2,0.05)
+    independent_variable = np.arange(10, 100, 5)
+    independent_variable = np.hstack((independent_variable, np.array([100, 150, 200, 500])))
+    # independent_variable = [100]
+    ind_label = "num agents"
 
     fig, axes = plt.subplots(nrows=3, ncols=1)
     
@@ -123,13 +125,29 @@ def run_1var_test():
     usis = []
     dsts = []
     for i, ind in enumerate(independent_variable):
-        print(f"{i}/{len(independent_variable)}", end='\r')
-        sb, usb, si, usi, dst = run_perturbed_auction(n, int(n*ind), pert_scale, eps)
-        sbs.append(sb)
-        usbs.append(usb)
-        sis.append(si)
-        usis.append(usi)
-        dsts.append(dst/n)
+        n = ind
+        sb_tot = 0
+        usb_tot = 0
+        si_tot = 0
+        usi_tot = 0
+        dst_tot = 0
+        for j in range(num_auctions_per_pt):
+            print(f"ind = {ind} ({i+1}/{len(independent_variable)}) {j+1}/{num_auctions_per_pt}", end='\r')
+            sb, usb, si, usi, dst = run_perturbed_auction(n, n, pert_scale, eps)
+            sb_tot += sb
+            usb_tot += usb
+            si_tot += si
+            usi_tot += usi
+            dst_tot += dst
+        print(" ")
+        print(usi_tot/num_auctions_per_pt)
+        print(si_tot/num_auctions_per_pt)
+        print(dst_tot/num_auctions_per_pt/n*100)
+        sbs.append(sb_tot/num_auctions_per_pt)
+        usbs.append(usb_tot/num_auctions_per_pt)
+        sis.append(si_tot/num_auctions_per_pt)
+        usis.append(usi_tot/num_auctions_per_pt)
+        dsts.append(dst_tot/num_auctions_per_pt/n*100)
     
     # Define the size of the window by which to smooth the data
     window_size = 3  # for a 3x1 kernel
@@ -137,25 +155,25 @@ def run_1var_test():
     # Create a normalized 1D kernel (so the sum of the kernel is 1)
     kernel = np.ones(window_size) / (window_size)
 
-    seeded_benefit = convolve(np.array(sbs), kernel, mode='reflect')
-    unseeded_benefit = convolve(np.array(usbs), kernel, mode='reflect')
-    seeded_iterations = convolve(np.array(sis), kernel, mode='reflect')
-    unseeded_iterations = convolve(np.array(usis), kernel, mode='reflect')
-    distances = convolve(np.array(dsts), kernel, mode='reflect')
+    # sbs = convolve(np.array(sbs), kernel, mode='reflect')
+    # usbs = convolve(np.array(usbs), kernel, mode='reflect')
+    # sis = convolve(np.array(sis), kernel, mode='reflect')
+    # usis = convolve(np.array(usis), kernel, mode='reflect')
+    # dsts = convolve(np.array(dsts), kernel, mode='reflect')
 
-    axes[0].plot(independent_variable, seeded_benefit, label="Seeded Benefit")
-    axes[0].plot(independent_variable, unseeded_benefit, label="Unseeded Benefit")
+    axes[0].plot(independent_variable, sbs, label="Seeded Benefit")
+    axes[0].plot(independent_variable, usbs, label="Unseeded Benefit")
     axes[0].set_xlabel(ind_label)
     axes[0].set_ylabel("Benefit")
     axes[0].legend()
 
-    axes[1].plot(independent_variable, distances, label="Distance btwn solutions")
+    axes[1].plot(independent_variable, dsts, label="Distance btwn solutions")
     axes[1].set_xlabel(ind_label)
     axes[1].set_ylabel("% Of Agents changed")
     axes[1].legend()
 
-    axes[2].plot(independent_variable, seeded_iterations, label="Seeded Iterations")
-    axes[2].plot(independent_variable, unseeded_iterations, label="Unseeded Iterations")
+    axes[2].plot(independent_variable, sis, label="Seeded Iterations")
+    axes[2].plot(independent_variable, usis, label="Unseeded Iterations")
     axes[2].set_xlabel(ind_label)
     axes[2].set_ylabel("Iterations")
     axes[2].legend()
@@ -164,4 +182,4 @@ def run_1var_test():
     plt.show()
 
 if __name__ == "__main__":
-    run_1var_test()
+    run_1var_test(100)
