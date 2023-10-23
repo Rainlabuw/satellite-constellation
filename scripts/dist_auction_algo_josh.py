@@ -3,6 +3,7 @@ from methods import *
 import networkx as nx
 import scipy.optimize
 from multiprocessing import Pool, cpu_count
+import matplotlib.pyplot as plt
 
 class Auction(object):
     def __init__(self, n_agents, n_tasks, eps=0.01, benefits=None, prices=None, graph=None, verbose=False):
@@ -241,69 +242,46 @@ class AuctionAgent(object):
 
 
 if __name__ == "__main__":
-    #Benefit array which can show proof of suboptimality by epsilon
-    b = np.array([[0.58171674, 0.16394833, 0.9471958,  0.67933512, 0.75647097, 0.96396759],
-                    [0.19934895, 0.89260454, 0.18748017, 0.96584496, 0.37879552, 0.20749475],
-                    [0.07692341, 0.15046442, 0.34058061, 0.93558144, 0.785595,   0.30242082],
-                    [0.53182682, 0.92819657, 0.79620561, 0.71194428, 0.8427648,  0.11332127]])
-    b = None
-    # b = np.array([[0.15, 0.05, 101, 100],
-    #               [0.2, 0.15, 100, 101]])
-    
-    # p = np.array([0,0,1000,1000])
-    p = None
-    a = Auction(100,150, benefits=b, prices=p, verbose=True)
-    print(a.benefits)
-    a.run_auction()
-    choices = [ag.choice for ag in a.agents]
-    num_dups = len(choices) - len(set(choices))
-    print(f"Number of duplicate choices: {num_dups}")
+    n = 10
+    m = 10
+    pert_scale = 0.05
+    eps = 0.01
 
-    # for ag in a.agents:
-    #     ag.eps = 0.01
-    # eps = check_almost_equilibrium(a)
-    # print(f"eps eq before: {eps}")
+    graph = rand_connected_graph(n)
+    auction = Auction(n, m, graph=graph, eps=0.01)
+    auction.run_auction()
+    prices_init = auction.agents[0].public_prices - np.min(auction.agents[0].public_prices)
 
-    # a.run_auction()
-    # eps = check_almost_equilibrium(a)
-    # print(f"eps eq after: {eps}")
-    # print("Final Prices:")
-    # print(a.agents[0].public_prices)
+    #Perturb the benefits
+    perturb = np.random.normal(scale=pert_scale, size=(n, m))
+    # perturb = np.random.choice([-0.05, 0, 0.05], size=(n, m))
+    perturbed_benefits = auction.benefits + perturb
+    max_perturb = np.max(np.abs(perturb))
+    max_ben = np.max(perturbed_benefits)
+    min_ben = np.min(perturbed_benefits)
+    print(max_perturb)
+    b_diff = max_ben - min_ben
+    speedup = b_diff/(2*max_perturb+eps)
+    print(speedup)
+    # perturbed_benefits = np.clip(perturbed_benefits, 0, 1)
 
-    # a.run_reverse_auction_for_asymmetric()
-    # a.solve_centralized()
+    #Run seeded auction
+    seeded_auction = Auction(n, m, graph=graph, benefits=perturbed_benefits, prices=prices_init, eps=eps)
+    for s_agent, agent in zip(seeded_auction.agents, auction.agents):
+        s_agent.choice = agent.choice
+    s_ae = check_almost_equilibrium(seeded_auction)
+    seeded_benefit = seeded_auction.run_auction()
 
-    # b = np.array([[101.0, 10, 1],
-    #               [100, 10, 1]])
-    
-    # p = np.array([1000.0, 0, 0])
+    unseeded_auction = Auction(n, m, graph=graph, benefits=perturbed_benefits, eps=eps)
+    us_ae = check_almost_equilibrium(unseeded_auction)
+    print(us_ae, s_ae)
+    unseeded_benefit = unseeded_auction.run_auction()
 
-    # a = Auction(2,3, benefits=b, prices=p, verbose=True)
+    dist = calc_distance_btwn_solutions(seeded_auction.agents, auction.agents)
 
-    # eps = check_almost_equilibrium(a)
-    # print(f"eps eq before: {eps}")
-    # a.run_auction()
-    # eps = check_almost_equilibrium(a)
-    # print(f"eps eq after: {eps}")
+    print(seeded_auction.n_iterations, unseeded_auction.n_iterations, dist)
 
-    # a.run_reverse_auction_for_asymmetric()
-    # a.solve_centralized()
-
-    # for i in range(1000):
-    #     print(i, end='\r')
-    #     n_agents = 10
-    #     n_tasks = 20
-    #     b = np.random.rand(n_agents, n_tasks)
-
-    #     p = np.random.choice([0, 0.5, 10], n_tasks)
-    #     a = Auction(n_agents, n_tasks, benefits=b, prices=p, verbose=False)
-
-    #     a.run_auction()
-    #     a.run_reverse_auction_for_asymmetric()
-    #     auct_benefit = sum([agent.benefits[agent.choice] for agent in a.agents])
-
-    #     r, c = a.solve_centralized()
-    #     opt_benefit = b[r,c].sum()
-
-    #     if opt_benefit > auct_benefit + n_agents*a.eps:
-    #         print("NON OPTIMAL DETECTED")
+    plt.plot(seeded_auction.total_benefit_hist, label='Seeded')
+    plt.plot(unseeded_auction.total_benefit_hist, label='Unseeded')
+    plt.legend()
+    plt.show()

@@ -12,14 +12,17 @@ def run_perturbed_auction(n, m, pert_scale, eps):
     graph = rand_connected_graph(n)
     auction = Auction(n, m, graph=graph, eps=0.01)
     auction.run_auction()
-    prices_init = auction.agents[0].public_prices/2
+    prices_init = auction.agents[0].public_prices
 
     #Perturb the benefits
-    perturbed_benefits = auction.benefits + np.random.normal(scale=pert_scale, size=(n, m))
+    perturb = np.random.normal(scale=pert_scale, size=(n, m))
+    perturbed_benefits = auction.benefits + perturb
     # perturbed_benefits = np.clip(perturbed_benefits, 0, 1)
 
     #Run seeded auction
     seeded_auction = Auction(n, m, graph=graph, benefits=perturbed_benefits, prices=prices_init, eps=eps)
+    for s_agent, agent in zip(seeded_auction.agents, auction.agents):
+        s_agent.choice = agent.choice
     seeded_benefit = seeded_auction.run_auction()
 
     unseeded_auction = Auction(n, m, graph=graph, benefits=perturbed_benefits, eps=eps)
@@ -112,7 +115,7 @@ def run_1var_test(num_auctions_per_pt=5):
 
     # independent_variable = np.arange(1,2,0.05)
     independent_variable = np.arange(10, 100, 5)
-    independent_variable = np.hstack((independent_variable, np.array([100, 150, 200, 500])))
+    # independent_variable = np.hstack((independent_variable, np.array([100, 150, 200])))
     # independent_variable = [100]
     ind_label = "num agents"
 

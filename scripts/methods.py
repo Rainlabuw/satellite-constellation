@@ -58,7 +58,7 @@ def check_almost_equilibrium(auction):
         if eps > max_eps:
             max_eps = eps
 
-    return eps
+    return max_eps
 
 def calc_distance_btwn_solutions(agents1, agents2):
     dist = 0
@@ -67,3 +67,24 @@ def calc_distance_btwn_solutions(agents1, agents2):
             dist += 1
 
     return dist
+
+def convert_central_sol_to_assignment_mat(n, m, assignments):
+    assignment_mat = np.zeros((n, m))
+    for i, assignment in enumerate(assignments):
+        assignment_mat[i, assignment] = 1
+
+    return assignment_mat
+
+def calc_handover_penalty(assignments, lambda_):
+    handover_pen = 0
+    for i in range(len(assignments)-1):
+        new_assign = assignments[i+1]
+        old_assign = assignments[i]
+
+        if old_assign is not None:
+            assign_diff = new_assign - old_assign
+            handover_pen += -lambda_*np.sum(assign_diff**2)
+        else:
+            handover_pen += 0
+
+    return handover_pen

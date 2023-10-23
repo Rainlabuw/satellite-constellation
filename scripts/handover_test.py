@@ -24,17 +24,6 @@ def generate_benefits_over_time(n, m, t_final, num_tsteps):
                 benefits[i,j,t_index] = benefit_scale*np.exp(-(t-time_center)**2/time_spread**2)
     return benefits
 
-def calc_handover_penalty(assignments, lambda_):
-    handover_pen = 0
-    for i in range(len(assignments)-1):
-        new_assign = assignments[i+1]
-        old_assign = assignments[i]
-
-        assign_diff = new_assign - old_assign
-        handover_pen += -lambda_*np.sum(assign_diff**2)
-
-    return handover_pen
-
 def convert_agents_to_assignment_matrix(agents):
     assignment_matrix = np.zeros((len(agents), len(agents[0].benefits)))
     for i, agent in enumerate(agents):
@@ -42,7 +31,7 @@ def convert_agents_to_assignment_matrix(agents):
     return assignment_matrix
 
 def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_):
-    adjusted_benefits = np.where(prev_assign == 1, benefits, benefits - lambda_)
+    adjusted_benefits = np.where(prev_assign == 1, benefits, benefits - lambda_*2)
     return adjusted_benefits
 
 if __name__ == "__main__":
