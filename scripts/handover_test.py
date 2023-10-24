@@ -42,12 +42,15 @@ if __name__ == "__main__":
 
     naive_benefits = []
     naive_handover_benefits = []
+    naive_handover_violations = []
 
     sequential_benefits = []
     sequential_handover_benefits = []
+    sequential_handover_violations = []
 
     sga_benefits = []
     sga_handover_benefits = []
+    sga_handover_violations = []
     for n in ns:
         print(f"AGENT {n}")
         m = n
@@ -83,6 +86,7 @@ if __name__ == "__main__":
 
         naive_benefits.append(sum(benefits)/(n*num_tsteps))
         naive_handover_benefits.append(handover_ben/(n*num_tsteps))
+        naive_handover_violations.append(calc_handover_penalty(assignment_mats, lambda_))
 
         #solve each timestep sequentially
         assignment_mats = []

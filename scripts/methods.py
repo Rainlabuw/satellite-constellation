@@ -75,16 +75,26 @@ def convert_central_sol_to_assignment_mat(n, m, assignments):
 
     return assignment_mat
 
-def calc_handover_penalty(assignments, lambda_):
+def calc_handover_penalty(init_assignment, assignments, lambda_):
+    """
+    Given an initial assignment and a list of assignment matrices,
+    calculates the handover penalty associated with them,
+    according to the Frobenius norm definition.
+
+    If init_assignment is None, the the handover penalty from the first
+    step is zero.
+    """
     handover_pen = 0
+
+    if init_assignment is not None:
+        assign_diff = np.sqrt(lambda_/2)*(assignments[0] - init_assignment)
+        handover_pen += np.sum(assign_diff**2)
+
     for i in range(len(assignments)-1):
         new_assign = assignments[i+1]
         old_assign = assignments[i]
 
-        if old_assign is not None:
-            assign_diff = new_assign - old_assign
-            handover_pen += -lambda_*np.sum(assign_diff**2)
-        else:
-            handover_pen += 0
+        assign_diff = np.sqrt(lambda_/2)*(new_assign - old_assign)
+        handover_pen += np.sum(assign_diff**2)
 
     return handover_pen
