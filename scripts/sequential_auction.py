@@ -5,7 +5,7 @@ from dist_auction_algo_josh import Auction
 from handover_test import *
 
 class MultiAuction(object):
-    def __init__(self, benefits, init_assignment, max_tstep_lookahead, graph=None, prices=None, verbose=False, lambda_=0.5):
+    def __init__(self, benefits, init_assignment, max_tstep_lookahead, graph=None, prices=None, verbose=False, lambda_=1):
         # benefit matrix for the next few timesteps
         self.benefits = benefits
 
@@ -33,7 +33,7 @@ class MultiAuction(object):
         for i, chosen_ass in enumerate(self.chosen_assignments):
             curr_benefit = self.benefits[:,:,i]
             total_benefit += (curr_benefit * chosen_ass).sum()
-        total_benefit += calc_handover_penalty([self.init_assignment] + self.chosen_assignments, self.lambda_)
+        total_benefit -= calc_handover_penalty(self.init_assignment, self.chosen_assignments, self.lambda_)
 
         return total_benefit
 
@@ -88,10 +88,10 @@ class MultiAuction(object):
                 init_ass = combined_sols[sol_key_sequence[0]].assignment
             else: init_ass = self.curr_assignment
 
-            assignment_sequence = [init_ass] + [combined_sols[ass].assignment for ass in sol_key_sequence]
+            assignment_sequence = [combined_sols[ass].assignment for ass in sol_key_sequence]
 
             #take into account losses from handover
-            total_benefit += calc_handover_penalty(assignment_sequence, self.lambda_)
+            total_benefit -= calc_handover_penalty(init_ass, assignment_sequence, self.lambda_)
             
             # print(sol_key_sequence, total_benefit)
 
@@ -151,122 +151,124 @@ class BenefitSolution(object):
         return f"Benefit: {self.benefit},\nAssignment:\n{self.assignment},\nCombined benefit matrix:\n{self.benefit_mat}"
 
 if __name__ == "__main__":
-    # # Case where no solutions are the best.
-    # benefits = np.zeros((4,4,2))
-    # benefits[:,:,0] = np.array([[100, 1, 0, 0],
-    #                             [1, 100, 0, 0],
-    #                             [0, 0, 0.2, 0.1],
-    #                             [0, 0, 0.1, 0.2]])
+    # Case where no solutions are the best.
+    benefits = np.zeros((4,4,2))
+    benefits[:,:,0] = np.array([[100, 1, 0, 0],
+                                [1, 100, 0, 0],
+                                [0, 0, 0.2, 0.1],
+                                [0, 0, 0.1, 0.2]])
     
-    # benefits[:,:,1] = np.array([[1, 1000, 0, 0],
-    #                             [1000, 1, 0, 0],
-    #                             [0, 0, 0.1, 0.3],
-    #                             [0, 0, 0.3, 0.1]])
+    benefits[:,:,1] = np.array([[1, 1000, 0, 0],
+                                [1000, 1, 0, 0],
+                                [0, 0, 0.1, 0.3],
+                                [0, 0, 0.3, 0.1]])
 
-    # print("Expect no solution to be optimal (2198.8) but them to be same for all lookaheads")
-    # for lookahead in range(1,benefits.shape[-1]+1):
-    #     multi_auction = MultiAuction(benefits, None, lookahead)
-    #     multi_auction.run_auctions()
-    #     ben = multi_auction.calc_benefit()
-    #     print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
+    print("Expect no solution to be optimal (2198.8) but them to be same for all lookaheads")
+    for lookahead in range(1,benefits.shape[-1]+1):
+        multi_auction = MultiAuction(benefits, None, lookahead)
+        multi_auction.run_auctions()
+        ben = multi_auction.calc_benefit()
+        print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
 
-    # #Case where a combined solution is the best.
-    # benefits = np.zeros((3,3,3))
-    # benefits[:,:,0] = np.array([[0.1, 0, 0],
-    #                             [0, 0.1, 0],
-    #                             [0, 0, 0.1]])
-    # benefits[:,:,1] = np.array([[0.1, 0, 0],
-    #                             [0, 0.1, 0],
-    #                             [0, 0, 0.1]])
-    # benefits[:,:,2] = np.array([[0.1, 1000, 0],
-    #                             [0, 0.1, 1000],
-    #                             [1000, 0, 0.1]])
+    #Case where a combined solution is the best.
+    benefits = np.zeros((3,3,3))
+    benefits[:,:,0] = np.array([[0.1, 0, 0],
+                                [0, 0.1, 0],
+                                [0, 0, 0.1]])
+    benefits[:,:,1] = np.array([[0, 0, 0.1],
+                                [0.1, 0, 0],
+                                [0, 0.1, 0]])
+    benefits[:,:,2] = np.array([[0.1, 1000, 0],
+                                [0, 0.1, 1000],
+                                [1000, 0, 0.1]])
 
-    # print("Expect combined solution to be optimal (3000) only at lookahead of 3")
-    # for lookahead in range(1,benefits.shape[-1]+1):
-    #     multi_auction = MultiAuction(benefits, None, lookahead)
-    #     multi_auction.run_auctions()
-    #     ben = multi_auction.calc_benefit()
-    #     print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
+    print("Expect combined solution to be optimal (3000) only at lookahead of 3")
+    for lookahead in range(1,benefits.shape[-1]+1):
+        multi_auction = MultiAuction(benefits, None, lookahead)
+        multi_auction.run_auctions()
+        ben = multi_auction.calc_benefit()
+        print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
+
+    
     # np.random.seed(45)
+    n = 50
+    m = 50
+    T = 10
+    benefits = np.random.rand(n,m,T)
+    
+    for lookahead in range(1,benefits.shape[-1]+1):
+        multi_auction = MultiAuction(benefits, None, lookahead)
+        multi_auction.run_auctions()
+        ben = multi_auction.calc_benefit()
+        print(f"~~~~Benefit from combined solution, lookahead {lookahead}: {ben}~~~~")
+
+    # #Case where we expect solutions to get increasingly better as lookahead window increases
     # n = 50
     # m = 50
     # T = 25
-    # benefits = np.random.rand(n,m,T)
+    # np.random.seed(42)
+
+    # resulting_bens = []
+    # print("Expect combined solutions to get better as lookahead increases")
+    # max_lookahead = 10
+    # num_avgs = 100
+
+    # for lookahead in range(1,max_lookahead+1):
+    #     avg_ben = 0
+    #     for _ in range(num_avgs):
+    #         print(f"Lookahead {lookahead} ({_}/{num_avgs})", end='\r')
+    #         benefits = generate_benefits_over_time(n, m, 10, T)
+    #         multi_auction = MultiAuction(benefits, None, lookahead, lambda_=0.5)
+    #         multi_auction.run_auctions()
+    #         ben = multi_auction.calc_benefit()
+    #         avg_ben += ben/num_avgs
+    #         # print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
+
+    #     resulting_bens.append(avg_ben)
+
+    # plt.plot(range(1,max_lookahead+1), resulting_bens)
+    # plt.title(f"Lookahead vs. accuracy, n={n}, m={m}, T={T}")
+    # plt.xlabel("Lookahead timesteps")
+    # plt.ylabel(f"Average benefit across {num_avgs} runs")
+    # plt.savefig("lookahead_vs_benefit.png")
+    # plt.show()
+
+
+    # #solve each timestep sequentially
+    # assignment_mats = []
+    # benefits_hist = []
+    # lambda_ = 0.5
     
-    # for lookahead in range(1,benefits.shape[-1]+1):
-    #     multi_auction = MultiAuction(benefits, None, lookahead)
-    #     multi_auction.run_auctions()
-    #     ben = multi_auction.calc_benefit()
-    #     print(f"~~~~Benefit from combined solution, lookahead {lookahead}: {ben}~~~~")
+    # #solve first timestep separately
+    # graph = nx.complete_graph(n)
+    # a = Auction(n, m, benefits=benefits[:,:,0], graph=graph)
+    # benefit = a.run_auction()
 
-    #Case where we expect solutions to get icnreasingly better as lookahead window increases
-    n = 50
-    m = 50
-    T = 25
-    np.random.seed(42)
+    # assignment_mat = convert_agents_to_assignment_matrix(a.agents)
+    # assignment_mats.append(assignment_mat)
+    # benefits_hist.append(benefit)
 
-    resulting_bens = []
-    print("Expect combined solutions to get better as lookahead increases")
-    max_lookahead = 10
-    num_avgs = 100
+    # prev_assignment_mat = assignment_mat
+    # for k in range(1, T):
+    #     print(k, end='\r')
+    #     #Generate assignment for the task minimizing handover
+    #     benefit_mat_w_handover = add_handover_pen_to_benefit_matrix(benefits[:,:,k], prev_assignment_mat, lambda_)
 
-    for lookahead in range(1,max_lookahead+1):
-        avg_ben = 0
-        for _ in range(num_avgs):
-            print(f"Lookahead {lookahead} ({_}/{num_avgs})", end='\r')
-            benefits = generate_benefits_over_time(n, m, 10, T)
-            multi_auction = MultiAuction(benefits, None, lookahead, lambda_=0.5)
-            multi_auction.run_auctions()
-            ben = multi_auction.calc_benefit()
-            avg_ben += ben/num_avgs
-            # print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
+    #     a = Auction(n, m, benefits=benefit_mat_w_handover, graph=graph)
+    #     a.run_auction()
+    #     choices = [ag.choice for ag in a.agents]
 
-        resulting_bens.append(avg_ben)
+    #     assignment_mat = convert_agents_to_assignment_matrix(a.agents)
+    #     assignment_mats.append(assignment_mat)
 
-    plt.plot(range(1,max_lookahead+1), resulting_bens)
-    plt.title(f"Lookahead vs. accuracy, n={n}, m={m}, T={T}")
-    plt.xlabel("Lookahead timesteps")
-    plt.ylabel(f"Average benefit across {num_avgs} runs")
-    plt.savefig("lookahead_vs_benefit.png")
-    plt.show()
+    #     prev_assignment_mat = assignment_mat
 
+    #     #Calculate the benefits from a task with the normal benefit matrix
+    #     benefit = benefits[:,:,k]*assignment_mat
 
-    #solve each timestep sequentially
-    assignment_mats = []
-    benefits_hist = []
-    lambda_ = 0.5
-    
-    #solve first timestep separately
-    graph = nx.complete_graph(n)
-    a = Auction(n, m, benefits=benefits[:,:,0], graph=graph)
-    benefit = a.run_auction()
+    #     benefits_hist.append(benefit.sum())
 
-    assignment_mat = convert_agents_to_assignment_matrix(a.agents)
-    assignment_mats.append(assignment_mat)
-    benefits_hist.append(benefit)
-
-    prev_assignment_mat = assignment_mat
-    for k in range(1, T):
-        print(k, end='\r')
-        #Generate assignment for the task minimizing handover
-        benefit_mat_w_handover = add_handover_pen_to_benefit_matrix(benefits[:,:,k], prev_assignment_mat, lambda_)
-
-        a = Auction(n, m, benefits=benefit_mat_w_handover, graph=graph)
-        a.run_auction()
-        choices = [ag.choice for ag in a.agents]
-
-        assignment_mat = convert_agents_to_assignment_matrix(a.agents)
-        assignment_mats.append(assignment_mat)
-
-        prev_assignment_mat = assignment_mat
-
-        #Calculate the benefits from a task with the normal benefit matrix
-        benefit = benefits[:,:,k]*assignment_mat
-
-        benefits_hist.append(benefit.sum())
-
-    handover_ben = sum(benefits_hist) + calc_handover_penalty(assignment_mats, lambda_)
-    print("Solving sequentially, each timestep considering the last one")
-    print(f"\tBenefit without considering handover: {sum(benefits_hist)}")
-    print(f"\tBenefit with handover penalty: {handover_ben}")
+    # handover_ben = sum(benefits_hist) - calc_handover_penalty(None, assignment_mats, lambda_)
+    # print("Solving sequentially, each timestep considering the last one")
+    # print(f"\tBenefit without considering handover: {sum(benefits_hist)}")
+    # print(f"\tBenefit with handover penalty: {handover_ben}")
