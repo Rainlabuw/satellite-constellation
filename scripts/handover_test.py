@@ -5,7 +5,7 @@ from sequential_greedy import sequential_greedy
 import networkx as nx
 from matplotlib import pyplot as plt
 
-def generate_benefits_over_time(n, m, t_final, num_tsteps):
+def generate_benefits_over_time(n, m, t_final, num_tsteps, scale_min=0.5, scale_max=2):
     benefits = np.zeros((n,m,num_tsteps))
     for i in range(n):
         for j in range(m):
@@ -16,7 +16,7 @@ def generate_benefits_over_time(n, m, t_final, num_tsteps):
             time_spread = np.random.uniform(0, t_final/2)
 
             #how high is the benefit curve
-            benefit_scale = np.random.uniform(1, 2)
+            benefit_scale = np.random.uniform(scale_min, scale_max)
 
             #iterate from time zero to t_final with 100 steps in between
             for t_index, t in enumerate(np.linspace(0, t_final, num_tsteps)):
@@ -33,6 +33,25 @@ def convert_agents_to_assignment_matrix(agents):
 def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_):
     adjusted_benefits = np.where(prev_assign == 1, benefits, benefits - lambda_*2)
     return adjusted_benefits
+
+def solve_naively(benefit_mats_over_time, lambda_):
+    n = benefit_mats_over_time.shape[0]
+    m = benefit_mats_over_time.shape[1]
+    T = benefit_mats_over_time.shape[2]
+    #solve each timestep independently
+    assignment_mats = []
+    benefits_received = []
+    for k in range(T):
+        print(k, end='\r')
+        a = Auction(n, m, benefits=benefit_mats_over_time[:,:,k], graph=nx.complete_graph(n))
+        benefit_received = a.run_auction()
+
+        assignment_mat = convert_agents_to_assignment_matrix(a.agents)
+        assignment_mats.append(assignment_mat)
+
+        benefits_received.append(benefit_received)
+
+    return sum(benefits_received)-calc_handover_penalty(None, assignment_mats, lambda_), calc_handover_penalty(None, assignment_mats, lambda_)/lambda_
 
 if __name__ == "__main__":
     ns = [10, 25, 50, 100]
