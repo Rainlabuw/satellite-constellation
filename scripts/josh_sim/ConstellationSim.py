@@ -2,6 +2,7 @@ from astropy import units as u
 from astropy import constants as c
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 from poliastro.bodies import Earth
 from poliastro.twobody import Orbit
@@ -11,27 +12,68 @@ import time
 from Satellite import Satellite
 
 class ConstellationSim(object):
-    def __init__(self) -> None:
+    def __init__(self, dt=5*u.min) -> None:
         self.sats = []
         self.tasks = []
 
+        self.dt = dt
+
     def add_sat(self, sat):
+        sat.id = len(self.sats)
         self.sats.append(sat)
 
     def add_task(self, task):
+        task.id = len(self.tasks)
         self.tasks.append(task)
 
     def add_sats(self, sats):
+        for i, sat in enumerate(sats):
+            sat.id = len(self.sats) + i
         self.sats.extend(sats)
 
     def add_tasks(self, tasks):
+        for i, task in enumerate(tasks):
+            task.id = len(self.tasks) + i
         self.tasks.extend(tasks)
 
     def gen_random_sats(self, n_sats, orbital_elements):
         """
         Generates n_sats satellites with random orbital elements.
         """
-        self.tasks.append
+        pass
+
+    def update(self):
+        """
+        Updates the constellation state by propagating things forward in time
+        """
+        for sat in const.sats:
+            sat.propagate_orbit(self.dt)
+
+    def update_plot(self, frame):
+        """
+        Updates the constellation state and updates the plot accordingly
+        """
+        self.plotter._ax.clear()
+
+        self.update()
+
+        for sat in self.sats:
+            self.plotter.plot(sat.orbit, label=f"Sat {sat.id}, Plane {sat.plane_id}",color=self.plane_colors[sat.plane_id])
+
+        plt.show(block=False)
+
+    def run_animation(self, frames=10):
+        self.plane_colors = {}
+        for sat in self.sats:
+            if sat.plane_id not in self.plane_colors.keys():
+                self.plane_colors[sat.plane_id] = np.random.rand(3,)
+
+        fig, ax = plt.subplots()
+        fig.set_size_inches(12,6)
+        self.plotter = StaticOrbitPlotter(ax)
+        ani  = FuncAnimation(fig, self.update_plot, frames=frames, interval=1000, blit=False)
+
+        ani.save('constellation.gif', writer='imagemagick', fps=1)
 
 if __name__ == "__main__":
     const = ConstellationSim()
@@ -53,15 +95,13 @@ if __name__ == "__main__":
         raan = plane_num*360/num_planes*u.deg
         for sat_num in range(num_sats_per_plane):
             ta = sat_num*360/num_sats_per_plane*u.deg
-            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [])
+            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num)
             const.add_sat(sat)
 
-            plotter.plot(sat.orbit, label=f"sat {plane_num},{sat_num}", color=plane_color)
+    const.run_animation()
+    # for sat in const.sats:
+    #     sat.propagate_orbit(10*u.min)
+    #     plotter.plot(sat.orbit)
 
-    #Animate each satellite in the constellation over a period of 3 huors, every 10 minutes
-    for sat in const.sats:
-        sat.propagate_orbit(10*u.min)
-        plotter.plot(sat.orbit)
-
-        plotter.show()
+    #     plotter.show()
         

@@ -7,11 +7,14 @@ from poliastro.bodies import Earth
 from poliastro.twobody import Orbit
 
 class Satellite(object):
-    def __init__(self, orbit, neighbors, benefits):
+    def __init__(self, orbit, neighbors, benefits, id=None, plane_id=None):
         self.orbit = orbit
 
         self.neighbors = neighbors
         self.benefits = benefits
+
+        self.id = id
+        self.plane_id = plane_id
 
     def propagate_orbit(self, time):
         """
