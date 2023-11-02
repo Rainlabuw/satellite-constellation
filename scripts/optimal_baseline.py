@@ -3,67 +3,37 @@ from methods import *
 import itertools
 import time
 
-def generate_matrices(n, m, T):
-    # This function will generate all possible matrices for given dimensions
-    max = 2**(n * m * T)
-    for i in range(max):
-        print(f"{i/max}", end='\r')
-        matrix = [[[0 for _ in range(T)] for _ in range(m)] for _ in range(n)]
-        # Convert i to binary and fill the matrix
-        bin_rep = format(i, f'0{n*m*T}b')
-        idx = 0
-        for x in range(n):
-            for y in range(m):
-                for z in range(T):
-                    matrix[x][y][z] = int(bin_rep[idx])
-                    idx += 1
-        matrix = np.array(matrix)
+from sequential_auction import MultiAuction, solve_naively
 
-        if not np.all(np.sum(matrix, axis=0) == 1) or not np.all(np.sum(matrix, axis=1) == 1):
-            continue
-        # if not np.array_equal(np.sum(matrix, axis=0), np.ones_like(np.sum(matrix, axis=0))) or not np.array_equal(np.sum(matrix, axis=1), np.ones_like(np.sum(matrix, axis=1))):
-        #     continue
-        yield matrix
+def gen_perms_of_perms(curr_perm_list, n, T):
+    global total_perm_list
 
-# def generate_permutation_matrices(n, m):
-#     # Generate all permutation matrices of size n x m
-#     base = [1] + [0] * (m - 1)
-#     for perm in itertools.permutations(base, m):
-#         yield np.array(list(perm))
+    if len(curr_perm_list) == T:
+        total_perm_list.append(curr_perm_list)
+        return
+    else:
+        for perm in itertools.permutations(range(n)):
+            gen_perms_of_perms(curr_perm_list + [perm], n, T)
 
-# def generate_3d_matrices(n, m, T):
-#     # Generate all 3D matrices with row and column sums equal to 1 for each time slice
-#     perm_matrices = list(generate_permutation_matrices(n, m))
-#     for matrix_combination in itertools.product(perm_matrices, repeat=T):
-#         yield np.array(list(matrix_combination))
+def find_true_optimal_ass(benefit, init_ass, lambda_):
+    n = benefit.shape[0]
+    m = benefit.shape[1]
+    T = benefit.shape[2]
 
-if __name__ == "__main__":
-    #Aims to compute a true optimal solution via exhaustive search.
-
-    n = 4
-    m = 4
-    T = 2
-
-    benefit = np.random.rand(n,m,T)
-    init_ass = np.array([[0, 0, 0, 1],
-                         [0, 0, 1, 0],
-                         [0, 1, 0, 0],
-                         [1, 0, 0, 0]])
-    benefit[:,:,0] = np.array([[100, 1, 0, 0],
-                               [1, 100, 0, 0],
-                               [0, 0, 0.1, 0.2],
-                               [0, 0, 0.2, 0.1]])
-    benefit[:,:,1] = np.array([[1000, 1, 0, 0],
-                               [1, 1000, 0, 0],
-                               [0, 0, 0.3, 0.1],
-                               [0, 0, 0.1, 0.3]])
-    lambda_ = 1
-
+    global total_perm_list
+    total_perm_list = []
+    gen_perms_of_perms([], n, T)
+    
     best_benefit = -np.inf
     best_assignment = None
-    #generate all possible assignments
-    for assignments in generate_matrices(n,m,T):
-        assignment_list = [assignments[:,:,j] for j in range(T)]
+
+    for perm_list in total_perm_list:
+        assignment_list = []
+        for perm in perm_list:
+            ass = np.zeros((n,m))
+            for i, j in enumerate(perm):
+                ass[i,j] = 1
+            assignment_list.append(ass)
 
         total_benefit = 0
         for j, ass in enumerate(assignment_list):
@@ -75,6 +45,52 @@ if __name__ == "__main__":
             best_benefit = total_benefit
             best_assignment = assignment_list
 
-    print(f"Best Assignment: (for {best_benefit} benefit):")
-    for ass in best_assignment:
-        print(ass)
+    return best_benefit, best_assignment
+
+if __name__ == "__main__":
+    #Aims to compute a true optimal solution via exhaustive search.
+
+    n = 5
+    m = 5
+    T = 3
+
+    init_ass = None
+    
+    lambda_ = 1
+
+    avg_best = 0
+    avg_smghl = 0
+    avg_smgh = 0
+    avg_naive = 0
+
+    num_avgs = 50
+    for _ in range(num_avgs):
+        benefit = np.random.rand(n,m,T)
+
+        print(f"Run {_}/{num_avgs}", end='\r')
+
+        #SMHGL centralized, lookahead = 2
+        multi_auction = MultiAuction(benefit, None, T, lambda_=lambda_)
+        multi_auction.run_auctions()
+        ben, nh = multi_auction.calc_benefit()
+        avg_smghl += ben/num_avgs
+
+        #SMGH
+        multi_auction = MultiAuction(benefit, None, 1, lambda_=lambda_)
+        multi_auction.run_auctions()
+        ben, nh = multi_auction.calc_benefit()
+        avg_smgh += ben/num_avgs
+
+        #Naive
+        ben, nh = solve_naively(benefit, lambda_)
+        avg_naive += ben/num_avgs
+
+        #Optimal
+        ben, _ = find_true_optimal_ass(benefit, init_ass, lambda_)
+        avg_best += ben/num_avgs
+
+    fig = plt.figure()
+    plt.bar(["Naive","SMGH", "SMGHL", "Optimal"], [avg_naive, avg_smgh, avg_smghl, avg_best])
+    plt.title(f"Average benefit across {num_avgs} runs, n={n}, m={m}, T={T}")
+
+    plt.show()

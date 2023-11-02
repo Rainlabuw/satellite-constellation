@@ -4,6 +4,15 @@ import networkx as nx
 from dist_auction_algo_josh import Auction
 from base_smgh_test import *
 
+from constellation_sim.ConstellationSim import get_benefit_matrix_from_constellation, ConstellationSim
+from constellation_sim.Satellite import Satellite
+from constellation_sim.Task import Task
+from poliastro.bodies import Earth
+from poliastro.twobody import Orbit
+from poliastro.plotting import StaticOrbitPlotter
+from poliastro.spheroid_location import SpheroidLocation
+from astropy import units as u
+
 class MultiAuction(object):
     def __init__(self, benefits, init_assignment, max_tstep_lookahead, graph=None, prices=None, verbose=False, approximate=False, lambda_=1):
         # benefit matrix for the next few timesteps
@@ -250,21 +259,23 @@ if __name__ == "__main__":
     #         ben, nh = multi_auction.calc_benefit()
     #         bens.append(ben)
     
-    # #Case where we expect solutions to get increasingly better as lookahead window increases
-    n = 50
-    m = 50
-    T = 5
-    lambda_ = 1
-    # np.random.seed(42)
 
-    resulting_bens = []
-    resulting_approx_bens = []
-    naive_benefits = []
-    smgh_benefits = []
-    handovers = []
-    print("Expect combined solutions to get better as lookahead increases")
-    max_lookahead = 5
-    num_avgs = 10
+
+    # #Case where we expect solutions to get increasingly better as lookahead window increases
+    # n = 50
+    # m = 50
+    # T = 95
+    # lambda_ = 1
+    # # np.random.seed(42)
+
+    # resulting_bens = []
+    # resulting_approx_bens = []
+    # naive_benefits = []
+    # smgh_benefits = []
+    # handovers = []
+    # print("Comparing performance of SMGHL to other algorithms")
+    # max_lookahead = 5
+    # num_avgs = 10
 
     # smghl2_ben = 0
     # smghl2_nh = 0
@@ -281,8 +292,10 @@ if __name__ == "__main__":
     # sga_ben = 0
     # sga_nh = 0
     # for _ in range(num_avgs):
-    #     print(f"Run {_}")
-    #     benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
+    #     print(f"Run {_}/{num_avgs}")
+    #     # benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
+    #     benefits = get_benefit_matrix_from_constellation(n, m, T)
+    #     print("Generated realistic benefits")
 
     #     #SMHGL centralized, lookahead = 2
     #     multi_auction = MultiAuction(benefits, None, 2, lambda_=lambda_)
@@ -310,15 +323,15 @@ if __name__ == "__main__":
     #     naive_ben += ben/num_avgs
     #     naive_nh += nh/num_avgs
 
-    #     #SGA/CBBA
-    #     sg_assignment_mats = sequential_greedy(benefits, lambda_)
-    #     sg_benefit = 0
-    #     for k, sg_assignment_mat in enumerate(sg_assignment_mats):
-    #         sg_benefit += (benefits[:,:,k]*sg_assignment_mat).sum()
+    #     # #SGA/CBBA
+    #     # sg_assignment_mats = sequential_greedy(benefits, lambda_)
+    #     # sg_benefit = 0
+    #     # for k, sg_assignment_mat in enumerate(sg_assignment_mats):
+    #     #     sg_benefit += (benefits[:,:,k]*sg_assignment_mat).sum()
 
-    #     handover_ben = sg_benefit - calc_handover_penalty(None, sg_assignment_mats, lambda_)
-    #     sga_ben += handover_ben/num_avgs
-    #     sga_nh += calc_handover_penalty(None, sg_assignment_mats, lambda_)/lambda_/num_avgs
+    #     # handover_ben = sg_benefit - calc_handover_penalty(None, sg_assignment_mats, lambda_)
+    #     # sga_ben += handover_ben/num_avgs
+    #     # sga_nh += calc_handover_penalty(None, sg_assignment_mats, lambda_)/lambda_/num_avgs
 
     # fig, axes = plt.subplots(2,1)
     # axes[0].bar(["Naive", "SGA", "SMGH", "SMGHL2", "SMGHL5"],[naive_ben, sga_ben, smgh_ben, smghl2_ben, smghl5_ben])
@@ -332,42 +345,92 @@ if __name__ == "__main__":
 
     # plt.show()
 
-    for lookahead in range(1,max_lookahead+1):
-        avg_ben = 0
-        avg_nh = 0
-        avg_approx_ben = 0
-        for _ in range(num_avgs):
-            print(f"Lookahead {lookahead} ({_}/{num_avgs})", end='\r')
-            benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
-            # benefits = np.random.rand(n,m,T)
+    # #TESTING FOR HOW PERFORMANCE INCREASES AS LOOKAHAED INCREASES
+    # print("Expect performance to generally increase as lookahead increases")
 
-            #SMGHL with true lookaheads
-            multi_auction = MultiAuction(benefits, None, lookahead, lambda_=lambda_)
-            multi_auction.run_auctions()
-            ben, nh = multi_auction.calc_benefit()
-            avg_ben += ben/num_avgs
-            avg_nh += nh/num_avgs
+    # for lookahead in range(1,max_lookahead+1):
+    #     avg_ben = 0
+    #     avg_nh = 0
+    #     avg_approx_ben = 0
+    #     for _ in range(num_avgs):
+    #         print(f"Lookahead {lookahead} ({_}/{num_avgs})", end='\r')
+    #         # benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
+    #         benefits = get_benefit_matrix_from_constellation(n, m, T)
+    #         # benefits = np.random.rand(n,m,T)
+
+    #         #SMGHL with true lookaheads
+    #         multi_auction = MultiAuction(benefits, None, lookahead, lambda_=lambda_)
+    #         multi_auction.run_auctions()
+    #         ben, nh = multi_auction.calc_benefit()
+    #         avg_ben += ben/num_avgs
+    #         avg_nh += nh/num_avgs
             
-            #SMGHL (distributed)
-            multi_auction = MultiAuction(benefits, None, lookahead, lambda_=lambda_, approximate=True)
-            multi_auction.run_auctions()
-            ben, _ = multi_auction.calc_benefit()
-            avg_approx_ben += ben/num_avgs
+    #         #SMGHL (distributed)
+    #         multi_auction = MultiAuction(benefits, None, lookahead, lambda_=lambda_, approximate=True)
+    #         multi_auction.run_auctions()
+    #         ben, _ = multi_auction.calc_benefit()
+    #         avg_approx_ben += ben/num_avgs
 
-        resulting_bens.append(avg_ben)
-        resulting_approx_bens.append(avg_approx_ben)
-        handovers.append(avg_nh)
+    #     resulting_bens.append(avg_ben)
+    #     resulting_approx_bens.append(avg_approx_ben)
+    #     handovers.append(avg_nh)
 
-    plt.plot(range(1,max_lookahead+1), resulting_bens, label="SMGHL (Centralized)")
-    plt.plot(range(1,max_lookahead+1), resulting_approx_bens, label="SMGHL (Distributed)")
-    plt.title(f"Lookahead vs. accuracy, n={n}, m={m}, T={T}")
-    plt.xlabel("Lookahead timesteps")
-    plt.ylabel(f"Average benefit across {num_avgs} runs")
-    plt.legend()
-    plt.savefig("lookahead_vs_benefit.png")
-    plt.show()
+    # plt.plot(range(1,max_lookahead+1), resulting_bens, label="SMGHL (Centralized)")
+    # plt.plot(range(1,max_lookahead+1), resulting_approx_bens, label="SMGHL (Distributed)")
+    # plt.title(f"Lookahead vs. accuracy, n={n}, m={m}, T={T}")
+    # plt.xlabel("Lookahead timesteps")
+    # plt.ylabel(f"Average benefit across {num_avgs} runs")
+    # plt.legend()
+    # plt.savefig("lookahead_vs_benefit.png")
+    # plt.show()
 
     # plt.figure()
     # plt.plot(range(1,max_lookahead+1), handovers)
     # plt.title("Num handovers vs. lookahead")
     # plt.show()
+
+    # Testing plotting
+    const = ConstellationSim(dt=1*u.min)
+
+    T = int(95 // const.dt.to_value(u.min)) #simulate enough timesteps for ~1 orbit
+    T = 25
+    earth = Earth
+
+    #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
+    #5 evenly spaced planes of satellites, each with 10 satellites per plane
+    a = earth.R.to(u.km) + 400*u.km
+    ecc = 0.01*u.one
+    inc = 58*u.deg
+    argp = 0*u.deg
+
+    num_planes = 10
+    num_sats_per_plane = 5
+    for plane_num in range(num_planes):
+        raan = plane_num*360/num_planes*u.deg
+        for sat_num in range(num_sats_per_plane):
+            ta = sat_num*360/num_sats_per_plane*u.deg
+            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num)
+            const.add_sat(sat)
+
+    #~~~~~~~~~Generate 5 random tasks on the surface of earth~~~~~~~~~~~~~
+    num_tasks = 50
+
+    for i in range(num_tasks):
+        lon = np.random.uniform(-180, 180)
+        lat = np.random.uniform(-50, 50)
+        task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
+        
+        task_benefit = np.random.uniform(1,2)
+        task = Task(task_loc, task_benefit)
+        const.add_task(task)
+
+    const.propagate_orbits(T)
+
+    const.assign_over_time = [np.eye(const.n, const.m) for i in range(T)]
+
+    multi_auction = MultiAuction(const.benefits_over_time, None, 5, lambda_=1)
+    multi_auction.run_auctions()
+
+    const.assign_over_time = multi_auction.chosen_assignments
+    print(const.assign_over_time)
+    const.run_animation(frames=T)
