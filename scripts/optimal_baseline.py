@@ -25,56 +25,59 @@ def generate_matrices(n, m, T):
         #     continue
         yield matrix
 
-# def generate_permutation_matrices(n, m):
-#     # Generate all permutation matrices of size n x m
-#     base = [1] + [0] * (m - 1)
-#     for perm in itertools.permutations(base, m):
-#         yield np.array(list(perm))
+def gen_perms_of_perms(curr_perm_list, n, T):
+    global total_perm_list
 
-# def generate_3d_matrices(n, m, T):
-#     # Generate all 3D matrices with row and column sums equal to 1 for each time slice
-#     perm_matrices = list(generate_permutation_matrices(n, m))
-#     for matrix_combination in itertools.product(perm_matrices, repeat=T):
-#         yield np.array(list(matrix_combination))
+    if len(curr_perm_list) == T:
+        total_perm_list.append(curr_perm_list)
+        return
+    else:
+        for perm in itertools.permutations(range(n)):
+            gen_perms_of_perms(curr_perm_list + [perm], n, T)
 
 if __name__ == "__main__":
     #Aims to compute a true optimal solution via exhaustive search.
 
-    n = 4
-    m = 4
+    n = 3
+    m = 3
     T = 2
 
-    benefit = np.random.rand(n,m,T)
-    init_ass = np.array([[0, 0, 0, 1],
-                         [0, 0, 1, 0],
-                         [0, 1, 0, 0],
-                         [1, 0, 0, 0]])
-    benefit[:,:,0] = np.array([[100, 1, 0, 0],
-                               [1, 100, 0, 0],
-                               [0, 0, 0.1, 0.2],
-                               [0, 0, 0.2, 0.1]])
-    benefit[:,:,1] = np.array([[1000, 1, 0, 0],
-                               [1, 1000, 0, 0],
-                               [0, 0, 0.3, 0.1],
-                               [0, 0, 0.1, 0.3]])
-    lambda_ = 1
+    global total_perm_list
+    total_perm_list = []
+    gen_perms_of_perms([], n, T)
+    print(total_perm_list)
 
-    best_benefit = -np.inf
-    best_assignment = None
-    #generate all possible assignments
-    for assignments in generate_matrices(n,m,T):
-        assignment_list = [assignments[:,:,j] for j in range(T)]
+    # benefit = np.random.rand(n,m,T)
+    # init_ass = np.array([[0, 0, 0, 1],
+    #                      [0, 0, 1, 0],
+    #                      [0, 1, 0, 0],
+    #                      [1, 0, 0, 0]])
+    # benefit[:,:,0] = np.array([[100, 1, 0, 0],
+    #                            [1, 100, 0, 0],
+    #                            [0, 0, 0.1, 0.2],
+    #                            [0, 0, 0.2, 0.1]])
+    # benefit[:,:,1] = np.array([[1000, 1, 0, 0],
+    #                            [1, 1000, 0, 0],
+    #                            [0, 0, 0.3, 0.1],
+    #                            [0, 0, 0.1, 0.3]])
+    # lambda_ = 1
 
-        total_benefit = 0
-        for j, ass in enumerate(assignment_list):
-            total_benefit += (benefit[:,:,j]*ass).sum()
+    # best_benefit = -np.inf
+    # best_assignment = None
+    # #generate all possible assignments
+    # for assignments in generate_matrices(n,m,T):
+    #     assignment_list = [assignments[:,:,j] for j in range(T)]
 
-        total_benefit -= calc_handover_penalty(init_ass, assignment_list, lambda_)
+    #     total_benefit = 0
+    #     for j, ass in enumerate(assignment_list):
+    #         total_benefit += (benefit[:,:,j]*ass).sum()
 
-        if total_benefit > best_benefit:
-            best_benefit = total_benefit
-            best_assignment = assignment_list
+    #     total_benefit -= calc_handover_penalty(init_ass, assignment_list, lambda_)
 
-    print(f"Best Assignment: (for {best_benefit} benefit):")
-    for ass in best_assignment:
-        print(ass)
+    #     if total_benefit > best_benefit:
+    #         best_benefit = total_benefit
+    #         best_assignment = assignment_list
+
+    # print(f"Best Assignment: (for {best_benefit} benefit):")
+    # for ass in best_assignment:
+    #     print(ass)
