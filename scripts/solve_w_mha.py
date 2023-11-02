@@ -2,7 +2,6 @@ import numpy as np
 from methods import *
 import networkx as nx
 from classic_auction import Auction
-from base_smgh_test import *
 
 from constellation_sim.ConstellationSim import get_benefit_matrix_from_constellation, ConstellationSim
 from constellation_sim.Satellite import Satellite
@@ -13,7 +12,7 @@ from poliastro.plotting import StaticOrbitPlotter
 from poliastro.spheroid_location import SpheroidLocation
 from astropy import units as u
 
-class SMGHAuction(object):
+class MHAAuction(object):
     def __init__(self, benefits, init_assignment, max_tstep_lookahead, graph=None, prices=None, verbose=False, approximate=False, lambda_=1):
         # benefit matrix for the next few timesteps
         self.benefits = benefits
@@ -242,9 +241,9 @@ if __name__ == "__main__":
 
     const.assign_over_time = [np.eye(const.n, const.m) for i in range(T)]
 
-    smgh_auction = SMGHAuction(const.benefits_over_time, None, 5, lambda_=1)
-    smgh_auction.run_auctions()
+    mha_auction = MHAAuction(const.benefits_over_time, None, 5, lambda_=1)
+    mha_auction.run_auctions()
 
-    const.assign_over_time = smgh_auction.chosen_assignments
+    const.assign_over_time = mha_auction.chosen_assignments
     print(const.assign_over_time)
     const.run_animation(frames=T)

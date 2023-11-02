@@ -48,7 +48,7 @@ def optimal_baseline_comparison():
         ben, nh = multi_auction.calc_benefit()
         avg_mhal += ben/num_avgs
 
-        #SMGH
+        #MHA
         multi_auction = MHAAuction(benefit, None, 1, lambda_=lambda_)
         multi_auction.run_auctions()
         ben, nh = multi_auction.calc_benefit()
@@ -63,14 +63,14 @@ def optimal_baseline_comparison():
         avg_best += ben/num_avgs
 
     fig = plt.figure()
-    plt.bar(["Naive","SMGH", "SMGHL", "Optimal"], [avg_naive, avg_mha, avg_mhal, avg_best])
+    plt.bar(["Naive","MHA", "MHAL", "Optimal"], [avg_naive, avg_mha, avg_mhal, avg_best])
     plt.title(f"Average benefit across {num_avgs} runs, n={n}, m={m}, T={T}")
 
     plt.show()
 
-def SMGH_unit_testing():
+def MHA_unit_testing():
     """
-    Tests SMGH in various cases where solutions are known.
+    Tests MHA in various cases where solutions are known.
     """
     # Case where no solutions are the best.
     benefits = np.zeros((4,4,2))
@@ -110,14 +110,14 @@ def SMGH_unit_testing():
         ben,_ = multi_auction.calc_benefit()
         print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
 
-def compare_SMGH_to_other_algs():
+def compare_MHA_to_other_algs():
     #Case where we expect solutions to get increasingly better as lookahead window increases
     n = 50
     m = 50
     T = 95
     lambda_ = 1
 
-    print("Comparing performance of SMGHL to other algorithms")
+    print("Comparing performance of MHAL to other algorithms")
     num_avgs = 10
 
     mhal2_ben = 0
@@ -154,7 +154,7 @@ def compare_SMGH_to_other_algs():
         mhal5_ben += ben/num_avgs
         mhal5_nh += nh/num_avgs
 
-        #SMGH
+        #MHA
         multi_auction = MHAAuction(benefits, None, 1, lambda_=lambda_)
         multi_auction.run_auctions()
         ben, nh = multi_auction.calc_benefit()
@@ -177,20 +177,20 @@ def compare_SMGH_to_other_algs():
         sga_nh += calc_handover_penalty(None, sg_assignment_mats, lambda_)/lambda_/num_avgs
 
     fig, axes = plt.subplots(2,1)
-    axes[0].bar(["Naive", "SGA", "SMGH", "SMGHL2", "SMGHL5"],[naive_ben, sga_ben, mha_ben, mhal2_ben, mhal5_ben])
+    axes[0].bar(["Naive", "SGA", "MHA", "MHAL2", "MHAL5"],[naive_ben, sga_ben, mha_ben, mhal2_ben, mhal5_ben])
     axes[0].set_title("Average benefit across 10 runs")
     # axes[0].set_xlabel("Lookahead timesteps")
 
-    axes[1].bar(["Naive", "SGA", "SMGH", "SMGHL2", "SMGHL5"],[naive_nh, sga_nh, mha_nh, mhal2_nh, mhal5_nh])
+    axes[1].bar(["Naive", "SGA", "MHA", "MHAL2", "MHAL5"],[naive_nh, sga_nh, mha_nh, mhal2_nh, mhal5_nh])
     
     axes[1].set_title("Average number of handovers across 10 runs")
     fig.suptitle(f"Test with n={n}, m={m}, T={T}, lambda={lambda_}, realistic-ish benefits")
 
     plt.show()
 
-def test_SMGH_lookahead_performance():
+def test_MHA_lookahead_performance():
     """
-    Test performance of SMGH as lookahead window increases.
+    Test performance of MHA as lookahead window increases.
 
     Hopefully, general trend is that performance increases as lookahead increases.
     """
@@ -216,14 +216,14 @@ def test_SMGH_lookahead_performance():
             benefits = get_benefit_matrix_from_constellation(n, m, T)
             # benefits = np.random.rand(n,m,T)
 
-            #SMGHL with true lookaheads
+            #MHAL with true lookaheads
             multi_auction = MHAAuction(benefits, None, lookahead, lambda_=lambda_)
             multi_auction.run_auctions()
             ben, nh = multi_auction.calc_benefit()
             avg_ben += ben/num_avgs
             avg_nh += nh/num_avgs
             
-            #SMGHL (distributed)
+            #MHAL (distributed)
             multi_auction = MHAAuction(benefits, None, lookahead, lambda_=lambda_, approximate=True)
             multi_auction.run_auctions()
             ben, _ = multi_auction.calc_benefit()
@@ -233,8 +233,8 @@ def test_SMGH_lookahead_performance():
         resulting_approx_bens.append(avg_approx_ben)
         handovers.append(avg_nh)
 
-    plt.plot(range(1,max_lookahead+1), resulting_bens, label="SMGHL (Centralized)")
-    plt.plot(range(1,max_lookahead+1), resulting_approx_bens, label="SMGHL (Distributed)")
+    plt.plot(range(1,max_lookahead+1), resulting_bens, label="MHAL (Centralized)")
+    plt.plot(range(1,max_lookahead+1), resulting_approx_bens, label="MHAL (Distributed)")
     plt.title(f"Lookahead vs. accuracy, n={n}, m={m}, T={T}")
     plt.xlabel("Lookahead timesteps")
     plt.ylabel(f"Average benefit across {num_avgs} runs")
@@ -380,7 +380,7 @@ def compare_alg_benefits_and_handover():
     axs[0].set_ylabel('Total benefit')
     axs[0].bar(np.arange(len(naive_benefits)), naive_benefits, width=0.2, label='Naive')
     axs[0].bar(np.arange(len(sga_benefits))+0.2, sga_benefits, width=0.2, label='SGA')
-    axs[0].bar(np.arange(len(sequential_benefits))+0.4, sequential_benefits, width=0.2, label='SMGH (Ours)')
+    axs[0].bar(np.arange(len(sequential_benefits))+0.4, sequential_benefits, width=0.2, label='MHA (Ours)')
     axs[0].set_xticks(np.arange(len(naive_benefits)))
     axs[0].set_xticklabels([str(n) for n in ns])
     axs[0].legend(loc='lower center')
@@ -391,7 +391,7 @@ def compare_alg_benefits_and_handover():
     axs[1].set_ylabel('Average Benefit')
     axs[1].bar(np.arange(len(naive_handover_benefits)), naive_handover_benefits, width=0.2, label='Naive')
     axs[1].bar(np.arange(len(sga_handover_benefits))+0.2, sga_handover_benefits, width=0.2, label='CBBA')
-    axs[1].bar(np.arange(len(sequential_handover_benefits))+0.4, sequential_handover_benefits, width=0.2, label='SMGH (Ours)')
+    axs[1].bar(np.arange(len(sequential_handover_benefits))+0.4, sequential_handover_benefits, width=0.2, label='MHA (Ours)')
     axs[1].set_xticks(np.arange(len(naive_handover_benefits)))
     axs[1].set_xticklabels([str(n) for n in ns])
     #add a legend to the bottom middle of the subplot
