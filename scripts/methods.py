@@ -80,6 +80,15 @@ def convert_central_sol_to_assignment_mat(n, m, assignments):
 
     return assignment_mat
 
+def convert_agents_to_assignment_matrix(agents):
+    """
+    Convert list of agents as returned by auction to assignment matrix
+    """
+    assignment_matrix = np.zeros((len(agents), len(agents[0].benefits)))
+    for i, agent in enumerate(agents):
+        assignment_matrix[i, agent.choice] = 1
+    return assignment_matrix
+
 #~~~~~~~~~~~~~~~~~~~~HANDOVER PENALTY STUFF~~~~~~~~~~~~~~~
 def calc_handover_penalty(init_assignment, assignments, lambda_):
     """

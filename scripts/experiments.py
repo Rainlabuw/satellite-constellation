@@ -5,7 +5,7 @@ from methods import *
 
 from solve_optimally import solve_optimally
 from solve_naively import solve_naively
-from solve_w_sgmh import SMGHAuction
+from solve_w_mha import MHAAuction
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from classic_auction import Auction
 
@@ -32,8 +32,8 @@ def optimal_baseline_comparison():
     lambda_ = 1
 
     avg_best = 0
-    avg_smghl = 0
-    avg_smgh = 0
+    avg_mhal = 0
+    avg_mha = 0
     avg_naive = 0
 
     num_avgs = 50
@@ -43,16 +43,16 @@ def optimal_baseline_comparison():
         print(f"Run {_}/{num_avgs}", end='\r')
 
         #SMHGL centralized, lookahead = 2
-        multi_auction = SMGHAuction(benefit, None, T, lambda_=lambda_)
+        multi_auction = MHAAuction(benefit, None, T, lambda_=lambda_)
         multi_auction.run_auctions()
         ben, nh = multi_auction.calc_benefit()
-        avg_smghl += ben/num_avgs
+        avg_mhal += ben/num_avgs
 
         #SMGH
-        multi_auction = SMGHAuction(benefit, None, 1, lambda_=lambda_)
+        multi_auction = MHAAuction(benefit, None, 1, lambda_=lambda_)
         multi_auction.run_auctions()
         ben, nh = multi_auction.calc_benefit()
-        avg_smgh += ben/num_avgs
+        avg_mha += ben/num_avgs
 
         #Naive
         ben, nh = solve_naively(benefit, lambda_)
@@ -63,7 +63,7 @@ def optimal_baseline_comparison():
         avg_best += ben/num_avgs
 
     fig = plt.figure()
-    plt.bar(["Naive","SMGH", "SMGHL", "Optimal"], [avg_naive, avg_smgh, avg_smghl, avg_best])
+    plt.bar(["Naive","SMGH", "SMGHL", "Optimal"], [avg_naive, avg_mha, avg_mhal, avg_best])
     plt.title(f"Average benefit across {num_avgs} runs, n={n}, m={m}, T={T}")
 
     plt.show()
@@ -86,7 +86,7 @@ def SMGH_unit_testing():
 
     print("Expect no solution to be optimal (2198.8) but them to be same for all lookaheads")
     for lookahead in range(1,benefits.shape[-1]+1):
-        multi_auction = SMGHAuction(benefits, None, lookahead)
+        multi_auction = MHAAuction(benefits, None, lookahead)
         multi_auction.run_auctions()
         ben = multi_auction.calc_benefit()
         print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
@@ -105,7 +105,7 @@ def SMGH_unit_testing():
 
     print("Expect combined solution to be optimal (3000) only at lookahead of 3")
     for lookahead in range(1,benefits.shape[-1]+1):
-        multi_auction = SMGHAuction(benefits, None, lookahead)
+        multi_auction = MHAAuction(benefits, None, lookahead)
         multi_auction.run_auctions()
         ben,_ = multi_auction.calc_benefit()
         print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
@@ -120,14 +120,14 @@ def compare_SMGH_to_other_algs():
     print("Comparing performance of SMGHL to other algorithms")
     num_avgs = 10
 
-    smghl2_ben = 0
-    smghl2_nh = 0
+    mhal2_ben = 0
+    mhal2_nh = 0
 
-    smghl5_ben = 0
-    smghl5_nh = 0
+    mhal5_ben = 0
+    mhal5_nh = 0
 
-    smgh_ben = 0
-    smgh_nh = 0
+    mha_ben = 0
+    mha_nh = 0
 
     naive_ben = 0
     naive_nh = 0
@@ -141,25 +141,25 @@ def compare_SMGH_to_other_algs():
         print("Generated realistic benefits")
 
         #SMHGL centralized, lookahead = 2
-        multi_auction = SMGHAuction(benefits, None, 2, lambda_=lambda_)
+        multi_auction = MHAAuction(benefits, None, 2, lambda_=lambda_)
         multi_auction.run_auctions()
         ben, nh = multi_auction.calc_benefit()
-        smghl2_ben += ben/num_avgs
-        smghl2_nh += nh/num_avgs
+        mhal2_ben += ben/num_avgs
+        mhal2_nh += nh/num_avgs
 
         #SMHGL centralized, lookahead = 5
-        multi_auction = SMGHAuction(benefits, None, 5, lambda_=lambda_)
+        multi_auction = MHAAuction(benefits, None, 5, lambda_=lambda_)
         multi_auction.run_auctions()
         ben, nh = multi_auction.calc_benefit()
-        smghl5_ben += ben/num_avgs
-        smghl5_nh += nh/num_avgs
+        mhal5_ben += ben/num_avgs
+        mhal5_nh += nh/num_avgs
 
         #SMGH
-        multi_auction = SMGHAuction(benefits, None, 1, lambda_=lambda_)
+        multi_auction = MHAAuction(benefits, None, 1, lambda_=lambda_)
         multi_auction.run_auctions()
         ben, nh = multi_auction.calc_benefit()
-        smgh_ben += ben/num_avgs
-        smgh_nh += nh/num_avgs
+        mha_ben += ben/num_avgs
+        mha_nh += nh/num_avgs
 
         #Naive
         ben, nh = solve_naively(benefits, lambda_)
@@ -177,11 +177,11 @@ def compare_SMGH_to_other_algs():
         sga_nh += calc_handover_penalty(None, sg_assignment_mats, lambda_)/lambda_/num_avgs
 
     fig, axes = plt.subplots(2,1)
-    axes[0].bar(["Naive", "SGA", "SMGH", "SMGHL2", "SMGHL5"],[naive_ben, sga_ben, smgh_ben, smghl2_ben, smghl5_ben])
+    axes[0].bar(["Naive", "SGA", "SMGH", "SMGHL2", "SMGHL5"],[naive_ben, sga_ben, mha_ben, mhal2_ben, mhal5_ben])
     axes[0].set_title("Average benefit across 10 runs")
     # axes[0].set_xlabel("Lookahead timesteps")
 
-    axes[1].bar(["Naive", "SGA", "SMGH", "SMGHL2", "SMGHL5"],[naive_nh, sga_nh, smgh_nh, smghl2_nh, smghl5_nh])
+    axes[1].bar(["Naive", "SGA", "SMGH", "SMGHL2", "SMGHL5"],[naive_nh, sga_nh, mha_nh, mhal2_nh, mhal5_nh])
     
     axes[1].set_title("Average number of handovers across 10 runs")
     fig.suptitle(f"Test with n={n}, m={m}, T={T}, lambda={lambda_}, realistic-ish benefits")
@@ -217,14 +217,14 @@ def test_SMGH_lookahead_performance():
             # benefits = np.random.rand(n,m,T)
 
             #SMGHL with true lookaheads
-            multi_auction = SMGHAuction(benefits, None, lookahead, lambda_=lambda_)
+            multi_auction = MHAAuction(benefits, None, lookahead, lambda_=lambda_)
             multi_auction.run_auctions()
             ben, nh = multi_auction.calc_benefit()
             avg_ben += ben/num_avgs
             avg_nh += nh/num_avgs
             
             #SMGHL (distributed)
-            multi_auction = SMGHAuction(benefits, None, lookahead, lambda_=lambda_, approximate=True)
+            multi_auction = MHAAuction(benefits, None, lookahead, lambda_=lambda_, approximate=True)
             multi_auction.run_auctions()
             ben, _ = multi_auction.calc_benefit()
             avg_approx_ben += ben/num_avgs
