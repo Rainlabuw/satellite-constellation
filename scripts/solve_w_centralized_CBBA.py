@@ -32,7 +32,7 @@ def score_task(i, j, k, benefits, agents, lambda_):
                 marginal_benefit -= lambda_
     return marginal_benefit
 
-def sequential_greedy(benefits, lambda_):
+def solve_w_centralized_CBBA(benefits, lambda_):
     n = benefits.shape[0]
     m = benefits.shape[1]
     T = benefits.shape[2]

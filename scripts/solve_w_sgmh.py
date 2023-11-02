@@ -1,7 +1,7 @@
 import numpy as np
 from methods import *
 import networkx as nx
-from dist_auction_algo_josh import Auction
+from classic_auction import Auction
 from base_smgh_test import *
 
 from constellation_sim.ConstellationSim import get_benefit_matrix_from_constellation, ConstellationSim
@@ -13,7 +13,7 @@ from poliastro.plotting import StaticOrbitPlotter
 from poliastro.spheroid_location import SpheroidLocation
 from astropy import units as u
 
-class MultiAuction(object):
+class SMGHAuction(object):
     def __init__(self, benefits, init_assignment, max_tstep_lookahead, graph=None, prices=None, verbose=False, approximate=False, lambda_=1):
         # benefit matrix for the next few timesteps
         self.benefits = benefits
@@ -203,192 +203,6 @@ class BenefitSolution(object):
         return f"Benefit: {self.benefit},\nAssignment:\n{self.assignment},\nCombined benefit matrix:\n{self.benefit_mat}"
 
 if __name__ == "__main__":
-    # # Case where no solutions are the best.
-    # benefits = np.zeros((4,4,2))
-    # benefits[:,:,0] = np.array([[100, 1, 0, 0],
-    #                             [1, 100, 0, 0],
-    #                             [0, 0, 0.2, 0.1],
-    #                             [0, 0, 0.1, 0.2]])
-    
-    # benefits[:,:,1] = np.array([[1, 1000, 0, 0],
-    #                             [1000, 1, 0, 0],
-    #                             [0, 0, 0.1, 0.3],
-    #                             [0, 0, 0.3, 0.1]])
-
-    # print("Expect no solution to be optimal (2198.8) but them to be same for all lookaheads")
-    # for lookahead in range(1,benefits.shape[-1]+1):
-    #     multi_auction = MultiAuction(benefits, None, lookahead)
-    #     multi_auction.run_auctions()
-    #     ben = multi_auction.calc_benefit()
-    #     print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
-
-    # #Case where a combined solution is the best.
-    # benefits = np.zeros((3,3,3))
-    # benefits[:,:,0] = np.array([[0.1, 0, 0],
-    #                             [0, 0.1, 0],
-    #                             [0, 0, 0.1]])
-    # benefits[:,:,1] = np.array([[0, 0, 0.1],
-    #                             [0.1, 0, 0],
-    #                             [0, 0.1, 0]])
-    # benefits[:,:,2] = np.array([[0.1, 1000, 0],
-    #                             [0, 0.1, 1000],
-    #                             [1000, 0, 0.1]])
-
-    # print("Expect combined solution to be optimal (3000) only at lookahead of 3")
-    # for lookahead in range(1,benefits.shape[-1]+1):
-    #     multi_auction = MultiAuction(benefits, None, lookahead)
-    #     multi_auction.run_auctions()
-    #     ben,_ = multi_auction.calc_benefit()
-    #     print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
-
-    # seed = np.random.randint(0, 1000)
-    # # np.random.seed(624)
-    # n = 10
-    # m = 10
-    # T = 5
-    # i = 0
-    # np.random.seed(42)
-    # while True:
-    #     i += 1
-    #     print(i, end='\r')
-    #     bens = []
-    #     benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=1.01)
-    #     for lookahead in range(1,benefits.shape[-1]+1):
-    #         multi_auction = MultiAuction(benefits, None, lookahead)
-    #         multi_auction.run_auctions()
-    #         ben, nh = multi_auction.calc_benefit()
-    #         bens.append(ben)
-    
-
-
-    # #Case where we expect solutions to get increasingly better as lookahead window increases
-    # n = 50
-    # m = 50
-    # T = 95
-    # lambda_ = 1
-    # # np.random.seed(42)
-
-    # resulting_bens = []
-    # resulting_approx_bens = []
-    # naive_benefits = []
-    # smgh_benefits = []
-    # handovers = []
-    # print("Comparing performance of SMGHL to other algorithms")
-    # max_lookahead = 5
-    # num_avgs = 10
-
-    # smghl2_ben = 0
-    # smghl2_nh = 0
-
-    # smghl5_ben = 0
-    # smghl5_nh = 0
-
-    # smgh_ben = 0
-    # smgh_nh = 0
-
-    # naive_ben = 0
-    # naive_nh = 0
-
-    # sga_ben = 0
-    # sga_nh = 0
-    # for _ in range(num_avgs):
-    #     print(f"Run {_}/{num_avgs}")
-    #     # benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
-    #     benefits = get_benefit_matrix_from_constellation(n, m, T)
-    #     print("Generated realistic benefits")
-
-    #     #SMHGL centralized, lookahead = 2
-    #     multi_auction = MultiAuction(benefits, None, 2, lambda_=lambda_)
-    #     multi_auction.run_auctions()
-    #     ben, nh = multi_auction.calc_benefit()
-    #     smghl2_ben += ben/num_avgs
-    #     smghl2_nh += nh/num_avgs
-
-    #     #SMHGL centralized, lookahead = 5
-    #     multi_auction = MultiAuction(benefits, None, 5, lambda_=lambda_)
-    #     multi_auction.run_auctions()
-    #     ben, nh = multi_auction.calc_benefit()
-    #     smghl5_ben += ben/num_avgs
-    #     smghl5_nh += nh/num_avgs
-
-    #     #SMGH
-    #     multi_auction = MultiAuction(benefits, None, 1, lambda_=lambda_)
-    #     multi_auction.run_auctions()
-    #     ben, nh = multi_auction.calc_benefit()
-    #     smgh_ben += ben/num_avgs
-    #     smgh_nh += nh/num_avgs
-
-    #     #Naive
-    #     ben, nh = solve_naively(benefits, lambda_)
-    #     naive_ben += ben/num_avgs
-    #     naive_nh += nh/num_avgs
-
-    #     # #SGA/CBBA
-    #     # sg_assignment_mats = sequential_greedy(benefits, lambda_)
-    #     # sg_benefit = 0
-    #     # for k, sg_assignment_mat in enumerate(sg_assignment_mats):
-    #     #     sg_benefit += (benefits[:,:,k]*sg_assignment_mat).sum()
-
-    #     # handover_ben = sg_benefit - calc_handover_penalty(None, sg_assignment_mats, lambda_)
-    #     # sga_ben += handover_ben/num_avgs
-    #     # sga_nh += calc_handover_penalty(None, sg_assignment_mats, lambda_)/lambda_/num_avgs
-
-    # fig, axes = plt.subplots(2,1)
-    # axes[0].bar(["Naive", "SGA", "SMGH", "SMGHL2", "SMGHL5"],[naive_ben, sga_ben, smgh_ben, smghl2_ben, smghl5_ben])
-    # axes[0].set_title("Average benefit across 10 runs")
-    # # axes[0].set_xlabel("Lookahead timesteps")
-
-    # axes[1].bar(["Naive", "SGA", "SMGH", "SMGHL2", "SMGHL5"],[naive_nh, sga_nh, smgh_nh, smghl2_nh, smghl5_nh])
-    
-    # axes[1].set_title("Average number of handovers across 10 runs")
-    # fig.suptitle(f"Test with n={n}, m={m}, T={T}, lambda={lambda_}, realistic-ish benefits")
-
-    # plt.show()
-
-    # #TESTING FOR HOW PERFORMANCE INCREASES AS LOOKAHAED INCREASES
-    # print("Expect performance to generally increase as lookahead increases")
-
-    # for lookahead in range(1,max_lookahead+1):
-    #     avg_ben = 0
-    #     avg_nh = 0
-    #     avg_approx_ben = 0
-    #     for _ in range(num_avgs):
-    #         print(f"Lookahead {lookahead} ({_}/{num_avgs})", end='\r')
-    #         # benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
-    #         benefits = get_benefit_matrix_from_constellation(n, m, T)
-    #         # benefits = np.random.rand(n,m,T)
-
-    #         #SMGHL with true lookaheads
-    #         multi_auction = MultiAuction(benefits, None, lookahead, lambda_=lambda_)
-    #         multi_auction.run_auctions()
-    #         ben, nh = multi_auction.calc_benefit()
-    #         avg_ben += ben/num_avgs
-    #         avg_nh += nh/num_avgs
-            
-    #         #SMGHL (distributed)
-    #         multi_auction = MultiAuction(benefits, None, lookahead, lambda_=lambda_, approximate=True)
-    #         multi_auction.run_auctions()
-    #         ben, _ = multi_auction.calc_benefit()
-    #         avg_approx_ben += ben/num_avgs
-
-    #     resulting_bens.append(avg_ben)
-    #     resulting_approx_bens.append(avg_approx_ben)
-    #     handovers.append(avg_nh)
-
-    # plt.plot(range(1,max_lookahead+1), resulting_bens, label="SMGHL (Centralized)")
-    # plt.plot(range(1,max_lookahead+1), resulting_approx_bens, label="SMGHL (Distributed)")
-    # plt.title(f"Lookahead vs. accuracy, n={n}, m={m}, T={T}")
-    # plt.xlabel("Lookahead timesteps")
-    # plt.ylabel(f"Average benefit across {num_avgs} runs")
-    # plt.legend()
-    # plt.savefig("lookahead_vs_benefit.png")
-    # plt.show()
-
-    # plt.figure()
-    # plt.plot(range(1,max_lookahead+1), handovers)
-    # plt.title("Num handovers vs. lookahead")
-    # plt.show()
-
     # Testing plotting
     const = ConstellationSim(dt=1*u.min)
 
@@ -428,9 +242,9 @@ if __name__ == "__main__":
 
     const.assign_over_time = [np.eye(const.n, const.m) for i in range(T)]
 
-    multi_auction = MultiAuction(const.benefits_over_time, None, 5, lambda_=1)
-    multi_auction.run_auctions()
+    smgh_auction = SMGHAuction(const.benefits_over_time, None, 5, lambda_=1)
+    smgh_auction.run_auctions()
 
-    const.assign_over_time = multi_auction.chosen_assignments
+    const.assign_over_time = smgh_auction.chosen_assignments
     print(const.assign_over_time)
     const.run_animation(frames=T)

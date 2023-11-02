@@ -1,5 +1,9 @@
+"""
+Testing to what extent seeding an auction with a previous solution speeds up the auction
+"""
+
 import numpy as np
-from dist_auction_algo_josh import Auction
+from classic_auction import Auction
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.patches import Patch

@@ -254,4 +254,3 @@ if __name__ == "__main__":
     #     plotter.plot(sat.orbit)
 
     #     plotter.show()
-        

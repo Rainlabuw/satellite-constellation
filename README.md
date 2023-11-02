@@ -3,10 +3,11 @@
 ## Contents:
 * `bertsekas_symmetric_auction_algo.py` is an implementation of Bertsekas' auction algorithm when num_agents = num_tasks
 * `spencer_dist_auction.py` is an implementation of Zavalnos' distributed auction algorithm
-* `dist_auction_algo_josh.py` is an object oriented implementation of Zavalnos' distributed auction algorithm
+* `classic_auction.py` is an object oriented implementation of Zavalnos' distributed auction algorithm
 * `bertsekas_asymmetric_auction_algo.py` Bertsekas' auction algorithm for asymmetric 
 instances.
-
+* `experiments.py` contains all the experiments that have been run over the course of writing the paper
+* `constellation_sim/` is a folder containing the orbital mechanics simulation 
 
 ## Instructions on getting access to repo.
 
