@@ -29,7 +29,7 @@ def find_true_optimal_ass(benefit, init_ass, lambda_):
 
     for perm_list in total_perm_list:
         assignment_list = []
-        for k, perm in enumerate(perm_list):
+        for perm in perm_list:
             ass = np.zeros((n,m))
             for i, j in enumerate(perm):
                 ass[i,j] = 1
