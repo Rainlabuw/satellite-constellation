@@ -5,8 +5,8 @@ from sequential_greedy import sequential_greedy
 import networkx as nx
 from matplotlib import pyplot as plt
 
-def generate_benefits_over_time(n, m, t_final, num_tsteps, scale_min=0.5, scale_max=2):
-    benefits = np.zeros((n,m,num_tsteps))
+def generate_benefits_over_time(n, m, T, t_final, scale_min=0.5, scale_max=2):
+    benefits = np.zeros((n,m,T))
     for i in range(n):
         for j in range(m):
             #where is the benefit curve maximized
@@ -19,7 +19,7 @@ def generate_benefits_over_time(n, m, t_final, num_tsteps, scale_min=0.5, scale_
             benefit_scale = np.random.uniform(scale_min, scale_max)
 
             #iterate from time zero to t_final with 100 steps in between
-            for t_index, t in enumerate(np.linspace(0, t_final, num_tsteps)):
+            for t_index, t in enumerate(np.linspace(0, t_final, T)):
                 #calculate the benefit at time t
                 benefits[i,j,t_index] = benefit_scale*np.exp(-(t-time_center)**2/time_spread**2)
     return benefits
@@ -54,10 +54,11 @@ def solve_naively(benefit_mats_over_time, lambda_):
     return sum(benefits_received)-calc_handover_penalty(None, assignment_mats, lambda_), calc_handover_penalty(None, assignment_mats, lambda_)/lambda_
 
 if __name__ == "__main__":
-    ns = [10, 25, 50, 100]
+    ns = [10, 25]
     # ns = [10, 15, 20]
     t_final = 50
-    num_tsteps = 25
+    T = 25
+    lambda_ = 0.5
 
     naive_benefits = []
     naive_handover_benefits = []
@@ -73,22 +74,24 @@ if __name__ == "__main__":
     for n in ns:
         print(f"AGENT {n}")
         m = n
-        lambda_ = 1
         seed = np.random.randint(0, 1000)
         np.random.seed(seed)
         # np.random.seed(29)
         print(f"Seed {seed}")
-        print(f"n: {n}, m: {m}, T: {num_tsteps}, lambda: {lambda_}")
+        print(f"n: {n}, m: {m}, T: {T}, lambda: {lambda_}")
         graph = nx.complete_graph(n)
-        benefit_mats_over_time = generate_benefits_over_time(n, m, t_final, num_tsteps)
+        benefit_mats_over_time = np.random.rand(n,m,T)
+        
+        # benefit_mats_over_time = generate_benefits_over_time(n, m, T, t_final)
         #Add 2 lambda_+eps to the benefit matrix to ensure that it's always positive to complete
         #a task.
         # benefit_mats_over_time += 2*lambda_ + 0.01
 
+
         #solve each timestep independently
         assignment_mats = []
         benefits = []
-        for k in range(num_tsteps):
+        for k in range(T):
             print(k, end='\r')
             a = Auction(n, m, benefits=benefit_mats_over_time[:,:,k], graph=graph)
             benefit = a.run_auction()
@@ -103,8 +106,8 @@ if __name__ == "__main__":
         print(f"\tBenefit without considering handover: {sum(benefits)}")
         print(f"\tBenefit with handover penalty: {handover_ben}")
 
-        naive_benefits.append(sum(benefits)/(n*num_tsteps))
-        naive_handover_benefits.append(handover_ben/(n*num_tsteps))
+        naive_benefits.append(sum(benefits))
+        naive_handover_benefits.append(handover_ben)
         naive_handover_violations.append(calc_handover_penalty(assignment_mats, lambda_))
 
         #solve each timestep sequentially
@@ -120,7 +123,7 @@ if __name__ == "__main__":
         benefits.append(benefit)
 
         prev_assignment_mat = assignment_mat
-        for k in range(1, num_tsteps):
+        for k in range(1, T):
             print(k, end='\r')
             #Generate assignment for the task minimizing handover
             benefit_mat_w_handover = add_handover_pen_to_benefit_matrix(benefit_mats_over_time[:,:,k], prev_assignment_mat, lambda_)
@@ -171,28 +174,28 @@ if __name__ == "__main__":
     print(sga_handover_benefits)
 
 
-    fig, axs = plt.subplots(2, 1, figsize=(10, 10))
+    fig, axs = plt.subplots(1, 1, figsize=(10, 10))
 
-    # Top subplot
-    axs[0].set_title('Benefits without handover penalty')
-    axs[0].set_xlabel('Number of agents')
-    axs[0].set_ylabel('Total benefit')
-    axs[0].bar(np.arange(len(naive_benefits)), naive_benefits, width=0.2, label='Naive')
-    axs[0].bar(np.arange(len(sga_benefits))+0.2, sga_benefits, width=0.2, label='SGA')
-    axs[0].bar(np.arange(len(sequential_benefits))+0.4, sequential_benefits, width=0.2, label='SMGH (Ours)')
-    axs[0].set_xticks(np.arange(len(naive_benefits)))
-    axs[0].set_xticklabels([str(n) for n in ns])
-    axs[0].legend(loc='lower center')
+    # # Top subplot
+    # axs[0].set_title('Benefits without handover penalty')
+    # axs[0].set_xlabel('Number of agents')
+    # axs[0].set_ylabel('Total benefit')
+    # axs[0].bar(np.arange(len(naive_benefits)), naive_benefits, width=0.2, label='Naive')
+    # axs[0].bar(np.arange(len(sga_benefits))+0.2, sga_benefits, width=0.2, label='SGA')
+    # axs[0].bar(np.arange(len(sequential_benefits))+0.4, sequential_benefits, width=0.2, label='SMGH (Ours)')
+    # axs[0].set_xticks(np.arange(len(naive_benefits)))
+    # axs[0].set_xticklabels([str(n) for n in ns])
+    # axs[0].legend(loc='lower center')
 
     # Bottom subplot
-    axs[1].set_title('Benefits with handover penalty')
-    axs[1].set_xlabel('Number of agents')
-    axs[1].set_ylabel('Total benefit')
-    axs[1].bar(np.arange(len(naive_handover_benefits)), naive_handover_benefits, width=0.2, label='Naive')
-    axs[1].bar(np.arange(len(sga_handover_benefits))+0.2, sga_handover_benefits, width=0.2, label='SGA')
-    axs[1].bar(np.arange(len(sequential_handover_benefits))+0.4, sequential_handover_benefits, width=0.2, label='SMGH (Ours)')
-    axs[1].set_xticks(np.arange(len(naive_handover_benefits)))
-    axs[1].set_xticklabels([str(n) for n in ns])
+    axs[0].set_title('Total Benefits, including handover penalty')
+    axs[0].set_xlabel('Number of agents')
+    axs[0].set_ylabel('Average Benefit')
+    axs[0].bar(np.arange(len(naive_handover_benefits)), naive_handover_benefits, width=0.2, label='Naive')
+    axs[0].bar(np.arange(len(sga_handover_benefits))+0.2, sga_handover_benefits, width=0.2, label='CBBA')
+    axs[0].bar(np.arange(len(sequential_handover_benefits))+0.4, sequential_handover_benefits, width=0.2, label='SMGH (Ours)')
+    axs[0].set_xticks(np.arange(len(naive_handover_benefits)))
+    axs[0].set_xticklabels([str(n) for n in ns])
     #add a legend to the bottom middle of the subplot
     axs[1].legend(loc='lower center')
 

@@ -2,7 +2,7 @@ import numpy as np
 from methods import *
 import networkx as nx
 from dist_auction_algo_josh import Auction
-from handover_test import *
+from base_smgh_test import *
 
 class MultiAuction(object):
     def __init__(self, benefits, init_assignment, max_tstep_lookahead, graph=None, prices=None, verbose=False, approximate=False, lambda_=1):
