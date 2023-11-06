@@ -8,7 +8,7 @@ from methods import *
 
 from solve_optimally import solve_optimally
 from solve_naively import solve_naively
-from solve_w_mhal_d import solve_w_mhal
+from solve_w_mhal import solve_w_mhal
 from solve_w_mhal import MHAL_Auction
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from classic_auction import Auction
