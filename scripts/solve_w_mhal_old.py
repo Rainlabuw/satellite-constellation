@@ -3,7 +3,7 @@ from methods import *
 import networkx as nx
 from classic_auction import Auction
 
-from constellation_sim.ConstellationSim import get_benefit_matrix_from_constellation, ConstellationSim
+from constellation_sim.ConstellationSim import get_benefits_and_graphs_from_constellation, ConstellationSim
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
 from poliastro.bodies import Earth
