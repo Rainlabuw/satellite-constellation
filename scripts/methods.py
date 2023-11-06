@@ -174,5 +174,5 @@ def generate_benefits_over_time(n, m, T, t_final, scale_min=0.5, scale_max=2):
     return benefits
 
 def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_):
-    adjusted_benefits = np.where(prev_assign == 1, benefits, benefits - lambda_)
+    adjusted_benefits = np.where(prev_assign == 1, benefits + lambda_, benefits)
     return adjusted_benefits

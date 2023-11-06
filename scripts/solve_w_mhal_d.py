@@ -3,6 +3,8 @@ from methods import *
 import networkx as nx
 from classic_auction import Auction, AuctionAgent
 from solve_w_mhal import MHAL_Auction
+from solve_naively import solve_naively
+from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 
 from tqdm import tqdm
 import time
@@ -343,56 +345,12 @@ def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distribut
 
         chosen_assignments.append(chosen_assignment)
         curr_assignment = chosen_assignment
-            
-    return chosen_assignments
+    
+    total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_)
+    
+    return chosen_assignments, total_value, nh
 
 if __name__ == "__main__":
-    n = 20
-    m = 20
-    T = 5
-    L = 4
-
-    graphs = [rand_connected_graph(n) for i in range(T)]
-
-    ctot = 0
-    catot = 0
-    dtot = 0
-    n_tests = 100
-    for _ in tqdm(range(n_tests)):
-        benefits = np.random.rand(n, m, T)
-        init_assignment = np.eye(n,m)
-
-        # st = time.time()
-        dcas = solve_w_mhal(benefits, L, init_assignment, distributed=True, lambda_=0.5, graphs=graphs)
-        d_val = calc_value_and_num_handovers(dcas, benefits, init_assignment, 0.5)[0]
-        # print(f"Time elapsed (distributed) = {time.time()-st}")
-
-        cas = solve_w_mhal(benefits, L, init_assignment, distributed=False, lambda_=0.5)
-        c_val = calc_value_and_num_handovers(cas, benefits, init_assignment, 0.5)[0]
-
-        caas = solve_w_mhal(benefits, L, init_assignment, distributed=False, central_approx=True, lambda_=0.5)
-        ca_val = calc_value_and_num_handovers(caas, benefits, init_assignment, 0.5)[0]
-
-        ctot += c_val/n_tests
-        catot += ca_val/n_tests
-        dtot += d_val/n_tests
-        # st = time.time()
-        # caas = solve_w_mhal(benefits, L, init_assignment, distributed=False, central_approx=True, lambda_=0.5)
-        # ca_val = calc_value_and_num_handovers(caas, benefits, init_assignment, 0.5)[0]
-        # print(f"Time elapsed (centralized approx) = {time.time()-st}")
-
-        # for k, (dca, ca) in enumerate(zip(ma.chosen_assignments, cas)):
-        #     print(f"Timestep {k}")
-        #     print(f"\tMA valid = {check_assign_matrix_validity(dca)}, CA valid = {check_assign_matrix_validity(ca)}")
-        #     if not check_assign_matrix_validity(dca) or not check_assign_matrix_validity(ca):
-        #         break
-        #     for i in range(n):
-        #         print(f"\tAgent {i}, MA = {np.argmax(dca[i,:])}, CA = {np.argmax(ca[i,:])}")
-
-        # print(f"DA value = {d_val}, CA value = {c_val}, CAA value = {ca_val}")
-        # print(f"Diff = {c_val-ca_val}, n\epsilon = {n*0.01}")
-
-    print(ctot, catot, dtot)
-
+    pass
     # chosen_assignments = solve_w_mhal(benefits, 4, init_assignment)
     # print(calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 1))

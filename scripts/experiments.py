@@ -1,12 +1,15 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+import tqdm
+import time
+
 from methods import *
 
 from solve_optimally import solve_optimally
 from solve_naively import solve_naively
+from solve_w_mhal_d import solve_w_mhal
 from solve_w_mhal import MHAL_Auction
-from solve_w_mhal import solve_w_mhal_d
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from classic_auction import Auction
 
@@ -56,11 +59,11 @@ def optimal_baseline_comparison():
         avg_mha += ben/num_avgs
 
         #Naive
-        ben, nh = solve_naively(benefit, lambda_)
+        _, ben, nh = solve_naively(benefit, lambda_)
         avg_naive += ben/num_avgs
 
         #Optimal
-        ben, _ = solve_optimally(benefit, init_ass, lambda_)
+        _, ben, _ = solve_optimally(benefit, init_ass, lambda_)
         avg_best += ben/num_avgs
 
     fig = plt.figure()
@@ -163,19 +166,15 @@ def compare_MHA_to_other_algs():
         mha_nh += nh/num_avgs
 
         #Naive
-        ben, nh = solve_naively(benefits, lambda_)
+        _, ben, nh = solve_naively(benefits, lambda_)
         naive_ben += ben/num_avgs
         naive_nh += nh/num_avgs
 
         #SGA/CBBA
-        sg_assignment_mats = solve_w_centralized_CBBA(benefits, lambda_)
-        sg_benefit = 0
-        for k, sg_assignment_mat in enumerate(sg_assignment_mats):
-            sg_benefit += (benefits[:,:,k]*sg_assignment_mat).sum()
+        handover_ben, _, handover_nh = solve_w_centralized_CBBA(benefits, lambda_)
 
-        handover_ben = sg_benefit - calc_assign_seq_handover_penalty(None, sg_assignment_mats, lambda_)
         sga_ben += handover_ben/num_avgs
-        sga_nh += calc_assign_seq_handover_penalty(None, sg_assignment_mats, lambda_)/lambda_/num_avgs
+        sga_nh += handover_nh/num_avgs
 
     fig, axes = plt.subplots(2,1)
     axes[0].bar(["Naive", "SGA", "MHA", "MHAL2", "MHAL5"],[naive_ben, sga_ben, mha_ben, mhal2_ben, mhal5_ben])
@@ -350,7 +349,7 @@ def compare_alg_benefits_and_handover():
         sequential_handover_benefits.append(handover_ben)
 
         #solve each timestep sequentially with greedy
-        sg_assignment_mats = solve_w_centralized_CBBA(benefit_mats_over_time, lambda_)
+        _, sg_assignment_mats, _ = solve_w_centralized_CBBA(benefit_mats_over_time, lambda_)
         sg_benefit = 0
         for k, sg_assignment_mat in enumerate(sg_assignment_mats):
             sg_benefit += (benefit_mats_over_time[:,:,k]*sg_assignment_mat).sum()
@@ -400,5 +399,46 @@ def compare_alg_benefits_and_handover():
 
     plt.show()
 
+def distributed_comparison():
+    n = 20
+    m = 20
+    T = 10
+    L = 4
+
+    graphs = [rand_connected_graph(n) for i in range(T)]
+
+    ctot = 0
+    catot = 0
+    dtot = 0
+
+    naive_tot = 0
+    cbba_tot = 0
+
+    n_tests = 50
+    for _ in tqdm(range(n_tests)):
+        benefits = np.random.rand(n, m, T)
+        init_assignment = np.eye(n,m)
+
+        # st = time.time()
+        _, d_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, lambda_=0.5)
+
+        _, c_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=False, lambda_=0.5)
+
+        _, ca_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=False, central_approx=True, lambda_=0.5)
+
+        _, naive_val, _ = solve_naively(benefits, init_assignment, 0.5)
+        _, cbba_val, _ = solve_w_centralized_CBBA(benefits, init_assignment, 0.5)
+
+
+        ctot += c_val/n_tests
+        catot += ca_val/n_tests
+        dtot += d_val/n_tests
+
+        naive_tot += naive_val/n_tests
+        cbba_tot += cbba_val/n_tests
+
+    plt.bar(range(5), [naive_tot, cbba_tot, ctot, catot, dtot], tick_label=["Naive", "CBBA", "Centralized", "Centralized Approx", "Distributed"])
+    plt.show()
+
 if __name__ == "__main__":
-    optimal_baseline_comparison()
+    distributed_comparison()

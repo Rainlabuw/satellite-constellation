@@ -1,11 +1,12 @@
 import numpy as np
+from methods import *
 
 class SequentialCBBAAgent(object):
    def __init__(self, num_timesteps):
       self.bundle = []
       self.bundle_task_path = [None]*num_timesteps
 
-def score_task(i, j, k, benefits, agents, lambda_):
+def score_task(i, j, k, benefits, init_assignment, agents, lambda_):
     marginal_benefit = benefits[i,j,k]
     agent = agents[i]
 
@@ -30,9 +31,14 @@ def score_task(i, j, k, benefits, agents, lambda_):
                 pass
             else:
                 marginal_benefit -= lambda_
+
+        if k == 0 and init_assignment is not None:
+            if init_assignment[i,j] != 1: #If the task is not in the initial assignment, penalize
+                marginal_benefit -= lambda_
+
     return marginal_benefit
 
-def solve_w_centralized_CBBA(benefits, lambda_):
+def solve_w_centralized_CBBA(benefits, init_assignment, lambda_):
     n = benefits.shape[0]
     m = benefits.shape[1]
     T = benefits.shape[2]
@@ -48,7 +54,7 @@ def solve_w_centralized_CBBA(benefits, lambda_):
         for i in range(n):
             for j in range(m):
                 for k in range(T):
-                    marginal_benefit = score_task(i, j, k, benefits, agents, lambda_)
+                    marginal_benefit = score_task(i, j, k, benefits, init_assignment, agents, lambda_)
                     if marginal_benefit > best_marginal_benefit:
                         best_marginal_benefit = marginal_benefit
                         best_i = i
@@ -67,7 +73,9 @@ def solve_w_centralized_CBBA(benefits, lambda_):
             assignment_mat[i,j] = 1
         assignment_mats.append(assignment_mat)
 
-    return assignment_mats
+    total_value, nh = calc_value_and_num_handovers(assignment_mats, benefits, None, lambda_)
+
+    return assignment_mats, total_value, nh
 
 if __name__ == "__main__":
     benefits = np.random.rand(10, 10, 10)
@@ -75,5 +83,5 @@ if __name__ == "__main__":
     b[:,:,0] = np.array([[10, 1],[1, 10]])
     b[:,:,1] = np.array([[1, 1.5],[1.5, 1]])
     lambda_ = 0
-    ams = sequential_greedy(b, lambda_)
+    ams = solve_w_centralized_CBBA(b, lambda_)
     print(ams)
