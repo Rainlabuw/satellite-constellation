@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-import tqdm
+from tqdm import tqdm
 import time
 
 from methods import *
@@ -13,7 +13,7 @@ from solve_w_mhal import MHAL_Auction
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from classic_auction import Auction
 
-from constellation_sim.ConstellationSim import get_benefit_matrix_from_constellation, ConstellationSim
+from constellation_sim.ConstellationSim import get_benefits_and_graphs_from_constellation, ConstellationSim
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
 
@@ -400,10 +400,15 @@ def compare_alg_benefits_and_handover():
     plt.show()
 
 def distributed_comparison():
+    """
+    Compare the performance of the distributed MHAL algorithm
+    to other algorithms (including centralized MHAL)
+    """
     n = 20
     m = 20
     T = 10
     L = 4
+    lambda_ = 0.5
 
     graphs = [rand_connected_graph(n) for i in range(T)]
 
@@ -414,21 +419,26 @@ def distributed_comparison():
     naive_tot = 0
     cbba_tot = 0
 
-    n_tests = 50
+    old_mhal_tot = 0
+
+    n_tests = 10
     for _ in tqdm(range(n_tests)):
         benefits = np.random.rand(n, m, T)
         init_assignment = np.eye(n,m)
 
         # st = time.time()
-        _, d_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, lambda_=0.5)
+        _, d_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, lambda_=lambda_)
 
-        _, c_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=False, lambda_=0.5)
+        _, c_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=False, lambda_=lambda_)
 
-        _, ca_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=False, central_approx=True, lambda_=0.5)
+        _, ca_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=False, central_approx=True, lambda_=lambda_)
 
-        _, naive_val, _ = solve_naively(benefits, init_assignment, 0.5)
-        _, cbba_val, _ = solve_w_centralized_CBBA(benefits, init_assignment, 0.5)
+        _, naive_val, _ = solve_naively(benefits, init_assignment, lambda_)
+        _, cbba_val, _ = solve_w_centralized_CBBA(benefits, init_assignment, lambda_)
 
+        mhaa = MHAL_Auction(benefits, init_assignment, L, lambda_=lambda_)
+        mhaa.run_auctions()
+        old_mhal_v, _ = calc_value_and_num_handovers(mhaa.chosen_assignments, benefits, init_assignment, lambda_)
 
         ctot += c_val/n_tests
         catot += ca_val/n_tests
@@ -437,8 +447,52 @@ def distributed_comparison():
         naive_tot += naive_val/n_tests
         cbba_tot += cbba_val/n_tests
 
-    plt.bar(range(5), [naive_tot, cbba_tot, ctot, catot, dtot], tick_label=["Naive", "CBBA", "Centralized", "Centralized Approx", "Distributed"])
+        old_mhal_tot += old_mhal_v/n_tests
+
+    print([naive_tot, cbba_tot, old_mhal_tot, ctot, catot, dtot])
+    plt.bar(range(6), [naive_tot, cbba_tot, old_mhal_tot, ctot, catot, dtot], tick_label=["Naive", "CBBA", "Old MHAL", "Centralized", "Centralized Approx", "Distributed"])
+    plt.show()
+
+def realistic_orbital_simulation():
+    """
+    Simulate a realistic orbital mechanics case
+    using distributed and centralized MHAL.
+    """
+    n = 50
+    m = 50
+    T = 10
+    L = 4
+    lambda_ = 0.5
+    init_assignment = np.eye(n,m)
+
+    d_tot = 0
+    c_tot = 0
+    cbba_tot = 0
+    naive_tot = 0
+
+    num_avgs = 10
+    for _ in tqdm(range(num_avgs)):
+        benefits, graphs = get_benefits_and_graphs_from_constellation(n,m,T)
+
+        #Distributed
+        _, d_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, lambda_=lambda_)
+        d_tot += d_val/num_avgs
+
+        #Centralized
+        _, c_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=False, lambda_=lambda_)
+        c_tot += c_val/num_avgs
+
+        #CBBA
+        _, cbba_val, _ = solve_w_centralized_CBBA(benefits, init_assignment, lambda_)
+        cbba_tot += cbba_val/num_avgs
+
+        #Naive
+        _, naive_val, _ = solve_naively(benefits, init_assignment, lambda_)
+        naive_tot += naive_val/num_avgs
+
+    print([naive_tot, cbba_tot, c_tot, d_tot])
+    plt.bar(range(4), [naive_tot, cbba_tot, c_tot, d_tot], tick_label=["Naive", "CBBA", "Centralized", "Distributed"])
     plt.show()
 
 if __name__ == "__main__":
-    distributed_comparison()
+    realistic_orbital_simulation()

@@ -130,7 +130,7 @@ class ConstellationSim(object):
         storing satellite orbits over time a dictionary of the form:
         {sat_id: [orbit_0, orbit_1, ..., orbit_T]}.
 
-        Also compute the benefits over time.
+        Also compute the benefits and connectivity graphs over time and returns them.
         """
         self.orbits_over_time = defaultdict(list)
         self.benefits_over_time = np.zeros((self.n, self.m, T))
@@ -145,6 +145,8 @@ class ConstellationSim(object):
                 for task in self.tasks:
                     #Compute the distance 
                     self.benefits_over_time[sat.id, task.id, k] = calc_distance_based_benefits(sat, task)
+
+        return self.benefits_over_time, self.graphs_over_time
 
     def determine_connectivity_graph(self):
         #Build adjacency matrix
@@ -185,10 +187,11 @@ def calc_distance_based_benefits(sat, task):
 
     return task_benefit
 
-def get_benefit_matrix_from_constellation(n,m,T):
+def get_benefits_and_graphs_from_constellation(n,m,T):
     """
     Generate benefit matrix of size n x m x T
-    from a constellation of satellites.
+    from a constellation of satellites, as well as
+    a list of the T connectivity graphs for each timestep.
 
     NOTE: n must be a multiple of 10.
     """
@@ -229,8 +232,8 @@ def get_benefit_matrix_from_constellation(n,m,T):
         task = Task(task_loc, task_benefit)
         const.add_task(task)
 
-    const.propagate_orbits(T)
-    return const.benefits_over_time
+    benefits, graphs = const.propagate_orbits(T)
+    return benefits, graphs
 
 if __name__ == "__main__":
     const = ConstellationSim(dt=1*u.min)
