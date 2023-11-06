@@ -6,9 +6,6 @@ from solve_w_mhal import MHAL_Auction
 from solve_naively import solve_naively
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 
-from tqdm import tqdm
-import time
-
 class MHAL_D_Auction(object):
     def __init__(self, benefits, curr_assignment, all_time_intervals, all_time_interval_sequences, prices=None, eps=0.01, graph=None, lambda_=1, verbose=False):
         # benefit matrix for the next few timesteps
