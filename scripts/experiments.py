@@ -5,7 +5,8 @@ from methods import *
 
 from solve_optimally import solve_optimally
 from solve_naively import solve_naively
-from solve_w_mha import MHAAuction
+from solve_w_mhal import MHAL_Auction
+from solve_w_mhal import solve_w_mhal_d
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from classic_auction import Auction
 
@@ -43,15 +44,15 @@ def optimal_baseline_comparison():
         print(f"Run {_}/{num_avgs}", end='\r')
 
         #SMHGL centralized, lookahead = 2
-        multi_auction = MHAAuction(benefit, None, T, lambda_=lambda_)
+        multi_auction = MHAL_Auction(benefit, None, T, lambda_=lambda_)
         multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_benefit()
+        ben, nh = multi_auction.calc_value_and_num_handovers()
         avg_mhal += ben/num_avgs
 
         #MHA
-        multi_auction = MHAAuction(benefit, None, 1, lambda_=lambda_)
+        multi_auction = MHAL_Auction(benefit, None, 1, lambda_=lambda_)
         multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_benefit()
+        ben, nh = multi_auction.calc_value_and_num_handovers()
         avg_mha += ben/num_avgs
 
         #Naive
@@ -86,9 +87,9 @@ def MHA_unit_testing():
 
     print("Expect no solution to be optimal (2198.8) but them to be same for all lookaheads")
     for lookahead in range(1,benefits.shape[-1]+1):
-        multi_auction = MHAAuction(benefits, None, lookahead)
+        multi_auction = MHAL_Auction(benefits, None, lookahead)
         multi_auction.run_auctions()
-        ben = multi_auction.calc_benefit()
+        ben = multi_auction.calc_value_and_num_handovers()
         print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
 
     #Case where a combined solution is the best.
@@ -105,9 +106,9 @@ def MHA_unit_testing():
 
     print("Expect combined solution to be optimal (3000) only at lookahead of 3")
     for lookahead in range(1,benefits.shape[-1]+1):
-        multi_auction = MHAAuction(benefits, None, lookahead)
+        multi_auction = MHAL_Auction(benefits, None, lookahead)
         multi_auction.run_auctions()
-        ben,_ = multi_auction.calc_benefit()
+        ben,_ = multi_auction.calc_value_and_num_handovers()
         print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
 
 def compare_MHA_to_other_algs():
@@ -141,23 +142,23 @@ def compare_MHA_to_other_algs():
         print("Generated realistic benefits")
 
         #SMHGL centralized, lookahead = 2
-        multi_auction = MHAAuction(benefits, None, 2, lambda_=lambda_)
+        multi_auction = MHAL_Auction(benefits, None, 2, lambda_=lambda_)
         multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_benefit()
+        ben, nh = multi_auction.calc_value_and_num_handovers()
         mhal2_ben += ben/num_avgs
         mhal2_nh += nh/num_avgs
 
         #SMHGL centralized, lookahead = 5
-        multi_auction = MHAAuction(benefits, None, 5, lambda_=lambda_)
+        multi_auction = MHAL_Auction(benefits, None, 5, lambda_=lambda_)
         multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_benefit()
+        ben, nh = multi_auction.calc_value_and_num_handovers()
         mhal5_ben += ben/num_avgs
         mhal5_nh += nh/num_avgs
 
         #MHA
-        multi_auction = MHAAuction(benefits, None, 1, lambda_=lambda_)
+        multi_auction = MHAL_Auction(benefits, None, 1, lambda_=lambda_)
         multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_benefit()
+        ben, nh = multi_auction.calc_value_and_num_handovers()
         mha_ben += ben/num_avgs
         mha_nh += nh/num_avgs
 
@@ -172,9 +173,9 @@ def compare_MHA_to_other_algs():
         for k, sg_assignment_mat in enumerate(sg_assignment_mats):
             sg_benefit += (benefits[:,:,k]*sg_assignment_mat).sum()
 
-        handover_ben = sg_benefit - calc_handover_penalty(None, sg_assignment_mats, lambda_)
+        handover_ben = sg_benefit - calc_assign_seq_handover_penalty(None, sg_assignment_mats, lambda_)
         sga_ben += handover_ben/num_avgs
-        sga_nh += calc_handover_penalty(None, sg_assignment_mats, lambda_)/lambda_/num_avgs
+        sga_nh += calc_assign_seq_handover_penalty(None, sg_assignment_mats, lambda_)/lambda_/num_avgs
 
     fig, axes = plt.subplots(2,1)
     axes[0].bar(["Naive", "SGA", "MHA", "MHAL2", "MHAL5"],[naive_ben, sga_ben, mha_ben, mhal2_ben, mhal5_ben])
@@ -217,16 +218,16 @@ def test_MHA_lookahead_performance():
             # benefits = np.random.rand(n,m,T)
 
             #MHAL with true lookaheads
-            multi_auction = MHAAuction(benefits, None, lookahead, lambda_=lambda_)
+            multi_auction = MHAL_Auction(benefits, None, lookahead, lambda_=lambda_)
             multi_auction.run_auctions()
-            ben, nh = multi_auction.calc_benefit()
+            ben, nh = multi_auction.calc_value_and_num_handovers()
             avg_ben += ben/num_avgs
             avg_nh += nh/num_avgs
             
             #MHAL (distributed)
-            multi_auction = MHAAuction(benefits, None, lookahead, lambda_=lambda_, approximate=True)
+            multi_auction = MHAL_Auction(benefits, None, lookahead, lambda_=lambda_, approximate=True)
             multi_auction.run_auctions()
-            ben, _ = multi_auction.calc_benefit()
+            ben, _ = multi_auction.calc_value_and_num_handovers()
             avg_approx_ben += ben/num_avgs
 
         resulting_bens.append(avg_ben)
@@ -299,14 +300,14 @@ def compare_alg_benefits_and_handover():
 
             benefits.append(benefit)
         
-        handover_ben = sum(benefits) + calc_handover_penalty(assignment_mats, lambda_)
+        handover_ben = sum(benefits) + calc_assign_seq_handover_penalty(assignment_mats, lambda_)
         print("Solving sequentially, each timestep independently")
         print(f"\tBenefit without considering handover: {sum(benefits)}")
         print(f"\tBenefit with handover penalty: {handover_ben}")
 
         naive_benefits.append(sum(benefits))
         naive_handover_benefits.append(handover_ben)
-        naive_handover_violations.append(calc_handover_penalty(assignment_mats, lambda_))
+        naive_handover_violations.append(calc_assign_seq_handover_penalty(assignment_mats, lambda_))
 
         #solve each timestep sequentially
         assignment_mats = []
@@ -340,7 +341,7 @@ def compare_alg_benefits_and_handover():
 
             benefits.append(benefit.sum())
 
-        handover_ben = sum(benefits) + calc_handover_penalty(assignment_mats, lambda_)
+        handover_ben = sum(benefits) + calc_assign_seq_handover_penalty(assignment_mats, lambda_)
         print("Solving sequentially, each timestep considering the last one")
         print(f"\tBenefit without considering handover: {sum(benefits)}")
         print(f"\tBenefit with handover penalty: {handover_ben}")
@@ -354,7 +355,7 @@ def compare_alg_benefits_and_handover():
         for k, sg_assignment_mat in enumerate(sg_assignment_mats):
             sg_benefit += (benefit_mats_over_time[:,:,k]*sg_assignment_mat).sum()
 
-        handover_ben = sg_benefit + calc_handover_penalty(sg_assignment_mats, lambda_)
+        handover_ben = sg_benefit + calc_assign_seq_handover_penalty(sg_assignment_mats, lambda_)
 
         print("Solving with greedy algorithm")
         print(f"\tBenefit without considering handover: {sg_benefit}")

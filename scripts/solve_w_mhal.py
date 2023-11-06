@@ -12,8 +12,8 @@ from poliastro.plotting import StaticOrbitPlotter
 from poliastro.spheroid_location import SpheroidLocation
 from astropy import units as u
 
-class MHAAuction(object):
-    def __init__(self, benefits, init_assignment, max_tstep_lookahead, graph=None, prices=None, verbose=False, approximate=False, lambda_=1):
+class MHAL_Auction(object):
+    def __init__(self, benefits, init_assignment, max_tstep_lookahead, approximate=False, lambda_=1):
         # benefit matrix for the next few timesteps
         self.benefits = benefits
 
@@ -22,11 +22,6 @@ class MHAAuction(object):
         self.n_timesteps = benefits.shape[2]
 
         self.max_tstep_lookahead = max_tstep_lookahead
-
-        #price matrix for the next few timesteps
-        self.prices = prices
-        
-        self.graph = graph
 
         # current assignment
         self.init_assignment = init_assignment
@@ -40,12 +35,12 @@ class MHAAuction(object):
         #assignment, not the actual assignment resulting from the previous auction.
         self.approximate = approximate
 
-    def calc_benefit(self):
+    def calc_value_and_num_handovers(self):
         total_benefit = 0
         for i, chosen_ass in enumerate(self.chosen_assignments):
             curr_benefit = self.benefits[:,:,i]
             total_benefit += (curr_benefit * chosen_ass).sum()
-        handover_pen = calc_handover_penalty(self.init_assignment, self.chosen_assignments, self.lambda_)
+        handover_pen = calc_assign_seq_handover_penalty(self.init_assignment, self.chosen_assignments, self.lambda_)
         total_benefit -= handover_pen
 
         return total_benefit, handover_pen/self.lambda_
@@ -93,17 +88,18 @@ class MHAAuction(object):
 
         #When we have an assignment which ends at the last timestep, we can compute the total benefit
         if most_recent_timestep == (len_window-1):
-            #Compute the series of optimal solutions
+            #If we're not approximating, we still need to calculate the assignment and benefit for each
+            #(if we are approximating, we already calculated this up front)
             if not self.approximate:
                 combined_sols = self.calc_sols_from_sol_key_sequence(combined_sols, sol_key_sequence)
 
             total_benefit = sum([combined_sols[ass].benefit for ass in sol_key_sequence])
 
-            #create list of assignments to use in calc_handover_penalty()
+            #create list of assignments to use in calc_assign_seq_handover_penalty()
             assignment_sequence = [combined_sols[ass].assignment for ass in sol_key_sequence]
 
             #take into account losses from handover
-            total_benefit -= calc_handover_penalty(self.curr_assignment, assignment_sequence, self.lambda_)
+            total_benefit -= calc_assign_seq_handover_penalty(self.curr_assignment, assignment_sequence, self.lambda_)
             
             # print(sol_key_sequence, total_benefit)
 
@@ -241,9 +237,9 @@ if __name__ == "__main__":
 
     const.assign_over_time = [np.eye(const.n, const.m) for i in range(T)]
 
-    mha_auction = MHAAuction(const.benefits_over_time, None, 5, lambda_=1)
-    mha_auction.run_auctions()
+    mhal_auction = MHAAuction(const.benefits_over_time, None, 5, lambda_=1)
+    mhal_auction.run_auctions()
 
-    const.assign_over_time = mha_auction.chosen_assignments
+    const.assign_over_time = mhal_auction.chosen_assignments
     print(const.assign_over_time)
     const.run_animation(frames=T)

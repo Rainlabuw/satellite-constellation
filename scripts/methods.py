@@ -89,8 +89,17 @@ def convert_agents_to_assignment_matrix(agents):
         assignment_matrix[i, agent.choice] = 1
     return assignment_matrix
 
+def check_assign_matrix_validity(assignment_matrix):
+    for i in range(assignment_matrix.shape[0]):
+        if assignment_matrix[i,:].sum() != 1:
+            return False
+    for j in range(assignment_matrix.shape[1]):
+        if assignment_matrix[:,j].sum() != 1:
+            return False
+    return True
+
 #~~~~~~~~~~~~~~~~~~~~HANDOVER PENALTY STUFF~~~~~~~~~~~~~~~
-def calc_handover_penalty(init_assignment, assignments, lambda_):
+def calc_assign_seq_handover_penalty(init_assignment, assignments, lambda_):
     """
     Given an initial assignment and a list of assignment matrices,
     calculates the handover penalty associated with them,
@@ -127,6 +136,20 @@ def calc_distance_btwn_solutions(agents1, agents2):
 
     return dist
 
+def calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_):
+    """
+    Given a sequence of assignments, an initial assignment, and a benefit matrix,
+    returns the total value and the number of handovers.
+    """
+    total_benefit = 0
+    for i, chosen_ass in enumerate(chosen_assignments):
+        curr_benefit = benefits[:,:,i]
+        total_benefit += (curr_benefit * chosen_ass).sum()
+    handover_pen = calc_assign_seq_handover_penalty(init_assignment, chosen_assignments, lambda_)
+    total_benefit -= handover_pen
+
+    return total_benefit, handover_pen/lambda_
+
 #~~~~~~~~~~~~~~~~~~~~BENEFIT MATRIX UTILITIES~~~~~~~~~~~~~~
 def generate_benefits_over_time(n, m, T, t_final, scale_min=0.5, scale_max=2):
     """
@@ -151,5 +174,5 @@ def generate_benefits_over_time(n, m, T, t_final, scale_min=0.5, scale_max=2):
     return benefits
 
 def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_):
-    adjusted_benefits = np.where(prev_assign == 1, benefits, benefits - lambda_*2)
+    adjusted_benefits = np.where(prev_assign == 1, benefits, benefits - lambda_)
     return adjusted_benefits

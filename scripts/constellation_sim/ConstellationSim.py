@@ -1,6 +1,7 @@
 from astropy import units as u
 from astropy import constants as c
 import numpy as np
+import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
@@ -10,6 +11,7 @@ from poliastro.bodies import Earth
 from poliastro.twobody import Orbit
 from poliastro.plotting import StaticOrbitPlotter
 from poliastro.spheroid_location import SpheroidLocation
+from poliastro.core.events import line_of_sight
 import time
 
 from constellation_sim.Satellite import Satellite
@@ -24,6 +26,9 @@ class ConstellationSim(object):
         self.m = 0
 
         self.dt = dt
+
+        self.orbits_over_time = None
+        self.graph_over_time = None
 
         self.assign_over_time = None
 
@@ -129,16 +134,34 @@ class ConstellationSim(object):
         """
         self.orbits_over_time = defaultdict(list)
         self.benefits_over_time = np.zeros((self.n, self.m, T))
+        self.graphs_over_time = []
         for k in range(T):
+            print(f"Propagating orbits and computing benefits + neighbors, T={k}/{T}...",end='\r')
+            self.graphs_over_time.append(self.determine_connectivity_graph())
             for sat in self.sats:
+
                 sat.propagate_orbit(self.dt)
                 self.orbits_over_time[sat.id].append(sat.orbit)
-
                 for task in self.tasks:
                     #Compute the distance 
-                    self.benefits_over_time[sat.id, task.id, k] = calc_benefits(sat, task)
+                    self.benefits_over_time[sat.id, task.id, k] = calc_distance_based_benefits(sat, task)
 
-def calc_benefits(sat, task):
+    def determine_connectivity_graph(self):
+        #Build adjacency matrix
+        adj = np.zeros((self.n, self.n))
+        for i in range(self.n):
+            for j in range(i+1, self.n):
+                sat1_r = self.sats[i].orbit.r.to_value(u.km)
+                sat2_r = self.sats[j].orbit.r.to_value(u.km)
+                R = self.sats[i].orbit._state.attractor.R.to_value(u.km)
+
+                if line_of_sight(sat1_r, sat2_r, R) >=0 and np.linalg.norm(sat1_r-sat2_r) < 2500:
+                    adj[i,j] = 1
+                    adj[j,i] = 1
+
+        return nx.from_numpy_array(adj)
+
+def calc_distance_based_benefits(sat, task):
     """
     Given a satellite and a task, computes the benefit of the satellite.
 
@@ -181,7 +204,7 @@ def get_benefit_matrix_from_constellation(n,m,T):
 
     #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
     #10 evenly spaced planes of satellites, each with n/10 satellites per plane
-    a = earth.R.to(u.km) + 400*u.km
+    a = earth.R.to(u.km) + 550*u.km
     ecc = 0.01*u.one
     inc = 58*u.deg
     argp = 0*u.deg
@@ -212,7 +235,7 @@ def get_benefit_matrix_from_constellation(n,m,T):
 if __name__ == "__main__":
     const = ConstellationSim(dt=1*u.min)
     T = int(95 // const.dt.to_value(u.min)) #simulate enough timesteps for ~1 orbit
-    T = 25
+    T = 10
     earth = Earth
 
     #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
@@ -222,8 +245,8 @@ if __name__ == "__main__":
     inc = 58*u.deg
     argp = 0*u.deg
 
-    num_planes = 10
-    num_sats_per_plane = 5
+    num_planes = 36
+    num_sats_per_plane = 15
     for plane_num in range(num_planes):
         raan = plane_num*360/num_planes*u.deg
         for sat_num in range(num_sats_per_plane):
@@ -231,12 +254,12 @@ if __name__ == "__main__":
             sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num)
             const.add_sat(sat)
 
-    #~~~~~~~~~Generate 5 random tasks on the surface of earth~~~~~~~~~~~~~
+    #~~~~~~~~~Generate n random tasks on the surface of earth~~~~~~~~~~~~~
     num_tasks = 50
 
     for i in range(num_tasks):
         lon = np.random.uniform(-180, 180)
-        lat = np.random.uniform(-50, 50)
+        lat = np.random.uniform(-60, 60)
         task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
         task_benefit = np.random.uniform(1,2)
@@ -245,9 +268,15 @@ if __name__ == "__main__":
 
     const.propagate_orbits(T)
 
+    print(sum([nx.is_connected(g) for g in const.graphs_over_time]))
+
+    for graph in const.graphs_over_time:
+        nx.draw(graph)
+        plt.show()
+
     const.assign_over_time = [np.eye(const.n, const.m) for i in range(T)]
 
-    const.run_animation(frames=T)
+    # const.run_animation(frames=T)
 
     # for sat in const.sats:
     #     sat.propagate_orbit(10*u.min)

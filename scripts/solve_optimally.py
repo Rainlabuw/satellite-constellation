@@ -37,7 +37,7 @@ def solve_optimally(benefit, init_ass, lambda_):
         for j, ass in enumerate(assignment_list):
             total_benefit += (benefit[:,:,j]*ass).sum()
 
-        total_benefit -= calc_handover_penalty(init_ass, assignment_list, lambda_)
+        total_benefit -= calc_assign_seq_handover_penalty(init_ass, assignment_list, lambda_)
 
         if total_benefit > best_benefit:
             best_benefit = total_benefit
