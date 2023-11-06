@@ -2,7 +2,7 @@ import numpy as np
 from classic_auction import Auction
 from methods import *
 
-def solve_naively(benefit_mats_over_time, lambda_):
+def solve_naively(benefit_mats_over_time, init_assignment, lambda_):
     """
     Solves problem without regard to handover minimization.
 
@@ -24,4 +24,4 @@ def solve_naively(benefit_mats_over_time, lambda_):
 
         benefits_received.append(benefit_received)
 
-    return sum(benefits_received)-calc_assign_seq_handover_penalty(None, assignment_mats, lambda_), calc_assign_seq_handover_penalty(None, assignment_mats, lambda_)/lambda_
+    return sum(benefits_received)-calc_assign_seq_handover_penalty(init_assignment, assignment_mats, lambda_), calc_assign_seq_handover_penalty(init_assignment, assignment_mats, lambda_)/lambda_
