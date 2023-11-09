@@ -187,21 +187,12 @@ def calc_distance_based_benefits(sat, task):
 
     return task_benefit
 
-def get_benefits_and_graphs_from_constellation(n,m,T):
+def get_benefits_and_graphs_from_constellation(num_planes, num_sats_per_plane, m,T):
     """
-    Generate benefit matrix of size n x m x T
+    Generate benefit matrix of size (num_planes*sats_per_plane) x m x T
     from a constellation of satellites, as well as
     a list of the T connectivity graphs for each timestep.
-
-    NOTE: n must be a multiple of 10.
     """
-    if n%10 != 0:
-        if m == n:
-            print(f"WARNING: n={n} is not a multiple of 10. Setting n and m to {n + 10 - n%10}.")
-            m = n + 10 - n%10
-        else: print(f"WARNING: n={n} is not a multiple of 10. Setting n to {n + 10 - n%10}.")
-        n = n + 10 - n%10
-        
     const = ConstellationSim(dt=1*u.min)
     earth = Earth
 
@@ -212,8 +203,6 @@ def get_benefits_and_graphs_from_constellation(n,m,T):
     inc = 58*u.deg
     argp = 0*u.deg
 
-    num_planes = 10
-    num_sats_per_plane = n//num_planes
     for plane_num in range(num_planes):
         raan = plane_num*360/num_planes*u.deg
         for sat_num in range(num_sats_per_plane):

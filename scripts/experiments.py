@@ -415,8 +415,6 @@ def distributed_comparison():
     naive_tot = 0
     cbba_tot = 0
 
-    old_mhal_tot = 0
-
     n_tests = 10
     for _ in tqdm(range(n_tests)):
         benefits = np.random.rand(n, m, T)
@@ -432,10 +430,6 @@ def distributed_comparison():
         _, naive_val, _ = solve_naively(benefits, init_assignment, lambda_)
         _, cbba_val, _ = solve_w_centralized_CBBA(benefits, init_assignment, lambda_)
 
-        mhaa = MHAL_Auction(benefits, init_assignment, L, lambda_=lambda_)
-        mhaa.run_auctions()
-        old_mhal_v, _ = calc_value_and_num_handovers(mhaa.chosen_assignments, benefits, init_assignment, lambda_)
-
         ctot += c_val/n_tests
         catot += ca_val/n_tests
         dtot += d_val/n_tests
@@ -443,10 +437,8 @@ def distributed_comparison():
         naive_tot += naive_val/n_tests
         cbba_tot += cbba_val/n_tests
 
-        old_mhal_tot += old_mhal_v/n_tests
-
-    print([naive_tot, cbba_tot, old_mhal_tot, ctot, catot, dtot])
-    plt.bar(range(6), [naive_tot, cbba_tot, old_mhal_tot, ctot, catot, dtot], tick_label=["Naive", "CBBA", "Old MHAL", "Centralized", "Centralized Approx", "Distributed"])
+    print([naive_tot, cbba_tot, ctot, catot, dtot])
+    plt.bar(range(6), [naive_tot, cbba_tot, ctot, catot, dtot], tick_label=["Naive", "CBBA", "Centralized", "Centralized Approx", "Distributed"])
     plt.show()
 
 def realistic_orbital_simulation():
@@ -454,40 +446,50 @@ def realistic_orbital_simulation():
     Simulate a realistic orbital mechanics case
     using distributed and centralized MHAL.
     """
-    n = 50
-    m = 50
-    T = 10
-    L = 4
-    lambda_ = 0.5
-    init_assignment = np.eye(n,m)
+    n = 100
+    m = 100
+    T = 95
+    L = 5
+    lambda_ = 1
+    init_assignment = np.eye(36*15,36*15)
 
     d_tot = 0
     c_tot = 0
     cbba_tot = 0
     naive_tot = 0
 
-    num_avgs = 10
+    num_avgs = 1
     for _ in tqdm(range(num_avgs)):
-        benefits, graphs = get_benefits_and_graphs_from_constellation(n,m,T)
+        benefits, graphs = get_benefits_and_graphs_from_constellation(36,15,36*15,T)
+
+        for i, graph in enumerate(graphs):
+            if not nx.is_connected(graph):
+                print("WARNING: GRAPH NOT CONNECTED")
+                graphs[i] = rand_connected_graph(36*15)
 
         #Distributed
-        _, d_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, lambda_=lambda_)
+        print(f"Done generating benefits, solving distributed...")
+        _, d_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, graphs=graphs, lambda_=lambda_)
         d_tot += d_val/num_avgs
 
         #Centralized
+        print(f"Done solving distributed, solving centralized...")
         _, c_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=False, lambda_=lambda_)
         c_tot += c_val/num_avgs
 
         #CBBA
+        print(f"Done solving centralized, solving CBBA...")
         _, cbba_val, _ = solve_w_centralized_CBBA(benefits, init_assignment, lambda_)
         cbba_tot += cbba_val/num_avgs
 
         #Naive
+        print(f"Done solving CBBA, solving naive...")
         _, naive_val, _ = solve_naively(benefits, init_assignment, lambda_)
         naive_tot += naive_val/num_avgs
 
     print([naive_tot, cbba_tot, c_tot, d_tot])
     plt.bar(range(4), [naive_tot, cbba_tot, c_tot, d_tot], tick_label=["Naive", "CBBA", "Centralized", "Distributed"])
+    plt.title(f"Realistic Constellation Sim with graph structure, n={36*15}, m={36*15}, T={T}, L={L}, lambda={lambda_}")
     plt.show()
 
 def lookahead_optimality_testing():

@@ -300,7 +300,7 @@ def generate_all_time_intervals(L):
         
     return all_time_intervals
 
-def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distributed=False, central_approx=False):
+def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distributed=False, central_approx=False, verbose=False):
     """
     Sequentially solves the problem using the MHAL algorithm.
 
@@ -320,6 +320,7 @@ def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distribut
     chosen_assignments = []
 
     while len(chosen_assignments) < T:
+        if verbose: print(f"Solving w distributed MHAL, {len(chosen_assignments)}/{T}", end='\r')
         curr_tstep = len(chosen_assignments)
         tstep_end = min(curr_tstep+L, T)
         benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
