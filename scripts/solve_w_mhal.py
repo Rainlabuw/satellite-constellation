@@ -2,7 +2,6 @@ import numpy as np
 from methods import *
 import networkx as nx
 from classic_auction import Auction, AuctionAgent
-from solve_w_mhal import MHAL_Auction
 from solve_naively import solve_naively
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 

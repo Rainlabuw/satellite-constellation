@@ -9,7 +9,6 @@ from methods import *
 from solve_optimally import solve_optimally
 from solve_naively import solve_naively
 from solve_w_mhal import solve_w_mhal
-from solve_w_mhal import MHAL_Auction
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from classic_auction import Auction
 
@@ -141,7 +140,7 @@ def compare_MHA_to_other_algs():
     for _ in range(num_avgs):
         print(f"Run {_}/{num_avgs}")
         # benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
-        benefits = get_benefit_matrix_from_constellation(n, m, T)
+        benefits, _ = get_benefits_and_graphs_from_constellation(n, m, T)
         print("Generated realistic benefits")
 
         #SMHGL centralized, lookahead = 2
@@ -199,6 +198,7 @@ def test_MHA_lookahead_performance():
     m = 50
     T = 25
     lambda_ = 1
+    init_assignment = np.eye(n,m)
 
     max_lookahead = 5
     num_avgs = 100
@@ -212,21 +212,17 @@ def test_MHA_lookahead_performance():
         avg_approx_ben = 0
         for _ in range(num_avgs):
             print(f"Lookahead {lookahead} ({_}/{num_avgs})", end='\r')
-            # benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
-            benefits = get_benefit_matrix_from_constellation(n, m, T)
+            benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
+            # benefits = get_benefit_matrix_from_constellation(n, m, T)
             # benefits = np.random.rand(n,m,T)
 
             #MHAL with true lookaheads
-            multi_auction = MHAL_Auction(benefits, None, lookahead, lambda_=lambda_)
-            multi_auction.run_auctions()
-            ben, nh = multi_auction.calc_value_and_num_handovers()
+            _, ben, nh = solve_w_mhal(benefits, lookahead, init_assignment, distributed=False, lambda_=lambda_)
             avg_ben += ben/num_avgs
             avg_nh += nh/num_avgs
             
             #MHAL (distributed)
-            multi_auction = MHAL_Auction(benefits, None, lookahead, lambda_=lambda_, approximate=True)
-            multi_auction.run_auctions()
-            ben, _ = multi_auction.calc_value_and_num_handovers()
+            _, ben, nh = solve_w_mhal(benefits, lookahead, init_assignment, distributed=True, lambda_=lambda_)
             avg_approx_ben += ben/num_avgs
 
         resulting_bens.append(avg_ben)
@@ -494,5 +490,64 @@ def realistic_orbital_simulation():
     plt.bar(range(4), [naive_tot, cbba_tot, c_tot, d_tot], tick_label=["Naive", "CBBA", "Centralized", "Distributed"])
     plt.show()
 
+def lookahead_optimality_testing():
+    """
+    Do any problems violate the new bounds (11/7)?
+    """
+    n = 3
+    m = 3
+    T = 5
+
+    for _ in range(1000):
+        print(_,end='\r')
+        benefit = np.random.random((n,m,T))
+        _, opt_val, _ = solve_optimally(benefit, None, 0.5)
+        for lookahead in range(T, T+1):
+            lower_bd = (0.5+0.5*(lookahead-1)/T)*opt_val
+            _, val, _ = solve_w_mhal(benefit, lookahead, None, distributed=False, lambda_=0.5)
+            if val < opt_val:
+                print("Bound violation!!")
+                print(benefit)
+                print(f"Lookahead {lookahead} value: {val}, lower bound: {lower_bd}, opt_val: {opt_val}")
+                return
+            
+def lookahead_counterexample():
+    benefit = np.zeros((5,5,3))
+    benefit[:,:,0] = np.array([[2.01, 1, 1, 1, 1],
+                               [1, 2.01, 1, 1, 1],
+                               [1, 1, 1.01, 1, 1],
+                               [1, 1, 1, 1.01, 1],
+                               [1, 1, 1, 1, 1.01]])
+    
+    benefit[:,:,1] = np.array([[1, 4.01, 1, 1, 1],
+                               [4.01, 1, 1, 1, 1],
+                               [1, 1, 1, 1.01, 1],
+                               [1, 1, 1, 1, 1.01],
+                               [1, 1, 1.01, 1, 1]])
+    
+    benefit[:,:,2] = np.array([[2.01, 1, 1, 1, 1],
+                               [1, 2.01, 1, 1, 1],
+                               [1, 1, 1, 1, 1.01],
+                               [1, 1, 1.01, 1, 1],
+                               [1, 1, 1, 1.01, 1]])
+    
+    init_assignment = np.eye(5,5)
+
+    ass, opt_val, _ = solve_optimally(benefit, init_assignment, 1)
+    print(opt_val)
+    for a in ass:
+        print(a)
+
+    L = 3
+    print("mhal")
+    ass, val, _ = solve_w_mhal(benefit, L, init_assignment)
+    print(val)
+    for a in ass:
+        print(a)
+
+    rat = 1/2+1/2*((L-1)/3)
+
+    print(f"Ratio: {val/opt_val}, desired rat: {rat}")
+
 if __name__ == "__main__":
-    realistic_orbital_simulation()
+    lookahead_optimality_testing()
