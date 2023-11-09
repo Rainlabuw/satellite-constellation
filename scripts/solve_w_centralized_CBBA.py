@@ -38,7 +38,7 @@ def score_task(i, j, k, benefits, init_assignment, agents, lambda_):
 
     return marginal_benefit
 
-def solve_w_centralized_CBBA(benefits, init_assignment, lambda_):
+def solve_w_centralized_CBBA(benefits, init_assignment, lambda_, verbose=False):
     n = benefits.shape[0]
     m = benefits.shape[1]
     T = benefits.shape[2]
@@ -46,7 +46,7 @@ def solve_w_centralized_CBBA(benefits, init_assignment, lambda_):
     agents = [SequentialCBBAAgent(T) for i in range(n)]
 
     for iter in range(n*T):
-        print(f"{iter}/{n*T}", end='\r')
+        if verbose: print(f"Solving w centralized CBBA, {iter}/{n*T}", end='\r')
         best_marginal_benefit = -np.inf
         best_i = None
         best_j = None
