@@ -22,17 +22,20 @@ from poliastro.plotting import StaticOrbitPlotter
 from poliastro.spheroid_location import SpheroidLocation
 from astropy import units as u
 
-def optimal_baseline_comparison():
+def optimal_baseline_plot():
     """
-    Compare various solutions types against the true optimal
+    Compare various solutions types against the true optimal,
+    plot for final paper
     """
     n = 5
     m = 5
     T = 3
+    
+    L = T
 
     init_ass = None
     
-    lambda_ = 1
+    lambda_ = 0.5
 
     avg_best = 0
     avg_mhal = 0
@@ -40,25 +43,19 @@ def optimal_baseline_comparison():
     avg_naive = 0
 
     num_avgs = 50
-    for _ in range(num_avgs):
+    for _ in tqdm(range(num_avgs)):
         benefit = np.random.rand(n,m,T)
 
-        print(f"Run {_}/{num_avgs}", end='\r')
-
-        #SMHGL centralized, lookahead = 2
-        multi_auction = MHAL_Auction(benefit, None, T, lambda_=lambda_)
-        multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_value_and_num_handovers()
-        avg_mhal += ben/num_avgs
+        #SMHGL centralized, lookahead = 3
+        _, mhal_ben, _ = solve_w_mhal(benefit, L, init_ass, lambda_=lambda_)
+        avg_mhal += mhal_ben/num_avgs
 
         #MHA
-        multi_auction = MHAL_Auction(benefit, None, 1, lambda_=lambda_)
-        multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_value_and_num_handovers()
-        avg_mha += ben/num_avgs
+        _, mha_ben, _ = solve_w_mhal(benefit, 1, init_ass, lambda_=lambda_)
+        avg_mha += mha_ben/num_avgs
 
         #Naive
-        _, ben, nh = solve_naively(benefit, lambda_)
+        _, ben, _ = solve_naively(benefit, init_ass, lambda_)
         avg_naive += ben/num_avgs
 
         #Optimal
@@ -66,9 +63,11 @@ def optimal_baseline_comparison():
         avg_best += ben/num_avgs
 
     fig = plt.figure()
-    plt.bar(["Naive","MHA", "MHAL", "Optimal"], [avg_naive, avg_mha, avg_mhal, avg_best])
+    plt.bar(["Naive","MHA", f"MHAL (L={L})", "Optimal"], [avg_naive, avg_mha, avg_mhal, avg_best])
     plt.title(f"Average benefit across {num_avgs} runs, n={n}, m={m}, T={T}")
-
+    print(["Naive","MHA", f"MHAL (L={L})", "Optimal"])
+    print([avg_naive, avg_mha, avg_mhal, avg_best])
+    plt.savefig("opt_comparison.png")
     plt.show()
 
 def MHA_unit_testing():
@@ -552,4 +551,4 @@ def lookahead_counterexample():
     print(f"Ratio: {val/opt_val}, desired rat: {rat}")
 
 if __name__ == "__main__":
-    lookahead_optimality_testing()
+    optimal_baseline_plot()
