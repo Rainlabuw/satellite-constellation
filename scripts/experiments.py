@@ -445,12 +445,12 @@ def realistic_orbital_simulation():
     Simulate a realistic orbital mechanics case
     using distributed and centralized MHAL.
     """
-    n = 100
-    m = 100
+    n = 50
+    m = 50
     T = 95
     L = 5
     lambda_ = 1
-    init_assignment = np.eye(36*15,36*15)
+    init_assignment = np.eye(n,m)
 
     d_tot = 0
     c_tot = 0
@@ -459,16 +459,11 @@ def realistic_orbital_simulation():
 
     num_avgs = 1
     for _ in tqdm(range(num_avgs)):
-        benefits, graphs = get_benefits_and_graphs_from_constellation(36,15,36*15,T)
-
-        for i, graph in enumerate(graphs):
-            if not nx.is_connected(graph):
-                print("WARNING: GRAPH NOT CONNECTED")
-                graphs[i] = rand_connected_graph(36*15)
+        benefits, graphs = get_benefits_and_graphs_from_constellation(10,5,n,T)
 
         #Distributed
         print(f"Done generating benefits, solving distributed...")
-        _, d_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, graphs=graphs, lambda_=lambda_)
+        _, d_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, graphs=None, lambda_=lambda_)
         d_tot += d_val/num_avgs
 
         #Centralized
@@ -489,6 +484,66 @@ def realistic_orbital_simulation():
     print([naive_tot, cbba_tot, c_tot, d_tot])
     plt.bar(range(4), [naive_tot, cbba_tot, c_tot, d_tot], tick_label=["Naive", "CBBA", "Centralized", "Distributed"])
     plt.title(f"Realistic Constellation Sim with graph structure, n={36*15}, m={36*15}, T={T}, L={L}, lambda={lambda_}")
+    plt.show()
+
+def epsilon_effect():
+    """
+    Simulate a realistic orbital mechanics case
+    using distributed and centralized MHAL.
+
+    Determine how the choice of epsilon for the auction
+    effects the difference
+    """
+    n = 50
+    m = 50
+    T = 40
+    L = 5
+    lambda_ = 1
+    init_assignment = np.eye(n,m)
+
+    d_tot_0p1 = 0
+    d_tot_0p01 = 0
+    d_tot_0p001 = 0
+    c_tot = 0
+    cbba_tot = 0
+    naive_tot = 0
+
+    num_avgs = 1
+    for _ in tqdm(range(num_avgs)):
+        benefits, graphs = get_benefits_and_graphs_from_constellation(10,5,n,T)
+
+        #Distributed
+        print(f"Done generating benefits, solving distributed 0.1...")
+        _, d_val_0p1, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, graphs=None, lambda_=lambda_, eps=0.1, verbose=True)
+        d_tot_0p1 += d_val_0p1/num_avgs
+
+        print(f"Done generating benefits, solving distributed 0.01...")
+        _, d_val_0p01, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, graphs=None, lambda_=lambda_, eps=0.01, verbose=True)
+        d_tot_0p01 += d_val_0p01/num_avgs
+
+        print(f"Done generating benefits, solving distributed 0.001...")
+        _, d_val_0p001, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, graphs=None, lambda_=lambda_, eps=0.001, verbose=True)
+        d_tot_0p001 += d_val_0p001/num_avgs
+
+        #Centralized
+        print(f"Done solving distributed, solving centralized...")
+        _, c_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=False, lambda_=lambda_)
+        c_tot += c_val/num_avgs
+
+        #CBBA
+        print(f"Done solving centralized, solving CBBA...")
+        _, cbba_val, _ = solve_w_centralized_CBBA(benefits, init_assignment, lambda_, verbose=True)
+        cbba_tot += cbba_val/num_avgs
+
+        #Naive
+        print(f"Done solving CBBA, solving naive...")
+        _, naive_val, _ = solve_naively(benefits, init_assignment, lambda_)
+        naive_tot += naive_val/num_avgs
+
+    print([naive_tot, cbba_tot, c_tot, d_tot_0p1, d_tot_0p01, d_tot_0p001])
+    plt.bar(range(6), [naive_tot, cbba_tot, c_tot, d_tot_0p1, d_tot_0p01, d_tot_0p001], tick_label=["Naive", "CBBA", "Centralized", "Distributed 0.1", "Distributed 0.01", "Distributed 0.001"])
+    plt.title(f"Realistic Constellation Sim with complete graphs over {num_avgs} runs, n={n}, m={m}, T={T}, L={L}, lambda={lambda_}")
+    plt.savefig("epsilon_effect.png")
     plt.show()
 
 def lookahead_optimality_testing():
@@ -550,5 +605,97 @@ def lookahead_counterexample():
 
     print(f"Ratio: {val/opt_val}, desired rat: {rat}")
 
+def performance_v_num_agents_line_chart():
+    ns = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 150]
+    T = 10
+    L = 5
+    lambda_ = 0.5
+    num_avgs = 3
+    init_assign = None
+
+    naive_vals = []
+    sga_vals = []
+    mha_vals = []
+    mhal_vals = []
+
+    naive_nhs = []
+    sga_nhs = []
+    mha_nhs = []
+    mhal_nhs = []
+
+    for n in ns:
+        print(f"Solving for {n} agents...")
+        m = n
+
+        naive_total_val = 0
+        sga_total_val = 0
+        mha_total_val = 0
+        mhal_total_vals = 0
+
+        naive_total_nhs = 0
+        sga_total_nhs = 0
+        mha_total_nhs = 0
+        mhal_total_nhs = 0
+        
+        for _ in range(num_avgs):
+            print(num_avgs)
+            benefits = np.random.random((n, m, T))
+
+            _, naive_val, naive_nh = solve_naively(benefits, init_assign, lambda_)
+            naive_total_val += naive_val/num_avgs
+            naive_total_nhs += naive_nh/num_avgs
+
+            _, sga_val, sga_nh = solve_w_centralized_CBBA(benefits, init_assign, lambda_)
+            sga_total_val += sga_val/num_avgs
+            sga_total_nhs += sga_nh/num_avgs
+
+            _, mha_val, mha_nh = solve_w_mhal(benefits, 1, init_assign, lambda_=lambda_)
+            mha_total_val += mha_val/num_avgs
+            mha_total_nhs += mha_nh/num_avgs
+
+            _, mhal_val, mhal_nh = solve_w_mhal(benefits, L, init_assign, lambda_=lambda_)
+            mhal_total_vals += mhal_val/num_avgs
+            mhal_total_nhs += mhal_nh/num_avgs
+
+        naive_vals.append(naive_total_val/n)
+        sga_vals.append(sga_total_val/n)
+        mha_vals.append(mha_total_val/n)
+        mhal_vals.append(mhal_total_vals/n)
+
+        naive_nhs.append(naive_total_nhs/n)
+        sga_nhs.append(sga_total_nhs/n)
+        mha_nhs.append(mha_total_nhs/n)
+        mhal_nhs.append(mhal_total_nhs/n)
+
+    fig, axes = plt.subplots(2,1, sharex=True)
+    fig.suptitle(f"Performance vs. number of agents over {num_avgs} runs, m=n, T={T}, L={L}, lambda={lambda_}")
+    axes[0].plot(ns, naive_vals, label="Naive")
+    axes[0].plot(ns, sga_vals, label="SGA")
+    axes[0].plot(ns, mha_vals, label="MHA")
+    axes[0].plot(ns, mhal_vals, label=f"MHAL (L={L})")
+    axes[0].set_ylabel("Average benefit per agent")
+    
+    axes[1].plot(ns, naive_nhs, label="Naive")
+    axes[1].plot(ns, sga_nhs, label="SGA")
+    axes[1].plot(ns, mha_nhs, label="MHA")
+    axes[1].plot(ns, mhal_nhs, label=f"MHAL (L={L})")
+    axes[1].set_ylabel("Average number of handovers per agent")
+    
+    axes[1].set_xlabel("Number of agents")
+
+    axes[1].legend()
+
+    print(naive_vals)
+    print(sga_vals)
+    print(mha_vals)
+    print(mhal_vals)
+
+    print(naive_nhs)
+    print(sga_nhs)
+    print(mha_nhs)
+    print(mhal_nhs)
+    plt.savefig("performance_v_num_agents.png")
+    plt.show()
+
 if __name__ == "__main__":
-    optimal_baseline_plot()
+    performance_v_num_agents_line_chart()

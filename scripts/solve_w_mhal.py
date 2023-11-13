@@ -34,7 +34,7 @@ class MHAL_D_Auction(object):
         self.verbose = verbose
 
         self.agents = [MHAL_D_Agent(self, i, all_time_intervals, all_time_interval_sequences, \
-                                    self.benefits[i,:,:], self.prices[i,:,:], list(self.graph.neighbors(i)), self.eps, nx.diameter(self.graph)) for i in range(self.n)]
+                                    self.benefits[i,:,:], self.prices[i,:,:], list(self.graph.neighbors(i)), nx.diameter(self.graph)) for i in range(self.n)]
 
     def run_auction(self):
         self.n_iterations = 0
@@ -52,8 +52,14 @@ class MHAL_D_Auction(object):
             print(f"\tAssignments: {[a.choice for a in self.agents]}")
 
 class MHAL_D_Agent(object):
-    def __init__(self, auction, id, all_time_intervals, all_time_interval_sequences, benefits, prices, neighbors, eps, max_steps_since_last_update):
+    def __init__(self, auction, id, all_time_intervals, all_time_interval_sequences, benefits, prices, neighbors, max_steps_since_last_update):
         self.id = id
+
+        #Grab info from auction
+        self.init_assignment = auction.curr_assignment
+        self.lambda_ = auction.lambda_
+        self.n = auction.n
+        self.eps = auction.eps
         self.auction = auction
 
         self.all_time_intervals = all_time_intervals
@@ -63,7 +69,6 @@ class MHAL_D_Agent(object):
         self.benefits = benefits
         self.init_time_interval_benefits()
         self.prices = prices
-        self.eps = eps
 
         self.m = benefits.shape[0]
         self.T = benefits.shape[1]
@@ -73,6 +78,7 @@ class MHAL_D_Agent(object):
         self._prices = {}
         self.public_prices = {}
         self.choice_by_ti = {}
+        #Generate bids and prices for every time interval you're running an auction for
         for time_interval in all_time_intervals:
             self._high_bidders[time_interval] = -1*np.ones(self.m)
             self._high_bidders[time_interval][0] = self.id
@@ -85,17 +91,22 @@ class MHAL_D_Agent(object):
             self.choice_by_ti[time_interval] = 0
 
         #Stores the benefit yielded by time interval sequences
-        self._benefits_from_time_interval_seq = {}
-        self.public_benefits_from_time_interval_seq = {}
+        self._values_from_time_interval_seq = {}
+        self.public_values_from_time_interval_seq = {}
         for time_interval_sequence in all_time_interval_sequences:
-            self._benefits_from_time_interval_seq[time_interval_sequence] = 0
-            self.public_benefits_from_time_interval_seq[time_interval_sequence] = 0
+            self._values_from_time_interval_seq[time_interval_sequence] = np.zeros(self.n)
+            self.public_values_from_time_interval_seq[time_interval_sequence] = np.zeros(self.n)
+
+        self._timestep_value_info_recieved = np.zeros(self.n)
+        self.public_timestep_value_info_recieved = np.zeros(self.n)
 
         self.neighbors = neighbors
 
         self.steps_since_last_update = 0
         self.max_steps_since_last_update = max_steps_since_last_update
         self.converged = False
+
+        self.n_iters = 0
 
         #Final task choice selected by the algorithm
         self.choice = None
@@ -112,19 +123,19 @@ class MHAL_D_Agent(object):
 
             self.time_interval_benefits[ti] = combined_benefits
 
-    def compute_time_interval_sequence_benefits(self):
+    def compute_time_interval_sequence_values(self):
         for time_interval_sequence in self.all_time_interval_sequences:
-            tis_benefit = 0
-            curr_assignment = np.argmax(self.auction.curr_assignment[self.id,:])
+            tis_value = 0
+            curr_assignment = np.argmax(self.init_assignment[self.id,:])
             for time_interval in time_interval_sequence:
-                tis_benefit += self.time_interval_benefits[time_interval][self.choice_by_ti[time_interval]]
+                tis_value += self.time_interval_benefits[time_interval][self.choice_by_ti[time_interval]]
                 
                 if curr_assignment != self.choice_by_ti[time_interval]:
-                    tis_benefit -= self.auction.lambda_
+                    tis_value -= self.lambda_
 
                 curr_assignment = self.choice_by_ti[time_interval]
             
-            self._benefits_from_time_interval_seq[time_interval_sequence] = tis_benefit
+            self._values_from_time_interval_seq[time_interval_sequence][self.id] = tis_value
 
     def update_agent_prices_bids(self):
         """
@@ -148,8 +159,8 @@ class MHAL_D_Agent(object):
 
                 if max_prices[self.choice_by_ti[ti]] >= self.public_prices[ti][self.choice_by_ti[ti]] and self._high_bidders[ti][self.choice_by_ti[ti]] != self.id:
                     #Adjust the combined benefits to enforce handover penalty 
-                    indices_where_agent_not_prev_assigned = np.where(self.auction.curr_assignment[self.id,:]==1, 0, 1)
-                    benefit_hat = self.time_interval_benefits[ti] - self.auction.lambda_ * indices_where_agent_not_prev_assigned
+                    indices_where_agent_not_prev_assigned = np.where(self.curr_assignment[self.id,:]==1, 0, 1)
+                    benefit_hat = self.time_interval_benefits[ti] - self.lambda_ * indices_where_agent_not_prev_assigned
 
                     best_net_value = np.max(benefit_hat - max_prices)
                     second_best_net_value = np.partition(benefit_hat - max_prices, -2)[-2] #https://stackoverflow.com/questions/33181350/quickest-way-to-find-the-nth-largest-value-in-a-numpy-matrix
@@ -167,25 +178,52 @@ class MHAL_D_Agent(object):
                     #based on the new info from other agents.
                     self._prices[ti] = max_prices
 
-            #Based on the new choices for each time interval, calculate the time interval sequence benefits
-            self.compute_time_interval_sequence_benefits()
+            neighbor_timestep_value_info_recieved = np.array(self.public_timestep_value_info_recieved)
+            for n in self.neighbors:
+                neighbor_timestep_value_info_recieved = np.vstack((neighbor_timestep_value_info_recieved, self.auction.agents[n].public_timestep_value_info_recieved))  
+
+            agents_w_most_updated_value_info = np.argmax(neighbor_timestep_value_info_recieved, axis=0)
+            self._timestep_value_info_recieved = np.max(neighbor_timestep_value_info_recieved, axis=0)
+
+            for time_interval_sequence in self.all_time_interval_sequences:
+                neighbor_values_from_time_interval_seq = np.array(self.public_values_from_time_interval_seq[time_interval_sequence])
+                for n in self.neighbors:
+                    neighbor_values_from_time_interval_seq = np.vstack((neighbor_values_from_time_interval_seq, self.auction.agents[n].public_values_from_time_interval_seq[time_interval_sequence]))
+
+                #This line takes the most updated benefit info from the neighbors and puts it into the agent's own benefit info
+                self._values_from_time_interval_seq[time_interval_sequence] = neighbor_values_from_time_interval_seq[agents_w_most_updated_value_info, np.arange(self._values_from_time_interval_seq[time_interval_sequence].shape[1])]
+
+            #Based on the new choices for each time interval, calculate the time interval sequence benefits for yourself
+            self.compute_time_interval_sequence_values()
         
         #Otherwise, the algorithm has converged
         else:
             self.converged = True
 
-            best_tis_benefit = -np.inf
+            best_tis_value = -np.inf
             best_tis = None
 
             #NOTE: Need to get this information in a distributed way
             for tis in self.all_time_interval_sequences:
-                tis_benefit = 0
+                tis_value = 0
                 for agent in self.auction.agents:
-                    tis_benefit += agent.public_benefits_from_time_interval_seq[tis]
+                    tis_value += agent.public_values_from_time_interval_seq[tis]
 
-                if tis_benefit > best_tis_benefit:
-                    best_tis_benefit = tis_benefit
+                if tis_value > best_tis_value:
+                    best_tis_value = tis_value
                     best_tis = tis
+
+            print(f"Centralized best_tis {best_tis}")
+            best_tis_value = -np.inf
+            best_tis = None
+            for tis in self.all_time_interval_sequences:
+                tis_value = np.sum(self._values_from_time_interval_seq[tis])
+
+                if tis_value > best_tis_value:
+                    best_tis_value = tis_value
+                    best_tis = tis
+            
+            print(f"Decentralized best_tis {best_tis}")
 
             self.choice = self.choice_by_ti[best_tis[0]]
 
@@ -200,8 +238,9 @@ class MHAL_D_Agent(object):
                 self.public_prices[ti] = np.copy(self._prices[ti])
                 self.public_high_bidders[ti] = np.copy(self._high_bidders[ti])
 
+            self.public_timestep_value_info_recieved = np.copy(self._timestep_value_info_recieved)
             for tis in self.all_time_interval_sequences:
-                self.public_benefits_from_time_interval_seq[tis] = self._benefits_from_time_interval_seq[tis]
+                self.public_values_from_time_interval_seq[tis] = np.copy(self._values_from_time_interval_seq[tis])
 
             if not updated:
                 self.steps_since_last_update += 1
@@ -212,6 +251,8 @@ class MHAL_D_Agent(object):
         else:
             self.converged = True
 
+        self.n_iters += 1
+        self.public_timestep_value_info_recieved[self.id] = self.n_iters
 
 def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, benefit_mat_window, lambda_, approx=False):
     """
@@ -221,12 +262,12 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
     n = benefit_mat_window.shape[0]
     m = benefit_mat_window.shape[1]
 
-    best_benefit = -np.inf
+    best_value = -np.inf
     best_assignment = None
     best_time_interval = None
 
     for time_interval_sequence in time_interval_sequences:
-        total_tis_benefit = 0
+        total_tis_value = 0
         tis_assignment_curr = prev_assignment
         tis_first_assignment = None
 
@@ -244,9 +285,9 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
             central_assignments = solve_centralized(benefit_hat)
             tis_assignment = convert_central_sol_to_assignment_mat(n, m, central_assignments)
 
-            #Calculate the benefit from this time interval sequence
-            total_tis_benefit += (tis_assignment * combined_benefit_mat).sum()
-            total_tis_benefit -= calc_assign_seq_handover_penalty(tis_assignment_curr, [tis_assignment], lambda_)
+            #Calculate the value from this time interval sequence
+            total_tis_value += (tis_assignment * combined_benefit_mat).sum()
+            total_tis_value -= calc_assign_seq_handover_penalty(tis_assignment_curr, [tis_assignment], lambda_)
 
             tis_assignment_curr = tis_assignment
             #If this is the first assignment in the time interval sequence, save it
@@ -254,8 +295,8 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
                 tis_first_assignment = tis_assignment_curr
 
         #If this time interval sequence is better than the best one we've seen so far, save it 
-        if total_tis_benefit > best_benefit:
-            best_benefit = total_tis_benefit
+        if total_tis_value > best_value:
+            best_value = total_tis_value
             best_assignment = tis_first_assignment
             best_time_interval = time_interval_sequence
 
@@ -300,7 +341,7 @@ def generate_all_time_intervals(L):
         
     return all_time_intervals
 
-def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distributed=False, central_approx=False, verbose=False):
+def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distributed=False, central_approx=False, verbose=False, eps=0.01):
     """
     Sequentially solves the problem using the MHAL algorithm.
 
@@ -335,7 +376,7 @@ def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distribut
         if not distributed:
             chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, lambda_, approx=central_approx)
         else:
-            mhal_d_auction = MHAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=0.01, graph=graphs[curr_tstep], lambda_=lambda_)
+            mhal_d_auction = MHAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
             mhal_d_auction.run_auction()
 
             chosen_assignment = convert_agents_to_assignment_matrix(mhal_d_auction.agents)
@@ -348,6 +389,6 @@ def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distribut
     return chosen_assignments, total_value, nh
 
 if __name__ == "__main__":
-    pass
-    # chosen_assignments = solve_w_mhal(benefits, 4, init_assignment)
+    benefits = 2*np.random.random((10, 10, 10))
+    chosen_assignments = solve_w_mhal(benefits, 4, None, distributed=True)
     # print(calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 1))
