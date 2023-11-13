@@ -33,8 +33,15 @@ class MHAL_D_Auction(object):
         self.eps = eps
         self.verbose = verbose
 
+        #Set the number of iterations since last getting an update before
+        #individual agents think that they've converged. Need to ensure that
+        #this number is higher than 1, because in a fully connected graph
+        #the last agent will win it's first bid due to index tiebreaks
+        #and then think it's converged.
+        self.max_steps_since_last_update = max(nx.diameter(self.graph), 2)
+
         self.agents = [MHAL_D_Agent(self, i, all_time_intervals, all_time_interval_sequences, \
-                                    self.benefits[i,:,:], self.prices[i,:,:], list(self.graph.neighbors(i)), nx.diameter(self.graph)) for i in range(self.n)]
+                                    self.benefits[i,:,:], self.prices[i,:,:], list(self.graph.neighbors(i))) for i in range(self.n)]
 
     def run_auction(self):
         self.n_iterations = 0
@@ -52,7 +59,7 @@ class MHAL_D_Auction(object):
             print(f"\tAssignments: {[a.choice for a in self.agents]}")
 
 class MHAL_D_Agent(object):
-    def __init__(self, auction, id, all_time_intervals, all_time_interval_sequences, benefits, prices, neighbors, max_steps_since_last_update):
+    def __init__(self, auction, id, all_time_intervals, all_time_interval_sequences, benefits, prices, neighbors):
         self.id = id
 
         #Grab info from auction
@@ -60,6 +67,7 @@ class MHAL_D_Agent(object):
         self.lambda_ = auction.lambda_
         self.n = auction.n
         self.eps = auction.eps
+        self.max_steps_since_last_update = auction.max_steps_since_last_update
         self.auction = auction
 
         self.all_time_intervals = all_time_intervals
@@ -90,7 +98,7 @@ class MHAL_D_Agent(object):
 
             self.choice_by_ti[time_interval] = 0
 
-        #Stores the benefit yielded by time interval sequences
+        #Stores the value yielded by time interval sequences
         self._values_from_time_interval_seq = {}
         self.public_values_from_time_interval_seq = {}
         for time_interval_sequence in all_time_interval_sequences:
@@ -103,7 +111,6 @@ class MHAL_D_Agent(object):
         self.neighbors = neighbors
 
         self.steps_since_last_update = 0
-        self.max_steps_since_last_update = max_steps_since_last_update
         self.converged = False
 
         self.n_iters = 0
@@ -126,11 +133,14 @@ class MHAL_D_Agent(object):
     def compute_time_interval_sequence_values(self):
         for time_interval_sequence in self.all_time_interval_sequences:
             tis_value = 0
-            curr_assignment = np.argmax(self.init_assignment[self.id,:])
+            if self.init_assignment is None:
+                curr_assignment = None
+            else: curr_assignment = np.argmax(self.init_assignment[self.id,:])
+            
             for time_interval in time_interval_sequence:
                 tis_value += self.time_interval_benefits[time_interval][self.choice_by_ti[time_interval]]
                 
-                if curr_assignment != self.choice_by_ti[time_interval]:
+                if curr_assignment != self.choice_by_ti[time_interval] and curr_assignment is not None:
                     tis_value -= self.lambda_
 
                 curr_assignment = self.choice_by_ti[time_interval]
@@ -159,7 +169,11 @@ class MHAL_D_Agent(object):
 
                 if max_prices[self.choice_by_ti[ti]] >= self.public_prices[ti][self.choice_by_ti[ti]] and self._high_bidders[ti][self.choice_by_ti[ti]] != self.id:
                     #Adjust the combined benefits to enforce handover penalty 
-                    indices_where_agent_not_prev_assigned = np.where(self.curr_assignment[self.id,:]==1, 0, 1)
+                    if self.init_assignment is None:
+                        #If initial assignment is None, then you shouldn't add a penalty at any index
+                        indices_where_agent_not_prev_assigned = np.zeros(self.m)
+                    else:
+                        indices_where_agent_not_prev_assigned = np.where(self.init_assignment[self.id,:]==1, 0, 1)
                     benefit_hat = self.time_interval_benefits[ti] - self.lambda_ * indices_where_agent_not_prev_assigned
 
                     best_net_value = np.max(benefit_hat - max_prices)
@@ -191,7 +205,7 @@ class MHAL_D_Agent(object):
                     neighbor_values_from_time_interval_seq = np.vstack((neighbor_values_from_time_interval_seq, self.auction.agents[n].public_values_from_time_interval_seq[time_interval_sequence]))
 
                 #This line takes the most updated benefit info from the neighbors and puts it into the agent's own benefit info
-                self._values_from_time_interval_seq[time_interval_sequence] = neighbor_values_from_time_interval_seq[agents_w_most_updated_value_info, np.arange(self._values_from_time_interval_seq[time_interval_sequence].shape[1])]
+                self._values_from_time_interval_seq[time_interval_sequence] = neighbor_values_from_time_interval_seq[agents_w_most_updated_value_info, np.arange(self.n)]
 
             #Based on the new choices for each time interval, calculate the time interval sequence benefits for yourself
             self.compute_time_interval_sequence_values()
@@ -202,28 +216,12 @@ class MHAL_D_Agent(object):
 
             best_tis_value = -np.inf
             best_tis = None
-
-            #NOTE: Need to get this information in a distributed way
-            for tis in self.all_time_interval_sequences:
-                tis_value = 0
-                for agent in self.auction.agents:
-                    tis_value += agent.public_values_from_time_interval_seq[tis]
-
-                if tis_value > best_tis_value:
-                    best_tis_value = tis_value
-                    best_tis = tis
-
-            print(f"Centralized best_tis {best_tis}")
-            best_tis_value = -np.inf
-            best_tis = None
             for tis in self.all_time_interval_sequences:
                 tis_value = np.sum(self._values_from_time_interval_seq[tis])
 
                 if tis_value > best_tis_value:
                     best_tis_value = tis_value
                     best_tis = tis
-            
-            print(f"Decentralized best_tis {best_tis}")
 
             self.choice = self.choice_by_ti[best_tis[0]]
 
@@ -389,6 +387,8 @@ def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distribut
     return chosen_assignments, total_value, nh
 
 if __name__ == "__main__":
-    benefits = 2*np.random.random((10, 10, 10))
-    chosen_assignments = solve_w_mhal(benefits, 4, None, distributed=True)
+    for _ in range(100):
+        print(_)
+        benefits = 2*np.random.random((20, 20, 10))
+        chosen_assignments = solve_w_mhal(benefits, 4, None, distributed=True, verbose=True)
     # print(calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 1))
