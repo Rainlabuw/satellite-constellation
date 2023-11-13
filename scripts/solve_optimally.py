@@ -1,7 +1,6 @@
 import numpy as np
 from methods import *
 import itertools
-import time
 
 def gen_perms_of_perms(curr_perm_list, n, T):
     global total_perm_list
