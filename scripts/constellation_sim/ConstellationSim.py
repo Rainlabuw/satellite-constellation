@@ -157,7 +157,8 @@ class ConstellationSim(object):
                 sat2_r = self.sats[j].orbit.r.to_value(u.km)
                 R = self.sats[i].orbit._state.attractor.R.to_value(u.km)
 
-                if line_of_sight(sat1_r, sat2_r, R) >=0 and np.linalg.norm(sat1_r-sat2_r) < 2500:
+                # if line_of_sight(sat1_r, sat2_r, R) >=0 and np.linalg.norm(sat1_r-sat2_r) < 2500:
+                if line_of_sight(sat1_r, sat2_r, R) >=0:
                     adj[i,j] = 1
                     adj[j,i] = 1
 
