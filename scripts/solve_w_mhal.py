@@ -1,11 +1,6 @@
 import numpy as np
 from methods import *
 import networkx as nx
-from classic_auction import Auction, AuctionAgent
-from solve_naively import solve_naively
-from solve_w_centralized_CBBA import solve_w_centralized_CBBA
-
-import time
 
 class MHAL_D_Auction(object):
     def __init__(self, benefits, curr_assignment, all_time_intervals, all_time_interval_sequences, prices=None, eps=0.01, graph=None, lambda_=1, verbose=False):
@@ -56,8 +51,6 @@ class MHAL_D_Auction(object):
             for agent in self.agents:
                 agent.update_agent_prices_bids()
 
-            #Have each agent publish it's prices, bids, and values
-            #to public variables, and determine if it has converged
             for agent in self.agents:
                 agent.publish_agent_prices_bids()
 
@@ -443,7 +436,8 @@ def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distribut
 
 if __name__ == "__main__":
     np.random.seed(42)
-    benefits = 2*np.random.random((20, 20, 10))
-    chosen_assignments, val, _ = solve_w_mhal(benefits, 4, None, distributed=True, verbose=False, graphs=[rand_connected_graph(20) for _ in range(10)])
-    print(val)
+    benefits = 2*np.random.random((50, 50, 10))
+    s = time.time()
+    chosen_assignments, val, _ = solve_w_mhal(benefits, 4, None, distributed=True, verbose=False, graphs=[rand_connected_graph(50) for _ in range(10)])
+    print(val,time.time()-s)
     # print(calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 1))
