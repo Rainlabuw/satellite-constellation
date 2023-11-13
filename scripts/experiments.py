@@ -532,8 +532,20 @@ def lookahead_counterexample():
                                [1, 1, 1, 1, 1.01],
                                [1, 1, 1.01, 1, 1],
                                [1, 1, 1, 1.01, 1]])
-    
+
     init_assignment = np.eye(5,5)
+
+    benefit = np.zeros((4,4,2))
+    benefit[:,:,0] = np.array([[100, 1, 0, 0],
+                               [1, 100, 0, 0],
+                               [0, 0, 0.2, 0.1],
+                               [0, 0, 0.1, 0.2]])
+    
+    benefit[:,:,1] = np.array([[1, 1000, 0, 0],
+                                 [1000, 1, 0, 0],
+                                 [0, 0, 0.1, 0.3],
+                                 [0, 0, 0.3, 0.1]])
+    init_assignment = np.eye(4,4)
 
     ass, opt_val, _ = solve_optimally(benefit, init_assignment, 1)
     print(opt_val)
