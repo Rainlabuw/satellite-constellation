@@ -434,6 +434,54 @@ def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distribut
     
     return chosen_assignments, total_value, nh
 
+def solve_w_mhald_track_iters(benefits, L, init_assignment, graphs=None, lambda_=1, verbose=False, eps=0.01):
+    """
+    Sequentially solves the problem using the MHAL algorithm.
+
+    When distributed = True, computes the solution using the fully distributed method.
+    When central_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
+        as would be done in the distributed version.
+    """
+    n = benefits.shape[0]
+    m = benefits.shape[1]
+    T = benefits.shape[2]
+
+    if graphs is None:
+        graphs = [nx.complete_graph(n) for i in range(T)]
+
+    curr_assignment = init_assignment
+    
+    chosen_assignments = []
+
+    total_iterations = 0
+
+    while len(chosen_assignments) < T:
+        if verbose: print(f"Solving w distributed MHAL, {len(chosen_assignments)}/{T}", end='\r')
+        curr_tstep = len(chosen_assignments)
+        tstep_end = min(curr_tstep+L, T)
+        benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
+
+        len_window = benefit_mat_window.shape[-1]
+
+        all_time_intervals = generate_all_time_intervals(len_window)
+        global all_time_interval_sequences
+        all_time_interval_sequences = []
+        build_time_interval_sequences(all_time_intervals, [], len_window)
+
+        mhal_d_auction = MHAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
+        mhal_d_auction.run_auction()
+
+        chosen_assignment = convert_agents_to_assignment_matrix(mhal_d_auction.agents)
+
+        chosen_assignments.append(chosen_assignment)
+        curr_assignment = chosen_assignment
+
+        total_iterations += mhal_d_auction.n_iterations
+    
+    total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_)
+    
+    return chosen_assignments, total_value, nh, total_iterations/T
+
 if __name__ == "__main__":
     np.random.seed(42)
     benefits = 2*np.random.random((50, 50, 10))

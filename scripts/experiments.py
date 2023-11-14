@@ -8,7 +8,7 @@ from methods import *
 
 from solve_optimally import solve_optimally
 from solve_naively import solve_naively
-from solve_w_mhal import solve_w_mhal
+from solve_w_mhal import solve_w_mhal, solve_w_mhald_track_iters
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from classic_auction import Auction
 
@@ -449,43 +449,70 @@ def realistic_orbital_simulation():
     """
     n = 100
     m = 100
-    T = 95
-    L = 5
+    T = 93
+    max_L = 5
     lambda_ = 1
-    init_assignment = np.eye(n,m)
+    init_assignment = None
 
-    d_tot = 0
-    c_tot = 0
     cbba_tot = 0
     naive_tot = 0
 
-    num_avgs = 1
-    for _ in tqdm(range(num_avgs)):
-        benefits, graphs = get_benefits_and_graphs_from_constellation(20,5,n,T)
-        for L in range(1,6):
-            #Distributed
-            print(f"Done generating benefits, solving distributed...")
-            _, d_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=True, graphs=graphs, lambda_=lambda_)
-            d_tot += d_val/num_avgs
+    tot_iters_by_lookahead = np.zeros(max_L)
+    tot_value_by_lookahead = np.zeros(max_L)
 
-            #Centralized
-            print(f"Done solving distributed, solving centralized...")
-            _, c_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=False, lambda_=lambda_)
-            c_tot += c_val/num_avgs
+    num_avgs = 5
+    for _ in range(num_avgs):
+        print(f"\nNum trial {_}")
+        num_planes = 10
+        num_sats_per_plane = 10
+        if n != num_planes*num_sats_per_plane: raise Exception("Make sure n = num planes * num sats per plane")
+        benefits, graphs = get_benefits_and_graphs_from_constellation(num_planes,num_sats_per_plane,m,T)
 
-            #CBBA
-            print(f"Done solving centralized, solving CBBA...")
-            _, cbba_val, _ = solve_w_centralized_CBBA(benefits, init_assignment, lambda_)
-            cbba_tot += cbba_val/num_avgs
+        #Ensure all graphs are connected
+        for i, graph in enumerate(graphs):
+            if not nx.is_connected(graph):
+                print("Graph not connected! Editing graph at timestep")
+                graphs[i] = nx.complete_graph(n)
 
-            #Naive
-            print(f"Done solving CBBA, solving naive...")
-            _, naive_val, _ = solve_naively(benefits, init_assignment, lambda_)
-            naive_tot += naive_val/num_avgs
+        # #CBBA
+        # print(f"Done generating benefits, solving CBBA...")
+        # _, cbba_val, _ = solve_w_centralized_CBBA(benefits, init_assignment, lambda_, verbose=True)
+        # cbba_tot += cbba_val/num_avgs
 
-    print([naive_tot, cbba_tot, c_tot, d_tot])
-    plt.bar(range(4), [naive_tot, cbba_tot, c_tot, d_tot], tick_label=["Naive", "CBBA", "Centralized", "Distributed"])
-    plt.title(f"Realistic Constellation Sim with graph structure, n={36*15}, m={36*15}, T={T}, L={L}, lambda={lambda_}")
+        #Naive
+        print(f"Done solving CBBA, solving naive...")
+        _, naive_val, _ = solve_naively(benefits, init_assignment, lambda_)
+        naive_tot += naive_val/num_avgs
+
+        iters_by_lookahead = []
+        value_by_lookahead = []
+        for L in range(1,max_L+1):
+            print(f"lookahead {L}")
+            _, d_val, _, avg_iters = solve_w_mhald_track_iters(benefits, L, init_assignment, graphs=graphs, lambda_=lambda_, verbose=True)
+
+            iters_by_lookahead.append(avg_iters)
+            value_by_lookahead.append(d_val)
+
+        tot_iters_by_lookahead += np.array(iters_by_lookahead)/num_avgs
+        tot_value_by_lookahead += np.array(value_by_lookahead)/num_avgs
+
+    fig, axes = plt.subplots(2,1)
+    
+    axes[0].plot(range(1,max_L+1), tot_value_by_lookahead, 'g', label="MHAL-D")
+    # axes[0].plot(range(1,max_L+1), [cbba_tot]*max_L, 'b--', label="CBBA")
+    axes[0].plot(range(1,max_L+1), [naive_tot]*max_L, 'r--', label="Naive")
+    axes[0].set_ylabel("Total value")
+    axes[0].set_xticks(range(1,max_L+1))
+    axes[0].set_ylim((0, 1.1*max(tot_value_by_lookahead)))
+    axes[0].legend()
+
+    axes[1].plot(range(1,max_L+1), tot_iters_by_lookahead, 'g', label="MHAL-D")
+    axes[1].set_ylim((0, 1.1*max(tot_iters_by_lookahead)))
+    axes[1].set_ylabel("Average iterations")
+    axes[1].set_xlabel("Lookahead window")
+    axes[1].set_xticks(range(1,max_L+1))
+
+    plt.savefig('real_const.png')
     plt.show()
 
 def epsilon_effect():
@@ -726,4 +753,4 @@ def performance_v_num_agents_line_chart():
     plt.show()
 
 if __name__ == "__main__":
-    performance_v_num_agents_line_chart()
+    realistic_orbital_simulation()

@@ -238,8 +238,8 @@ if __name__ == "__main__":
     inc = 58*u.deg
     argp = 0*u.deg
 
-    num_planes = 36
-    num_sats_per_plane = 15
+    num_planes = 10
+    num_sats_per_plane = 10
     for plane_num in range(num_planes):
         raan = plane_num*360/num_planes*u.deg
         for sat_num in range(num_sats_per_plane):
@@ -248,7 +248,7 @@ if __name__ == "__main__":
             const.add_sat(sat)
 
     #~~~~~~~~~Generate n random tasks on the surface of earth~~~~~~~~~~~~~
-    num_tasks = 50
+    num_tasks = 100
 
     for i in range(num_tasks):
         lon = np.random.uniform(-180, 180)
@@ -263,9 +263,9 @@ if __name__ == "__main__":
 
     print(sum([nx.is_connected(g) for g in const.graphs_over_time]))
 
-    for graph in const.graphs_over_time:
-        nx.draw(graph)
-        plt.show()
+    # for graph in const.graphs_over_time:
+    #     nx.draw(graph)
+    #     plt.show()
 
     const.assign_over_time = [np.eye(const.n, const.m) for i in range(T)]
 
