@@ -450,8 +450,8 @@ def realistic_orbital_simulation():
     n = 100
     m = 100
     T = 93
-    max_L = 5
-    lambda_ = 1
+    max_L = 3
+    lambda_ = 1.5
     init_assignment = None
 
     cbba_tot = 0
@@ -752,5 +752,135 @@ def performance_v_num_agents_line_chart():
     plt.savefig("performance_v_num_agents.png")
     plt.show()
 
+def tasking_history_plot():
+    """
+    Tracks the history of task allocations in a system over time,
+    with and without MHAL
+    """
+    n = 100
+    m = 100
+    num_planes = 10
+    num_sats_per_plane = 10
+    T = 93
+    lambda_ = 0.5
+
+    init_assign = np.eye(n, m)
+
+    benefits, graphs = get_benefits_and_graphs_from_constellation(num_planes,num_sats_per_plane,m,T)
+
+    # benefits = np.random.random((n, m, T))
+
+    naive_ass, naive_val, _ = solve_naively(benefits, init_assign, lambda_)
+
+    mhal_ass, mhal_val, _ = solve_w_mhal(benefits, 1, init_assign, None, lambda_)
+
+    mhal5_ass, mhal5_val, _ = solve_w_mhal(benefits, 5, init_assign, None, lambda_)
+
+    print(naive_val, mhal_val, mhal5_val)
+
+    fig, axes = plt.subplots(3,1, sharex=True)
+    agent1_naive_ass = [np.argmax(naive_a[0,:]) for naive_a in naive_ass]
+
+    agent1_mhal_ass = [np.argmax(mhal_a[0,:]) for mhal_a in mhal_ass]
+
+    agent1_mhal5_ass = [np.argmax(mhal5_a[0,:]) for mhal5_a in mhal5_ass]
+
+    axes[0].plot(range(T), agent1_naive_ass, label="Naive")
+    axes[1].plot(range(T), agent1_mhal_ass, label="MHAL 1")
+    axes[2].plot(range(T), agent1_mhal5_ass, label="MHAL 5")
+    axes[2].set_xlabel("Time (min.)")
+    axes[0].set_ylabel("Task assignment")
+    axes[1].set_ylabel("Task assignment")
+    axes[2].set_ylabel("Task assignment")
+
+    axes[0].set_title("Satellite 0 tasking, Naive")
+    axes[1].set_title("Satellite 0 tasking, MHA")
+    axes[2].set_title("Satellite 0 tasking, MHAL (L=5)")
+    plt.show(block=False)
+
+    fig = plt.figure()
+    gs = fig.add_gridspec(3,2)
+    naive_ax = fig.add_subplot(gs[0,0])
+    mhal_ax = fig.add_subplot(gs[1,0])
+    mhal5_ax = fig.add_subplot(gs[2,0])
+    val_ax = fig.add_subplot(gs[:,1])
+
+    prev_naive = 0
+    prev_mhal = 0
+    prev_mhal5 = 0
+
+    naive_ben_line = []
+    mhal_ben_line = []
+    mhal5_ben_line = []
+
+    naive_val_line = []
+    mhal_val_line = []
+    mhal5_val_line = []
+    
+    for k in range(T):
+        naive_choice = np.argmax(naive_ass[k][0,:])
+        mhal_choice = np.argmax(mhal_ass[k][0,:])
+        mhal5_choice = np.argmax(mhal5_ass[k][0,:])
+
+        if prev_naive != naive_choice:
+            naive_ax.axvline(k-0.5, linestyle='--')
+            if k != 0: 
+                # naive_ben_line.append(naive_ben_line[-1])
+                if len(naive_ben_line) > 1:
+                    naive_ax.plot(range(k-len(naive_ben_line), k), naive_ben_line, 'r')
+                elif len(naive_ben_line) == 1:
+                    naive_ax.plot(range(k-len(naive_ben_line), k), naive_ben_line, 'r.', markersize=1)
+            naive_ben_line = [benefits[0,naive_choice, k]]
+        else:
+            naive_ben_line.append(benefits[0, naive_choice, k])
+
+        if prev_mhal != mhal_choice:
+            mhal_ax.axvline(k-0.5, linestyle='--')
+            if k != 0: 
+                if len(mhal_ben_line) > 1:
+                    mhal_ax.plot(range(k-len(mhal_ben_line), k), mhal_ben_line,'b')
+                elif len(mhal_ben_line) == 1:
+                    mhal_ax.plot(range(k-len(mhal_ben_line), k), mhal_ben_line,'b.', markersize=1)
+            mhal_ben_line = [benefits[0,mhal_choice, k]]
+        else:
+            mhal_ben_line.append(benefits[0,mhal_choice, k])
+
+        if prev_mhal5 != mhal5_choice:
+            mhal5_ax.axvline(k-0.5, linestyle='--')
+            if k != 0: 
+                if len(mhal5_ben_line) > 1:
+                    mhal5_ax.plot(range(k-len(mhal5_ben_line), k), mhal5_ben_line,'g')
+                elif len(mhal5_ben_line) == 1:
+                    mhal5_ax.plot(range(k-len(mhal5_ben_line), k), mhal5_ben_line,'g.', markersize=1)
+
+            mhal5_ben_line = [benefits[0,mhal5_choice, k]]
+        else:
+            mhal5_ben_line.append(benefits[0,mhal5_choice, k])
+
+        naive_val_so_far, _ = calc_value_and_num_handovers(naive_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
+        naive_val_line.append(naive_val_so_far)
+
+        mhal_val_so_far, _ = calc_value_and_num_handovers(mhal_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
+        mhal_val_line.append(mhal_val_so_far)
+
+        mhal5_val_so_far, _ = calc_value_and_num_handovers(mhal5_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
+        mhal5_val_line.append(mhal5_val_so_far)
+
+        prev_naive = naive_choice
+        prev_mhal = mhal_choice
+        prev_mhal5 = mhal5_choice
+
+    #plot last interval
+    naive_ax.plot(range(k+1-len(naive_ben_line), k+1), naive_ben_line, 'r')
+    mhal_ax.plot(range(k+1-len(mhal_ben_line), k+1), mhal_ben_line,'b')
+    mhal5_ax.plot(range(k+1-len(mhal5_ben_line), k+1), mhal5_ben_line,'g')
+
+    #plot value over time
+    val_ax.plot(range(T), naive_val_line, 'r', label='Naive')
+    val_ax.plot(range(T), mhal_val_line, 'b', label='MHAL')
+    val_ax.plot(range(T), mhal5_val_line, 'g', label='MHAL 5')
+
+    plt.show()
+
 if __name__ == "__main__":
-    realistic_orbital_simulation()
+    tasking_history_plot()
