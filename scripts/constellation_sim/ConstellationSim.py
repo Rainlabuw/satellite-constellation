@@ -12,10 +12,13 @@ from poliastro.twobody import Orbit
 from poliastro.plotting import StaticOrbitPlotter
 from poliastro.spheroid_location import SpheroidLocation
 from poliastro.core.events import line_of_sight
+from poliastro.sensors import min_and_max_ground_range, ground_range_diff_at_azimuth_fast
 import time
 
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
+
+from methods import *
 
 class ConstellationSim(object):
     def __init__(self, dt=5*u.min) -> None:
@@ -124,13 +127,14 @@ class ConstellationSim(object):
 
         ani.save('constellation.gif', writer='imagemagick', fps=1, dpi=100)
 
-    def propagate_orbits(self,T):
+    def propagate_orbits(self,T,benefit_func):
         """
         Propagate the orbits of all satellites forward in time by T timesteps,
         storing satellite orbits over time a dictionary of the form:
         {sat_id: [orbit_0, orbit_1, ..., orbit_T]}.
 
-        Also compute the benefits and connectivity graphs over time and returns them.
+        Also compute the benefits and connectivity graphs over time and returns them,
+        given a benefit function which computes a benefit from a sat and a task.
         """
         self.orbits_over_time = defaultdict(list)
         self.benefits_over_time = np.zeros((self.n, self.m, T))
@@ -144,7 +148,7 @@ class ConstellationSim(object):
                 self.orbits_over_time[sat.id].append(sat.orbit)
                 for task in self.tasks:
                     #Compute the distance 
-                    self.benefits_over_time[sat.id, task.id, k] = calc_distance_based_benefits(sat, task)
+                    self.benefits_over_time[sat.id, task.id, k] = benefit_func(sat, task)
 
         return self.benefits_over_time, self.graphs_over_time
 
@@ -164,31 +168,7 @@ class ConstellationSim(object):
 
         return nx.from_numpy_array(adj)
 
-def calc_distance_based_benefits(sat, task):
-    """
-    Given a satellite and a task, computes the benefit of the satellite.
-
-    Benefit here is zero if the task is not visible from the satellite,
-    and is a gaussian centered at the minimum distance away from the task,
-    and dropping to 5% of the max value at the furthest distance away from the task.
-    """
-    if task.loc.is_visible(*sat.orbit.r):
-        body_rad = np.linalg.norm(sat.orbit._state.attractor.R.to_value(u.km))
-        max_distance = np.sqrt(np.linalg.norm(sat.orbit.r.to_value(u.km))**2 - body_rad**2)
-
-        gaussian_height = task.benefit
-        height_at_max_dist = 0.05*gaussian_height
-        gaussian_sigma = np.sqrt(-max_distance**2/(2*np.log(height_at_max_dist/gaussian_height)))
-
-        sat_height = np.linalg.norm(sat.orbit.r.to_value(u.km)) - body_rad
-        task_dist = np.linalg.norm(task.loc.cartesian_cords.to_value(u.km) - sat.orbit.r.to_value(u.km)) - sat_height
-        task_benefit = gaussian_height*np.exp(-task_dist**2/(2*gaussian_sigma**2))
-    else:
-        task_benefit = 0
-
-    return task_benefit
-
-def get_benefits_and_graphs_from_constellation(num_planes, num_sats_per_plane, m,T):
+def get_benefits_and_graphs_from_constellation(num_planes, num_sats_per_plane, m,T,benefit_func=calc_fov_benefits, altitude=550):
     """
     Generate benefit matrix of size (num_planes*sats_per_plane) x m x T
     from a constellation of satellites, as well as
@@ -199,7 +179,7 @@ def get_benefits_and_graphs_from_constellation(num_planes, num_sats_per_plane, m
 
     #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
     #10 evenly spaced planes of satellites, each with n/10 satellites per plane
-    a = earth.R.to(u.km) + 550*u.km
+    a = earth.R.to(u.km) + altitude*u.km
     ecc = 0.01*u.one
     inc = 58*u.deg
     argp = 0*u.deg
@@ -212,67 +192,48 @@ def get_benefits_and_graphs_from_constellation(num_planes, num_sats_per_plane, m
             const.add_sat(sat)
 
     #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    num_tasks = m
-    for _ in range(num_tasks):
-        lon = np.random.uniform(-180, 180)
-        lat = np.random.uniform(-50, 50)
-        task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
+    # num_tasks = m
+    # for _ in range(num_tasks):
+    #     lon = np.random.uniform(-180, 180)
+    #     lat = np.random.uniform(-50, 50)
+    #     task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
-        task_benefit = np.random.uniform(1, 2)
-        task = Task(task_loc, task_benefit)
-        const.add_task(task)
+    #     task_benefit = np.random.uniform(1, 2)
+    #     task = Task(task_loc, task_benefit)
+    #     const.add_task(task)
+    for lon in range(-180, 180, 5):
+        for lat in range(-50, 55, 5):
+            task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
+            
+            task_benefit = np.random.uniform(1, 2)
+            task = Task(task_loc, task_benefit)
+            const.add_task(task)
 
-    benefits, graphs = const.propagate_orbits(T)
+    benefits, graphs = const.propagate_orbits(T, benefit_func)
     return benefits, graphs
 
 if __name__ == "__main__":
     const = ConstellationSim(dt=1*u.min)
-    T = int(95 // const.dt.to_value(u.min)) #simulate enough timesteps for ~1 orbit
-    T = 10
     earth = Earth
 
-    #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
-    #5 evenly spaced planes of satellites, each with 10 satellites per plane
-    a = earth.R.to(u.km) + 400*u.km
-    ecc = 0.01*u.one
-    inc = 58*u.deg
-    argp = 0*u.deg
+    r = [earth.R.to_value(u.km) + 500, 0, 0] << u.km
+    v = [-3.457, 6.618, 2.533] << u.km / u.s
 
-    num_planes = 10
-    num_sats_per_plane = 10
-    for plane_num in range(num_planes):
-        raan = plane_num*360/num_planes*u.deg
-        for sat_num in range(num_sats_per_plane):
-            ta = sat_num*360/num_sats_per_plane*u.deg
-            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num)
-            const.add_sat(sat)
+    sat = Satellite(Orbit.from_vectors(earth, r, v), [], [], plane_id=0)
 
-    #~~~~~~~~~Generate n random tasks on the surface of earth~~~~~~~~~~~~~
-    num_tasks = 100
+    delta = generate_optimal_L(1*u.min, sat)
 
-    for i in range(num_tasks):
-        lon = np.random.uniform(-180, 180)
-        lat = np.random.uniform(-60, 60)
-        task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
-        
-        task_benefit = np.random.uniform(1,2)
-        task = Task(task_loc, task_benefit)
-        const.add_task(task)
+    task_loc = SpheroidLocation(delta*u.deg, 0*u.deg, 0*u.m, earth)
+    task = Task(task_loc, 1)
 
-    const.propagate_orbits(T)
+    fig, axes = plt.subplots()
 
-    print(sum([nx.is_connected(g) for g in const.graphs_over_time]))
+    axes.plot(task.loc.cartesian_cords[0].to_value(u.km), task.loc.cartesian_cords[2].to_value(u.km), 'go')
+    axes.plot(sat.orbit.r[0].to_value(u.km), sat.orbit.r[2].to_value(u.km), 'ro')
 
-    # for graph in const.graphs_over_time:
-    #     nx.draw(graph)
-    #     plt.show()
+    axes.plot([task.loc.cartesian_cords[0].to_value(u.km), sat.orbit.r[0].to_value(u.km)],
+              [task.loc.cartesian_cords[2].to_value(u.km), sat.orbit.r[2].to_value(u.km)], 'b--')
 
-    const.assign_over_time = [np.eye(const.n, const.m) for i in range(T)]
+    axes.add_patch(plt.Circle((0, 0), earth.R.to_value(u.km), color='g',fill=False))
 
-    # const.run_animation(frames=T)
-
-    # for sat in const.sats:
-    #     sat.propagate_orbit(10*u.min)
-    #     plotter.plot(sat.orbit)
-
-    #     plotter.show()
+    plt.show()

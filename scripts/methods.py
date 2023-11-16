@@ -2,6 +2,7 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 import scipy.optimize
+from astropy import units as u
 
 #~~~~~~~~~~~~~~~~~~~GRAPH STUFF~~~~~~~~~~~
 def rand_connected_graph(num_nodes):
@@ -176,3 +177,67 @@ def generate_benefits_over_time(n, m, T, t_final, scale_min=0.5, scale_max=2):
 def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_):
     adjusted_benefits = np.where(prev_assign == 1, benefits + lambda_, benefits)
     return adjusted_benefits
+
+#~~~~~~~~~~~~~~~~~~~~ ORBITAL MECHANICS STUFF ~~~~~~~~~~~~~~
+def calc_distance_based_benefits(sat, task):
+    """
+    Given a satellite and a task, computes the benefit of the satellite.
+
+    Benefit here is zero if the task is not visible from the satellite,
+    and is a gaussian centered at the minimum distance away from the task,
+    and dropping to 5% of the max value at the furthest distance away from the task.
+    """
+    if task.loc.is_visible(*sat.orbit.r):
+        body_rad = np.linalg.norm(sat.orbit._state.attractor.R.to_value(u.km))
+        max_distance = np.sqrt(np.linalg.norm(sat.orbit.r.to_value(u.km))**2 - body_rad**2)
+
+        gaussian_height = task.benefit
+        height_at_max_dist = 0.05*gaussian_height
+        gaussian_sigma = np.sqrt(-max_distance**2/(2*np.log(height_at_max_dist/gaussian_height)))
+
+        sat_height = np.linalg.norm(sat.orbit.r.to_value(u.km)) - body_rad
+        task_dist = np.linalg.norm(task.loc.cartesian_cords.to_value(u.km) - sat.orbit.r.to_value(u.km)) - sat_height
+        task_benefit = gaussian_height*np.exp(-task_dist**2/(2*gaussian_sigma**2))
+    else:
+        task_benefit = 0
+
+    return task_benefit
+
+def calc_fov_benefits(sat, task):
+    sat_r = sat.orbit.r.to_value(u.km)
+    sat_to_task = task.loc.cartesian_cords.to_value(u.km) - sat_r
+
+    angle_btwn = np.arccos(np.dot(-sat_r, sat_to_task)/(np.linalg.norm(sat_r)*np.linalg.norm(sat_to_task)))
+    angle_btwn *= 180/np.pi #convert to degrees
+
+    if angle_btwn < sat.fov and task.loc.is_visible(*sat.orbit.r):
+        gaussian_height = task.benefit
+        height_at_max_fov = 0.05*gaussian_height
+        gaussian_sigma = np.sqrt(-sat.fov**2/(2*np.log(height_at_max_fov/gaussian_height)))
+
+        task_benefit = gaussian_height*np.exp(-angle_btwn**2/(2*gaussian_sigma**2))
+    else:
+        task_benefit = 0
+    
+    return task_benefit
+
+def generate_optimal_L(timestep, sat):
+    """
+    Generates the optimal L given a satellite and a timestep size.
+
+    Calculates this by determining the angle of a satellites ground visibility,
+    and then calculating the time taken to cover that angular distance based on period.
+    """
+    earth = sat.orbit.attractor
+
+    earth_r = earth.R.to_value(u.km)
+    sat_r = np.linalg.norm(sat.orbit.r.to_value(u.km))
+
+    third_angle = (180 - np.arcsin(sat_r/earth_r*np.sin(sat.fov*np.pi/180))*180/np.pi)
+    delta_angle = (2*(180 - sat.fov - third_angle))
+
+    min_to_travel_delta_angle = sat.orbit.period.to(u.min) * delta_angle/360
+
+    L = np.ceil(min_to_travel_delta_angle/timestep)
+
+    return L

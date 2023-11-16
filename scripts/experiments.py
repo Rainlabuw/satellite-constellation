@@ -193,43 +193,46 @@ def test_MHA_lookahead_performance():
     Hopefully, general trend is that performance increases as lookahead increases.
     """
     print("Expect performance to generally increase as lookahead increases")
-    n = 50
-    m = 50
-    T = 25
+    n = 36*15
+    m = 300
+    T = 93
     lambda_ = 1
-    init_assignment = np.eye(n,m)
 
-    max_lookahead = 5
-    num_avgs = 100
+    max_lookahead = 6
+    num_avgs = 1
 
     resulting_bens = []
     resulting_approx_bens = []
     handovers = []
+    benefits, graphs = get_benefits_and_graphs_from_constellation(36, 15, m, T, altitude=500)
+    m = benefits.shape[1]
+
+    init_assignment = np.eye(n,m)
     for lookahead in range(1,max_lookahead+1):
         avg_ben = 0
         avg_nh = 0
         avg_approx_ben = 0
         for _ in range(num_avgs):
             print(f"Lookahead {lookahead} ({_}/{num_avgs})", end='\r')
-            benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
-            # benefits = get_benefit_matrix_from_constellation(n, m, T)
+            # benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
+            # benefits, graphs = get_benefits_and_graphs_from_constellation(10, 10, m, T, altitude=500)
             # benefits = np.random.rand(n,m,T)
 
             #MHAL with true lookaheads
-            _, ben, nh = solve_w_mhal(benefits, lookahead, init_assignment, distributed=False, lambda_=lambda_)
+            _, ben, nh = solve_w_mhal(benefits, lookahead, init_assignment, distributed=False, lambda_=lambda_, verbose=True)
             avg_ben += ben/num_avgs
             avg_nh += nh/num_avgs
             
-            #MHAL (distributed)
-            _, ben, nh = solve_w_mhal(benefits, lookahead, init_assignment, distributed=True, lambda_=lambda_)
-            avg_approx_ben += ben/num_avgs
+            # #MHAL (distributed)
+            # _, ben, nh = solve_w_mhal(benefits, lookahead, init_assignment, distributed=True, lambda_=lambda_)
+            # avg_approx_ben += ben/num_avgs
 
         resulting_bens.append(avg_ben)
-        resulting_approx_bens.append(avg_approx_ben)
+        # resulting_approx_bens.append(avg_approx_ben)
         handovers.append(avg_nh)
 
     plt.plot(range(1,max_lookahead+1), resulting_bens, label="MHAL (Centralized)")
-    plt.plot(range(1,max_lookahead+1), resulting_approx_bens, label="MHAL (Distributed)")
+    # plt.plot(range(1,max_lookahead+1), resulting_approx_bens, label="MHAL (Distributed)")
     plt.title(f"Lookahead vs. accuracy, n={n}, m={m}, T={T}")
     plt.xlabel("Lookahead timesteps")
     plt.ylabel(f"Average benefit across {num_avgs} runs")
@@ -758,15 +761,16 @@ def tasking_history_plot():
     with and without MHAL
     """
     n = 100
-    m = 100
+    m = 300
     num_planes = 10
     num_sats_per_plane = 10
-    T = 93
+    altitude=550
+    T = 50
     lambda_ = 0.5
 
     init_assign = np.eye(n, m)
 
-    benefits, graphs = get_benefits_and_graphs_from_constellation(num_planes,num_sats_per_plane,m,T)
+    benefits, graphs = get_benefits_and_graphs_from_constellation(num_planes,num_sats_per_plane,m,T, altitude=altitude, benefit_func=calc_fov_benefits)
 
     # benefits = np.random.random((n, m, T))
 
@@ -778,6 +782,7 @@ def tasking_history_plot():
 
     print(naive_val, mhal_val, mhal5_val)
 
+    #~~~~~~~~~~~~~~~~~~~~~~ PLOT OF TASKING HISTORY ~~~~~~~~~~~~~~~~~~~~~~~~~
     fig, axes = plt.subplots(3,1, sharex=True)
     agent1_naive_ass = [np.argmax(naive_a[0,:]) for naive_a in naive_ass]
 
@@ -798,6 +803,33 @@ def tasking_history_plot():
     axes[2].set_title("Satellite 0 tasking, MHAL (L=5)")
     plt.show(block=False)
 
+    #~~~~~~~~~~~~~~~~~~~~ PLOT OF PRODUCTIVE TASKS COMPLETED ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    naive_valid_tasks = []
+    mhal_valid_tasks = []
+    mhal5_valid_tasks = []
+    for k in range(T):
+        naive_assigned_benefits = naive_ass[k]*benefits[:,:,k]
+        num_naive_valid_tasks = np.sum(np.where(naive_assigned_benefits, 1, 0))
+
+        naive_valid_tasks.append(num_naive_valid_tasks)
+
+        mhal_assigned_benefits = mhal_ass[k]*benefits[:,:,k]
+        num_mhal_valid_tasks = np.sum(np.where(mhal_assigned_benefits, 1, 0))
+
+        mhal_valid_tasks.append(num_mhal_valid_tasks)
+
+        mhal5_assigned_benefits = mhal5_ass[k]*benefits[:,:,k]
+        num_mhal5_valid_tasks = np.sum(np.where(mhal5_assigned_benefits, 1, 0))
+
+        mhal5_valid_tasks.append(num_mhal5_valid_tasks)
+
+    fig = plt.figure()
+    plt.plot(range(T), naive_valid_tasks, label="Naive")
+    plt.plot(range(T), mhal_valid_tasks, label="MHA")
+    plt.plot(range(T), mhal5_valid_tasks, label="MHAL")
+    plt.legend()
+    plt.show(block=False)
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PLOT OF BENEFITS CAPTURED ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     fig = plt.figure()
     gs = fig.add_gridspec(3,2)
     naive_ax = fig.add_subplot(gs[0,0])
@@ -883,4 +915,4 @@ def tasking_history_plot():
     plt.show()
 
 if __name__ == "__main__":
-    tasking_history_plot()
+    test_MHA_lookahead_performance()
