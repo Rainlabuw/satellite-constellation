@@ -90,16 +90,21 @@ def convert_agents_to_assignment_matrix(agents):
         assignment_matrix[i, agent.choice] = 1
     return assignment_matrix
 
-def check_assign_matrix_validity(assignment_matrix):
-    for i in range(assignment_matrix.shape[0]):
-        if assignment_matrix[i,:].sum() != 1:
+def is_assignment_mat_valid(assignment_mat):
+    """
+    Checks if an assignment matrix is valid.
+    """
+    for i in range(assignment_mat.shape[0]):
+        if assignment_mat[i,:].sum() != 1:
+            print(f"agent {i} not doing exactly 1 task")
             return False
-    for j in range(assignment_matrix.shape[1]):
-        if assignment_matrix[:,j].sum() != 1:
+    for j in range(assignment_mat.shape[1]):
+        if assignment_mat[:,j].sum() > 1:
+            print(f"too many doing task {j}")
             return False
     return True
 
-#~~~~~~~~~~~~~~~~~~~~HANDOVER PENALTY STUFF~~~~~~~~~~~~~~~
+#~~~~~~~~~~~~~~~~~~~~HANDOVER PENALTY STUFF~~~~~~~~~~~~~~
 def calc_assign_seq_handover_penalty(init_assignment, assignments, lambda_):
     """
     Given an initial assignment and a list of assignment matrices,

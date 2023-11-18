@@ -387,7 +387,7 @@ def generate_all_time_intervals(L):
         
     return all_time_intervals
 
-def solve_w_mhal(benefits, L, init_assignment, graphs=None, lambda_=1, distributed=False, central_approx=False, verbose=False, eps=0.01):
+def solve_w_mhal(benefits, init_assignment, lambda_, L, graphs=None, distributed=False, central_approx=False, verbose=False, eps=0.01):
     """
     Sequentially solves the problem using the MHAL algorithm.
 

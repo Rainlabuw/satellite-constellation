@@ -168,7 +168,7 @@ class ConstellationSim(object):
 
         return nx.from_numpy_array(adj)
 
-def get_benefits_and_graphs_from_constellation(num_planes, num_sats_per_plane, m,T,benefit_func=calc_fov_benefits, altitude=550):
+def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m,T,benefit_func=calc_fov_benefits, altitude=550):
     """
     Generate benefit matrix of size (num_planes*sats_per_plane) x m x T
     from a constellation of satellites, as well as
@@ -180,7 +180,7 @@ def get_benefits_and_graphs_from_constellation(num_planes, num_sats_per_plane, m
     #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
     #10 evenly spaced planes of satellites, each with n/10 satellites per plane
     a = earth.R.to(u.km) + altitude*u.km
-    ecc = 0.01*u.one
+    ecc = 0*u.one
     inc = 58*u.deg
     argp = 0*u.deg
 
@@ -192,15 +192,43 @@ def get_benefits_and_graphs_from_constellation(num_planes, num_sats_per_plane, m
             const.add_sat(sat)
 
     #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    # num_tasks = m
-    # for _ in range(num_tasks):
-    #     lon = np.random.uniform(-180, 180)
-    #     lat = np.random.uniform(-50, 50)
-    #     task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
+    num_tasks = m
+    for _ in range(num_tasks):
+        lon = np.random.uniform(-180, 180)
+        lat = np.random.uniform(-50, 50)
+        task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
-    #     task_benefit = np.random.uniform(1, 2)
-    #     task = Task(task_loc, task_benefit)
-    #     const.add_task(task)
+        task_benefit = np.random.uniform(1, 2)
+        task = Task(task_loc, task_benefit)
+        const.add_task(task)
+
+    benefits, graphs = const.propagate_orbits(T, benefit_func)
+    return benefits, graphs
+
+def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,lat_long_inc=5,benefit_func=calc_fov_benefits, altitude=550):
+    """
+    Generate benefit matrix of with (num_planes*sats_per_plane)
+    satellites covering the entire surface of the earth, with tasks
+    at increments of lat_long_inc degrees in lat and long.
+    """
+    const = ConstellationSim(dt=1*u.min)
+    earth = Earth
+
+    #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
+    #10 evenly spaced planes of satellites, each with n/10 satellites per plane
+    a = earth.R.to(u.km) + altitude*u.km
+    ecc = 0*u.one
+    inc = 58*u.deg
+    argp = 0*u.deg
+
+    for plane_num in range(num_planes):
+        raan = plane_num*360/num_planes*u.deg
+        for sat_num in range(num_sats_per_plane):
+            ta = sat_num*360/num_sats_per_plane*u.deg
+            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num)
+            const.add_sat(sat)
+
+    #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
     for lon in range(-180, 180, 5):
         for lat in range(-50, 55, 5):
             task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
