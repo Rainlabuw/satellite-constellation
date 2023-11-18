@@ -2,7 +2,7 @@ import numpy as np
 from classic_auction import Auction
 from methods import *
 
-def solve_naively(benefit_mats_over_time, init_assignment, lambda_):
+def solve_wout_handover(benefit_mats_over_time, init_assignment, lambda_):
     """
     Solves problem without regard to handover minimization.
 

@@ -7,7 +7,7 @@ import time
 from methods import *
 
 from solve_optimally import solve_optimally
-from solve_naively import solve_naively
+from solve_wout_handover import solve_wout_handover
 from solve_w_mhal import solve_w_mhal, solve_w_mhald_track_iters
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from classic_auction import Auction
@@ -40,7 +40,7 @@ def optimal_baseline_plot():
     avg_best = 0
     avg_mhal = 0
     avg_mha = 0
-    avg_naive = 0
+    avg_no_handover = 0
 
     num_avgs = 50
     for _ in tqdm(range(num_avgs)):
@@ -55,18 +55,18 @@ def optimal_baseline_plot():
         avg_mha += mha_ben/num_avgs
 
         #Naive
-        _, ben, _ = solve_naively(benefit, init_ass, lambda_)
-        avg_naive += ben/num_avgs
+        _, ben, _ = solve_wout_handover(benefit, init_ass, lambda_)
+        avg_no_handover += ben/num_avgs
 
         #Optimal
         _, ben, _ = solve_optimally(benefit, init_ass, lambda_)
         avg_best += ben/num_avgs
 
     fig = plt.figure()
-    plt.bar(["Naive","MHA", f"MHAL (L={L})", "Optimal"], [avg_naive, avg_mha, avg_mhal, avg_best])
+    plt.bar(["Naive","MHA", f"MHAL (L={L})", "Optimal"], [avg_no_handover, avg_mha, avg_mhal, avg_best])
     plt.title(f"Average benefit across {num_avgs} runs, n={n}, m={m}, T={T}")
     print(["Naive","MHA", f"MHAL (L={L})", "Optimal"])
-    print([avg_naive, avg_mha, avg_mhal, avg_best])
+    print([avg_no_handover, avg_mha, avg_mhal, avg_best])
     plt.savefig("opt_comparison.png")
     plt.show()
 
@@ -131,8 +131,8 @@ def compare_MHA_to_other_algs():
     mha_ben = 0
     mha_nh = 0
 
-    naive_ben = 0
-    naive_nh = 0
+    no_handover_ben = 0
+    no_handover_nh = 0
 
     sga_ben = 0
     sga_nh = 0
@@ -164,9 +164,9 @@ def compare_MHA_to_other_algs():
         mha_nh += nh/num_avgs
 
         #Naive
-        _, ben, nh = solve_naively(benefits, lambda_)
-        naive_ben += ben/num_avgs
-        naive_nh += nh/num_avgs
+        _, ben, nh = solve_wout_handover(benefits, lambda_)
+        no_handover_ben += ben/num_avgs
+        no_handover_nh += nh/num_avgs
 
         #SGA/CBBA
         handover_ben, _, handover_nh = solve_w_centralized_CBBA(benefits, lambda_)
@@ -175,11 +175,11 @@ def compare_MHA_to_other_algs():
         sga_nh += handover_nh/num_avgs
 
     fig, axes = plt.subplots(2,1)
-    axes[0].bar(["Naive", "SGA", "MHA", "MHAL2", "MHAL5"],[naive_ben, sga_ben, mha_ben, mhal2_ben, mhal5_ben])
+    axes[0].bar(["Naive", "SGA", "MHA", "MHAL2", "MHAL5"],[no_handover_ben, sga_ben, mha_ben, mhal2_ben, mhal5_ben])
     axes[0].set_title("Average benefit across 10 runs")
     # axes[0].set_xlabel("Lookahead timesteps")
 
-    axes[1].bar(["Naive", "SGA", "MHA", "MHAL2", "MHAL5"],[naive_nh, sga_nh, mha_nh, mhal2_nh, mhal5_nh])
+    axes[1].bar(["Naive", "SGA", "MHA", "MHAL2", "MHAL5"],[no_handover_nh, sga_nh, mha_nh, mhal2_nh, mhal5_nh])
     
     axes[1].set_title("Average number of handovers across 10 runs")
     fig.suptitle(f"Test with n={n}, m={m}, T={T}, lambda={lambda_}, realistic-ish benefits")
@@ -256,9 +256,9 @@ def compare_alg_benefits_and_handover():
     T = 25
     lambda_ = 0.5
 
-    naive_benefits = []
-    naive_handover_benefits = []
-    naive_handover_violations = []
+    no_handover_benefits = []
+    no_handover_handover_benefits = []
+    no_handover_handover_violations = []
 
     sequential_benefits = []
     sequential_handover_benefits = []
@@ -302,9 +302,9 @@ def compare_alg_benefits_and_handover():
         print(f"\tBenefit without considering handover: {sum(benefits)}")
         print(f"\tBenefit with handover penalty: {handover_ben}")
 
-        naive_benefits.append(sum(benefits))
-        naive_handover_benefits.append(handover_ben)
-        naive_handover_violations.append(calc_assign_seq_handover_penalty(assignment_mats, lambda_))
+        no_handover_benefits.append(sum(benefits))
+        no_handover_handover_benefits.append(handover_ben)
+        no_handover_handover_violations.append(calc_assign_seq_handover_penalty(assignment_mats, lambda_))
 
         #solve each timestep sequentially
         assignment_mats = []
@@ -362,8 +362,8 @@ def compare_alg_benefits_and_handover():
         sga_handover_benefits.append(handover_ben)
 
     print("done")
-    print(naive_benefits)
-    print(naive_handover_benefits)
+    print(no_handover_benefits)
+    print(no_handover_handover_benefits)
     print(sequential_benefits)
     print(sequential_handover_benefits)
     print(sga_benefits)
@@ -376,10 +376,10 @@ def compare_alg_benefits_and_handover():
     axs[0].set_title('Benefits without handover penalty')
     axs[0].set_xlabel('Number of agents')
     axs[0].set_ylabel('Total benefit')
-    axs[0].bar(np.arange(len(naive_benefits)), naive_benefits, width=0.2, label='Naive')
+    axs[0].bar(np.arange(len(no_handover_benefits)), no_handover_benefits, width=0.2, label='Naive')
     axs[0].bar(np.arange(len(sga_benefits))+0.2, sga_benefits, width=0.2, label='SGA')
     axs[0].bar(np.arange(len(sequential_benefits))+0.4, sequential_benefits, width=0.2, label='MHA (Ours)')
-    axs[0].set_xticks(np.arange(len(naive_benefits)))
+    axs[0].set_xticks(np.arange(len(no_handover_benefits)))
     axs[0].set_xticklabels([str(n) for n in ns])
     axs[0].legend(loc='lower center')
 
@@ -387,10 +387,10 @@ def compare_alg_benefits_and_handover():
     axs[1].set_title('Total Benefits, including handover penalty')
     axs[1].set_xlabel('Number of agents')
     axs[1].set_ylabel('Average Benefit')
-    axs[1].bar(np.arange(len(naive_handover_benefits)), naive_handover_benefits, width=0.2, label='Naive')
+    axs[1].bar(np.arange(len(no_handover_handover_benefits)), no_handover_handover_benefits, width=0.2, label='Naive')
     axs[1].bar(np.arange(len(sga_handover_benefits))+0.2, sga_handover_benefits, width=0.2, label='CBBA')
     axs[1].bar(np.arange(len(sequential_handover_benefits))+0.4, sequential_handover_benefits, width=0.2, label='MHA (Ours)')
-    axs[1].set_xticks(np.arange(len(naive_handover_benefits)))
+    axs[1].set_xticks(np.arange(len(no_handover_handover_benefits)))
     axs[1].set_xticklabels([str(n) for n in ns])
     #add a legend to the bottom middle of the subplot
     axs[1].legend(loc='lower center')
@@ -414,7 +414,7 @@ def distributed_comparison():
     catot = 0
     dtot = 0
 
-    naive_tot = 0
+    no_handover_tot = 0
     cbba_tot = 0
 
     n_tests = 10
@@ -429,18 +429,18 @@ def distributed_comparison():
 
         _, ca_val, _ = solve_w_mhal(benefits, L, init_assignment, distributed=False, central_approx=True, lambda_=lambda_)
 
-        _, naive_val, _ = solve_naively(benefits, init_assignment, lambda_)
+        _, no_handover_val, _ = solve_wout_handover(benefits, init_assignment, lambda_)
         _, cbba_val, _ = solve_w_centralized_CBBA(benefits, init_assignment, lambda_)
 
         ctot += c_val/n_tests
         catot += ca_val/n_tests
         dtot += d_val/n_tests
 
-        naive_tot += naive_val/n_tests
+        no_handover_tot += no_handover_val/n_tests
         cbba_tot += cbba_val/n_tests
 
-    print([naive_tot, cbba_tot, ctot, catot, dtot])
-    plt.bar(range(6), [naive_tot, cbba_tot, ctot, catot, dtot], tick_label=["Naive", "CBBA", "Centralized", "Centralized Approx", "Distributed"])
+    print([no_handover_tot, cbba_tot, ctot, catot, dtot])
+    plt.bar(range(6), [no_handover_tot, cbba_tot, ctot, catot, dtot], tick_label=["Naive", "CBBA", "Centralized", "Centralized Approx", "Distributed"])
     plt.show()
 
 def realistic_orbital_simulation():
@@ -458,7 +458,7 @@ def realistic_orbital_simulation():
     init_assignment = None
 
     cbba_tot = 0
-    naive_tot = 0
+    no_handover_tot = 0
 
     tot_iters_by_lookahead = np.zeros(max_L)
     tot_value_by_lookahead = np.zeros(max_L)
@@ -483,9 +483,9 @@ def realistic_orbital_simulation():
         # cbba_tot += cbba_val/num_avgs
 
         #Naive
-        print(f"Done solving CBBA, solving naive...")
-        _, naive_val, _ = solve_naively(benefits, init_assignment, lambda_)
-        naive_tot += naive_val/num_avgs
+        print(f"Done solving CBBA, solving no_handover...")
+        _, no_handover_val, _ = solve_wout_handover(benefits, init_assignment, lambda_)
+        no_handover_tot += no_handover_val/num_avgs
 
         iters_by_lookahead = []
         value_by_lookahead = []
@@ -503,7 +503,7 @@ def realistic_orbital_simulation():
     
     axes[0].plot(range(1,max_L+1), tot_value_by_lookahead, 'g', label="MHAL-D")
     # axes[0].plot(range(1,max_L+1), [cbba_tot]*max_L, 'b--', label="CBBA")
-    axes[0].plot(range(1,max_L+1), [naive_tot]*max_L, 'r--', label="Naive")
+    axes[0].plot(range(1,max_L+1), [no_handover_tot]*max_L, 'r--', label="Naive")
     axes[0].set_ylabel("Total value")
     axes[0].set_xticks(range(1,max_L+1))
     axes[0].set_ylim((0, 1.1*max(tot_value_by_lookahead)))
@@ -538,7 +538,7 @@ def epsilon_effect():
     d_tot_0p001 = 0
     c_tot = 0
     cbba_tot = 0
-    naive_tot = 0
+    no_handover_tot = 0
 
     num_avgs = 1
     for _ in tqdm(range(num_avgs)):
@@ -568,12 +568,12 @@ def epsilon_effect():
         cbba_tot += cbba_val/num_avgs
 
         #Naive
-        print(f"Done solving CBBA, solving naive...")
-        _, naive_val, _ = solve_naively(benefits, init_assignment, lambda_)
-        naive_tot += naive_val/num_avgs
+        print(f"Done solving CBBA, solving no_handover...")
+        _, no_handover_val, _ = solve_wout_handover(benefits, init_assignment, lambda_)
+        no_handover_tot += no_handover_val/num_avgs
 
-    print([naive_tot, cbba_tot, c_tot, d_tot_0p1, d_tot_0p01, d_tot_0p001])
-    plt.bar(range(6), [naive_tot, cbba_tot, c_tot, d_tot_0p1, d_tot_0p01, d_tot_0p001], tick_label=["Naive", "CBBA", "Centralized", "Distributed 0.1", "Distributed 0.01", "Distributed 0.001"])
+    print([no_handover_tot, cbba_tot, c_tot, d_tot_0p1, d_tot_0p01, d_tot_0p001])
+    plt.bar(range(6), [no_handover_tot, cbba_tot, c_tot, d_tot_0p1, d_tot_0p01, d_tot_0p001], tick_label=["Naive", "CBBA", "Centralized", "Distributed 0.1", "Distributed 0.01", "Distributed 0.001"])
     plt.title(f"Realistic Constellation Sim with complete graphs over {num_avgs} runs, n={n}, m={m}, T={T}, L={L}, lambda={lambda_}")
     plt.savefig("epsilon_effect.png")
     plt.show()
@@ -655,13 +655,13 @@ def performance_v_num_agents_line_chart():
     num_avgs = 5
     init_assign = None
 
-    naive_vals = []
+    no_handover_vals = []
     sga_vals = []
     mha_vals = []
     mhal_vals = []
     mhald_vals = []
 
-    naive_nhs = []
+    no_handover_nhs = []
     sga_nhs = []
     mha_nhs = []
     mhal_nhs = []
@@ -671,13 +671,13 @@ def performance_v_num_agents_line_chart():
         print(f"Solving for {n} agents...")
         m = n
 
-        naive_total_val = 0
+        no_handover_total_val = 0
         sga_total_val = 0
         mha_total_val = 0
         mhal_total_vals = 0
         mhald_total_vals = 0
 
-        naive_total_nhs = 0
+        no_handover_total_nhs = 0
         sga_total_nhs = 0
         mha_total_nhs = 0
         mhal_total_nhs = 0
@@ -687,9 +687,9 @@ def performance_v_num_agents_line_chart():
             print(_)
             benefits = np.random.random((n, m, T))
 
-            _, naive_val, naive_nh = solve_naively(benefits, init_assign, lambda_)
-            naive_total_val += naive_val/num_avgs
-            naive_total_nhs += naive_nh/num_avgs
+            _, no_handover_val, no_handover_nh = solve_wout_handover(benefits, init_assign, lambda_)
+            no_handover_total_val += no_handover_val/num_avgs
+            no_handover_total_nhs += no_handover_nh/num_avgs
 
             _, sga_val, sga_nh = solve_w_centralized_CBBA(benefits, init_assign, lambda_)
             sga_total_val += sga_val/num_avgs
@@ -707,13 +707,13 @@ def performance_v_num_agents_line_chart():
             mhald_total_vals += mhald_val/num_avgs
             mhald_total_nhs += mhald_nh/num_avgs
 
-        naive_vals.append(naive_total_val/n)
+        no_handover_vals.append(no_handover_total_val/n)
         sga_vals.append(sga_total_val/n)
         mha_vals.append(mha_total_val/n)
         mhal_vals.append(mhal_total_vals/n)
         mhald_vals.append(mhald_total_vals/n)
 
-        naive_nhs.append(naive_total_nhs/n)
+        no_handover_nhs.append(no_handover_total_nhs/n)
         sga_nhs.append(sga_total_nhs/n)
         mha_nhs.append(mha_total_nhs/n)
         mhal_nhs.append(mhal_total_nhs/n)
@@ -721,14 +721,14 @@ def performance_v_num_agents_line_chart():
 
     fig, axes = plt.subplots(2,1, sharex=True)
     fig.suptitle(f"Performance vs. number of agents over {num_avgs} runs, m=n, T={T}, L={L}, lambda={lambda_}")
-    axes[0].plot(ns, naive_vals, label="Naive")
+    axes[0].plot(ns, no_handover_vals, label="Naive")
     axes[0].plot(ns, sga_vals, label="SGA")
     axes[0].plot(ns, mha_vals, label="MHA")
     axes[0].plot(ns, mhal_vals, label=f"MHAL (L={L})")
     axes[0].plot(ns, mhald_vals, label=f"MHAL-D (L={L})")
     axes[0].set_ylabel("Average benefit per agent")
     
-    axes[1].plot(ns, naive_nhs, label="Naive")
+    axes[1].plot(ns, no_handover_nhs, label="Naive")
     axes[1].plot(ns, sga_nhs, label="SGA")
     axes[1].plot(ns, mha_nhs, label="MHA")
     axes[1].plot(ns, mhal_nhs, label=f"MHAL (L={L})")
@@ -739,13 +739,13 @@ def performance_v_num_agents_line_chart():
 
     axes[1].legend()
 
-    print(naive_vals)
+    print(no_handover_vals)
     print(sga_vals)
     print(mha_vals)
     print(mhal_vals)
     print(mhald_vals)
 
-    print(naive_nhs)
+    print(no_handover_nhs)
     print(sga_nhs)
     print(mha_nhs)
     print(mhal_nhs)
@@ -772,23 +772,23 @@ def tasking_history_plot():
 
     # benefits = np.random.random((n, m, T))
 
-    naive_ass, naive_val, _ = solve_naively(benefits, init_assign, lambda_)
+    no_handover_ass, no_handover_val, _ = solve_wout_handover(benefits, init_assign, lambda_)
 
     mhal_ass, mhal_val, _ = solve_w_mhal(benefits, 1, init_assign, None, lambda_)
 
     mhal5_ass, mhal5_val, _ = solve_w_mhal(benefits, 5, init_assign, None, lambda_)
 
-    print(naive_val, mhal_val, mhal5_val)
+    print(no_handover_val, mhal_val, mhal5_val)
 
     #~~~~~~~~~~~~~~~~~~~~~~ PLOT OF TASKING HISTORY ~~~~~~~~~~~~~~~~~~~~~~~~~
     fig, axes = plt.subplots(3,1, sharex=True)
-    agent1_naive_ass = [np.argmax(naive_a[0,:]) for naive_a in naive_ass]
+    agent1_no_handover_ass = [np.argmax(no_handover_a[0,:]) for no_handover_a in no_handover_ass]
 
     agent1_mhal_ass = [np.argmax(mhal_a[0,:]) for mhal_a in mhal_ass]
 
     agent1_mhal5_ass = [np.argmax(mhal5_a[0,:]) for mhal5_a in mhal5_ass]
 
-    axes[0].plot(range(T), agent1_naive_ass, label="Naive")
+    axes[0].plot(range(T), agent1_no_handover_ass, label="Not Considering Handover")
     axes[1].plot(range(T), agent1_mhal_ass, label="MHAL 1")
     axes[2].plot(range(T), agent1_mhal5_ass, label="MHAL 5")
     axes[2].set_xlabel("Time (min.)")
@@ -802,14 +802,14 @@ def tasking_history_plot():
     plt.show(block=False)
 
     #~~~~~~~~~~~~~~~~~~~~ PLOT OF PRODUCTIVE TASKS COMPLETED ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    naive_valid_tasks = []
+    no_handover_valid_tasks = []
     mhal_valid_tasks = []
     mhal5_valid_tasks = []
     for k in range(T):
-        naive_assigned_benefits = naive_ass[k]*benefits[:,:,k]
-        num_naive_valid_tasks = np.sum(np.where(naive_assigned_benefits, 1, 0))
+        no_handover_assigned_benefits = no_handover_ass[k]*benefits[:,:,k]
+        num_no_handover_valid_tasks = np.sum(np.where(no_handover_assigned_benefits, 1, 0))
 
-        naive_valid_tasks.append(num_naive_valid_tasks)
+        no_handover_valid_tasks.append(num_no_handover_valid_tasks)
 
         mhal_assigned_benefits = mhal_ass[k]*benefits[:,:,k]
         num_mhal_valid_tasks = np.sum(np.where(mhal_assigned_benefits, 1, 0))
@@ -822,7 +822,7 @@ def tasking_history_plot():
         mhal5_valid_tasks.append(num_mhal5_valid_tasks)
 
     fig = plt.figure()
-    plt.plot(range(T), naive_valid_tasks, label="Naive")
+    plt.plot(range(T), no_handover_valid_tasks, label="Not Considering Handover")
     plt.plot(range(T), mhal_valid_tasks, label="MHA")
     plt.plot(range(T), mhal5_valid_tasks, label="MHAL")
     plt.legend()
@@ -830,39 +830,39 @@ def tasking_history_plot():
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PLOT OF BENEFITS CAPTURED ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     fig = plt.figure()
     gs = fig.add_gridspec(3,2)
-    naive_ax = fig.add_subplot(gs[0,0])
+    no_handover_ax = fig.add_subplot(gs[0,0])
     mhal_ax = fig.add_subplot(gs[1,0])
     mhal5_ax = fig.add_subplot(gs[2,0])
     val_ax = fig.add_subplot(gs[:,1])
 
-    prev_naive = 0
+    prev_no_handover = 0
     prev_mhal = 0
     prev_mhal5 = 0
 
-    naive_ben_line = []
+    no_handover_ben_line = []
     mhal_ben_line = []
     mhal5_ben_line = []
 
-    naive_val_line = []
+    no_handover_val_line = []
     mhal_val_line = []
     mhal5_val_line = []
     
     for k in range(T):
-        naive_choice = np.argmax(naive_ass[k][0,:])
+        no_handover_choice = np.argmax(no_handover_ass[k][0,:])
         mhal_choice = np.argmax(mhal_ass[k][0,:])
         mhal5_choice = np.argmax(mhal5_ass[k][0,:])
 
-        if prev_naive != naive_choice:
-            naive_ax.axvline(k-0.5, linestyle='--')
+        if prev_no_handover != no_handover_choice:
+            no_handover_ax.axvline(k-0.5, linestyle='--')
             if k != 0: 
-                # naive_ben_line.append(naive_ben_line[-1])
-                if len(naive_ben_line) > 1:
-                    naive_ax.plot(range(k-len(naive_ben_line), k), naive_ben_line, 'r')
-                elif len(naive_ben_line) == 1:
-                    naive_ax.plot(range(k-len(naive_ben_line), k), naive_ben_line, 'r.', markersize=1)
-            naive_ben_line = [benefits[0,naive_choice, k]]
+                # no_handover_ben_line.append(no_handover_ben_line[-1])
+                if len(no_handover_ben_line) > 1:
+                    no_handover_ax.plot(range(k-len(no_handover_ben_line), k), no_handover_ben_line, 'r')
+                elif len(no_handover_ben_line) == 1:
+                    no_handover_ax.plot(range(k-len(no_handover_ben_line), k), no_handover_ben_line, 'r.', markersize=1)
+            no_handover_ben_line = [benefits[0,no_handover_choice, k]]
         else:
-            naive_ben_line.append(benefits[0, naive_choice, k])
+            no_handover_ben_line.append(benefits[0, no_handover_choice, k])
 
         if prev_mhal != mhal_choice:
             mhal_ax.axvline(k-0.5, linestyle='--')
@@ -887,8 +887,8 @@ def tasking_history_plot():
         else:
             mhal5_ben_line.append(benefits[0,mhal5_choice, k])
 
-        naive_val_so_far, _ = calc_value_and_num_handovers(naive_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
-        naive_val_line.append(naive_val_so_far)
+        no_handover_val_so_far, _ = calc_value_and_num_handovers(no_handover_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
+        no_handover_val_line.append(no_handover_val_so_far)
 
         mhal_val_so_far, _ = calc_value_and_num_handovers(mhal_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
         mhal_val_line.append(mhal_val_so_far)
@@ -896,17 +896,17 @@ def tasking_history_plot():
         mhal5_val_so_far, _ = calc_value_and_num_handovers(mhal5_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
         mhal5_val_line.append(mhal5_val_so_far)
 
-        prev_naive = naive_choice
+        prev_no_handover = no_handover_choice
         prev_mhal = mhal_choice
         prev_mhal5 = mhal5_choice
 
     #plot last interval
-    naive_ax.plot(range(k+1-len(naive_ben_line), k+1), naive_ben_line, 'r')
+    no_handover_ax.plot(range(k+1-len(no_handover_ben_line), k+1), no_handover_ben_line, 'r')
     mhal_ax.plot(range(k+1-len(mhal_ben_line), k+1), mhal_ben_line,'b')
     mhal5_ax.plot(range(k+1-len(mhal5_ben_line), k+1), mhal5_ben_line,'g')
 
     #plot value over time
-    val_ax.plot(range(T), naive_val_line, 'r', label='Naive')
+    val_ax.plot(range(T), no_handover_val_line, 'r', label='Not Considering Handover')
     val_ax.plot(range(T), mhal_val_line, 'b', label='MHAL')
     val_ax.plot(range(T), mhal5_val_line, 'g', label='MHAL 5')
 
