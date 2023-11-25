@@ -1,19 +1,39 @@
 import numpy as np
 
 class CBBAAuction(object):
-    def __init__(self, n_agents, n_tasks, benefits):
-        self.n_agents = n_agents
-        self.n_tasks = n_tasks
-
-        self.lambda_ = 1
+    def __init__(self, benefits, lambda_):
+        self.lambda_ = lambda_
 
         # n x m x T array holding benefits for each agent and each task at each timestep
         self.benefits = benefits
+        self.n = benefits.shape[0]
+        self.m = benefits.shape[1]
+        self.T = benefits.shape[2]
 
         self.prices = np.zeros_like(self.benefits)
         self.winning_agents = np.zeros_like(self.benefits)
 
-        self.agents = [CBBAAgent(i, self.benefits[i,:,:], self.prices[i,:,:], self.winning_agents[i,:,:], self.lambda_) for i in range(n_agents)]
+        self.agents = [CBBAAgent(i, self.benefits[i,:,:], self.prices[i,:,:], self.winning_agents[i,:,:], self.lambda_) for i in range(self.n)]
+
+    def run_auction(self):
+        self.n_iterations = 0
+        while sum([agent.converged for agent in self.agents]) < self.n:
+            #Send the appropriate communication packets to each agent
+            self.update_communication_packets()
+
+            #Have each agent calculate it's prices, bids, and values
+            #based on the communication packet it currently has
+            for agent in self.agents:
+                agent.update_agent_prices_bids()
+
+            for agent in self.agents:
+                agent.publish_agent_prices_bids()
+
+            self.n_iterations += 1
+
+        if self.verbose:
+            print(f"Auction results ({self.n_iterations} iterations):")
+            print(f"\tAssignments: {[a.choice for a in self.agents]}")
 
 class CBBAAgent(object):
     def __init__(self, id, benefits, prices, winning_agents, neighbors, lambda_):
@@ -27,10 +47,10 @@ class CBBAAgent(object):
         self.public_prices = prices
         self.public_winning_agents = winning_agents
 
-        self.n_tasks = benefits.shape[0]
-        self.n_timesteps = benefits.shape[1]
+        self.m = benefits.shape[0]
+        self.T = benefits.shape[1]
 
-        self.bundle_task_path = [None]*self.n_timesteps
+        self.bundle_task_path = [None]*self.T
         self.bundle_tasks = []
 
         self.lambda_ = lambda_
@@ -39,16 +59,17 @@ class CBBAAgent(object):
 
     def build_bundle(self):
         #Iterate until you've assigned a task in each spot in the bundle
-        while len(self.bundle_tasks) < self.n_timesteps:
+        while len(self.bundle_tasks) < self.T:
             most_marginal_benefit = -np.inf
             most_marginal_benefit_task_idx = None
             most_marginal_benefit_timestep = None
             for timestep, selected_task_idx in enumerate(self.bundle_task_path):
                 #If selected_task_idx is None, then we can potentially add a task to the bundle
                 if selected_task_idx is None:
-                    for task_idx in range(self.n_tasks):
+                    for task_idx in range(self.m):
                         raw_benefit = self.benefits[task_idx, timestep]
-                        marginal_benefit = self.score_task_based_on_bundle(task_idx, timestep, raw_benefit, self.lambda_)
+                        task_price = self._prices[task_idx, timestep]
+                        marginal_benefit = self.score_task_based_on_bundle(task_idx, timestep, raw_benefit, task_price, self.lambda_)
                         if marginal_benefit > most_marginal_benefit:
                             most_marginal_benefit = marginal_benefit
                             most_marginal_benefit_task_idx = task_idx

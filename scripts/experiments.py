@@ -3,6 +3,7 @@ import numpy as np
 
 from tqdm import tqdm
 import time
+import pickle
 
 from methods import *
 
@@ -14,6 +15,7 @@ from solve_greedily import solve_greedily
 from classic_auction import Auction
 
 from constellation_sim.ConstellationSim import get_constellation_bens_and_graphs_random_tasks, get_constellation_bens_and_graphs_coverage
+from constellation_sim.Satellite import Satellite
 
 from poliastro.bodies import Earth
 from poliastro.twobody import Orbit
@@ -449,10 +451,10 @@ def realistic_orbital_simulation():
 
     Compute this over several lookahead windows.
     """
-    n = 100
-    m = 200
+    n = 648
+    m = 100
     T = 93
-    max_L = 3
+    max_L = 6
     lambda_ = 0.5
     init_assignment = None
 
@@ -460,16 +462,17 @@ def realistic_orbital_simulation():
     no_handover_tot = 0
     greedy_tot = 0
 
-    tot_iters_by_lookahead = np.zeros(max_L)
-    tot_value_by_lookahead = np.zeros(max_L)
+    tot_iters_by_lookahead = np.zeros(3)
+    tot_value_by_lookahead = np.zeros(3)
 
-    num_avgs = 5
+    num_avgs = 1
     for _ in range(num_avgs):
         print(f"\nNum trial {_}")
-        num_planes = 10
-        num_sats_per_plane = 10
+        num_planes = 36
+        num_sats_per_plane = 18
         if n != num_planes*num_sats_per_plane: raise Exception("Make sure n = num planes * num sats per plane")
-        benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes,num_sats_per_plane,m,T)
+        # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes,num_sats_per_plane,m,T, benefit_func=calc_distance_based_benefits)
+        benefits, graphs = get_constellation_bens_and_graphs_coverage(num_planes,num_sats_per_plane,T,5,benefit_func=calc_distance_based_benefits)
 
         #Ensure all graphs are connected
         for i, graph in enumerate(graphs):
@@ -494,7 +497,8 @@ def realistic_orbital_simulation():
 
         iters_by_lookahead = []
         value_by_lookahead = []
-        for L in range(1,max_L+1):
+        # for L in range(1,max_L+1):
+        for L in [1,3,6]:
             print(f"lookahead {L}")
             _, d_val, _, avg_iters = solve_w_mhald_track_iters(benefits, init_assignment, lambda_, L, graphs=graphs, verbose=True)
 
@@ -506,16 +510,21 @@ def realistic_orbital_simulation():
 
     fig, axes = plt.subplots(2,1)
     
-    axes[0].plot(range(1,max_L+1), tot_value_by_lookahead, 'g', label="MHAL-D")
+    print(tot_value_by_lookahead, no_handover_tot, greedy_tot)
+    # axes[0].plot(range(1,max_L+1), tot_value_by_lookahead, 'g', label="MHAL-D")
+    axes[0].plot([1,3,6], tot_value_by_lookahead, 'g', label="MHAL-D")
     # axes[0].plot(range(1,max_L+1), [cbba_tot]*max_L, 'b--', label="CBBA")
-    axes[0].plot(range(1,max_L+1), [no_handover_tot]*max_L, 'r--', label="Naive")
-    axes[0].plot(range(1,max_L+1), [greedy_tot]*max_L, 'k--', label="Greedy")
+    axes[0].plot([1,3,6], [no_handover_tot]*max_L, 'r--', label="Naive")
+    # axes[0].plot(range(1,max_L+1), [no_handover_tot]*max_L, 'r--', label="Naive")
+    # axes[0].plot(range(1,max_L+1), [greedy_tot]*max_L, 'k--', label="Greedy")
+    axes[0].plot([1,3,6], [greedy_tot]*max_L, 'k--', label="Greedy")
     axes[0].set_ylabel("Total value")
     axes[0].set_xticks(range(1,max_L+1))
     axes[0].set_ylim((0, 1.1*max(tot_value_by_lookahead)))
     axes[0].legend()
 
-    axes[1].plot(range(1,max_L+1), tot_iters_by_lookahead, 'g', label="MHAL-D")
+    axes[1].plot([1,3,6], tot_iters_by_lookahead, 'g', label="MHAL-D")
+    # axes[1].plot(range(1,max_L+1), tot_iters_by_lookahead, 'g', label="MHAL-D")
     axes[1].set_ylim((0, 1.1*max(tot_iters_by_lookahead)))
     axes[1].set_ylabel("Average iterations")
     axes[1].set_xlabel("Lookahead window")
@@ -653,6 +662,25 @@ def lookahead_counterexample():
 
     print(f"Ratio: {val/opt_val}, desired rat: {rat}")
 
+def mha_vs_naive_counterexample():
+    init_assign = np.eye(4)
+    lambda_ = 1
+    benefits = np.zeros((4,4,2))
+
+    benefits[:,:,0] = np.array([[100, 1, 1, 1],
+                                [1, 100, 1, 1],
+                                [1, 1, 1, 1.1],
+                                [1, 1, 1.1, 1]])
+
+    benefits[:,:,1] = np.array([[100, 1, 1, 1],
+                                [1, 100, 1, 1],
+                                [1, 1, 1, 100],
+                                [1, 1, 100, 1]])
+    
+    _, mv, _ = solve_w_mhal(benefits, init_assign, lambda_, 1)
+    _, nv, _ = solve_wout_handover(benefits, init_assign, lambda_)
+    print(mv, nv)
+
 def performance_v_num_agents_line_chart():
     ns = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     T = 10
@@ -764,17 +792,26 @@ def tasking_history_plot():
     Tracks the history of task allocations in a system over time,
     with and without MHAL
     """
-    n = 50
-    m = 50
-    num_planes = 10
-    num_sats_per_plane = 5
+    n = 150
+    m = 300
+    num_planes = 15
+    num_sats_per_plane = 10
     altitude=550
     T = 20
     lambda_ = 0.5
 
-    init_assign = np.eye(n, m)
+    benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits)
 
-    benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes,num_sats_per_plane,m,T, altitude=altitude, benefit_func=calc_fov_benefits)
+    # benefits, graphs = get_constellation_bens_and_graphs_coverage(num_planes,num_sats_per_plane,T,5, altitude=altitude, benefit_func=calc_fov_benefits)
+
+    # with open('bens.pkl', 'wb') as f:
+    #     pickle.dump(benefits, f)
+
+    # with open('bens.pkl', 'rb') as f:
+    #     benefits = pickle.load(f)
+
+    m = benefits.shape[1]
+    init_assign = np.eye(n, m)
 
     # benefits = np.random.random((n, m, T))
 
@@ -782,7 +819,7 @@ def tasking_history_plot():
 
     mhal_ass, mhal_val, _ = solve_w_mhal(benefits, init_assign, lambda_, 1, graphs=None)
 
-    mhal5_ass, mhal5_val, _ = solve_w_mhal(benefits, init_assign, lambda_, 5, graphs=None)
+    mhal5_ass, mhal5_val, _ = solve_w_mhal(benefits, init_assign, lambda_, 6, graphs=None)
 
     greedy_ass, greedy_val, _ = solve_greedily(benefits, init_assign, lambda_)
 
@@ -863,10 +900,11 @@ def tasking_history_plot():
     no_handover_val_line = []
     mhal_val_line = []
     mhal5_val_line = []
+    greedy_val_line = []
     
     for k in range(T):
         no_handover_choice = np.argmax(no_handover_ass[k][0,:])
-        mhal_choice = np.argmax(greedy_ass[k][0,:])
+        mhal_choice = np.argmax(mhal_ass[k][0,:])
         mhal5_choice = np.argmax(mhal5_ass[k][0,:])
 
         if prev_no_handover != no_handover_choice:
@@ -907,11 +945,14 @@ def tasking_history_plot():
         no_handover_val_so_far, _ = calc_value_and_num_handovers(no_handover_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
         no_handover_val_line.append(no_handover_val_so_far)
 
-        mhal_val_so_far, _ = calc_value_and_num_handovers(greedy_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
+        mhal_val_so_far, _ = calc_value_and_num_handovers(mhal_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
         mhal_val_line.append(mhal_val_so_far)
 
         mhal5_val_so_far, _ = calc_value_and_num_handovers(mhal5_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
         mhal5_val_line.append(mhal5_val_so_far)
+
+        greedy_val_so_far, _ = calc_value_and_num_handovers(greedy_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
+        greedy_val_line.append(greedy_val_so_far)
 
         prev_no_handover = no_handover_choice
         prev_mhal = mhal_choice
@@ -926,8 +967,77 @@ def tasking_history_plot():
     val_ax.plot(range(T), no_handover_val_line, 'r', label='Not Considering Handover')
     val_ax.plot(range(T), mhal_val_line, 'b', label='MHAL')
     val_ax.plot(range(T), mhal5_val_line, 'g', label='MHAL 5')
+    val_ax.plot(range(T), greedy_val_line, 'k', label='Greedy')
+    val_ax.legend()
 
     plt.show()
 
+def test_optimal_L(timestep=1*u.min, altitude=550, fov=65):
+    a = Earth.R.to(u.km) + altitude*u.km
+    sat = Satellite(Orbit.from_classical(Earth, a, 0*u.one, 0*u.deg, 0*u.deg, 0*u.deg, 0*u.deg), [], [], fov=fov)
+    
+    L = generate_optimal_L(timestep, sat)
+    print(L)
+    return L
+
+def paper_experiment1():
+    num_planes = 15
+    num_sats_per_plane = 10
+    m = 300
+    T = 93
+
+    altitude = 550
+    fov = 65
+    timestep = 1*u.min
+
+    max_L = 6
+    
+    lambda_ = 1
+
+    benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, 
+                                                                      calc_fov_benefits, altitude=altitude, fov=fov)
+
+    with open("paper_exp1_bens.pkl", 'wb') as f:
+        pickle.dump(benefits, f)
+    with open("paper_exp1_graphs.pkl", 'wb') as f:
+        pickle.dump(graphs, f)
+
+    _, no_handover_val, _ = solve_wout_handover(benefits, None, lambda_)
+
+    # _, cbba_val, _ = solve_w_centralized_CBBA(benefits, None, lambda_)
+
+    _, greedy_val, _ = solve_greedily(benefits, None, lambda_)
+
+    itersd_by_lookahead = []
+    valued_by_lookahead = []
+
+    valuec_by_lookahead = []
+    for L in range(1,max_L+1):
+        print(f"lookahead {L}")
+        _, d_val, _, avg_iters = solve_w_mhald_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
+
+        itersd_by_lookahead.append(avg_iters)
+        valued_by_lookahead.append(d_val)
+
+        _, c_val, _ = solve_w_mhal(benefits, None, lambda_, L, distributed=False, verbose=True)
+        valuec_by_lookahead.append(c_val)
+
+    fig, axes = plt.subplots(2,1)
+    axes[0].plot(range(1,max_L+1), valued_by_lookahead, 'g', label="MHAL-D")
+    axes[0].plot(range(1,max_L+1), valuec_by_lookahead, 'b', label="MHAL")
+    axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r--', label="Naive")
+    axes[0].plot(range(1,max_L+1), [cbba_val]*max_L, 'b--', label="CBBA")
+    axes[0].plot(range(1,max_L+1), [greedy_val]*max_L, 'k--', label="Greedy")
+    axes[0].set_ylabel("Total value")
+    axes[0].set_xticks(range(1,max_L+1))
+    axes[0].set_ylim((0, 1.1*max(valued_by_lookahead)))
+
+    axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g', label="MHAL-D")
+    axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
+    axes[1].set_ylabel("Average iterations")
+
+    plt.savefig("paper_exp1.png")
+    plt.show()
+
 if __name__ == "__main__":
-    realistic_orbital_simulation()
+    paper_experiment1()

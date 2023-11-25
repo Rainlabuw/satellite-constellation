@@ -434,7 +434,7 @@ def solve_w_mhal(benefits, init_assignment, lambda_, L, graphs=None, distributed
     
     return chosen_assignments, total_value, nh
 
-def solve_w_mhald_track_iters(benefits, L, init_assignment, graphs=None, lambda_=1, verbose=False, eps=0.01):
+def solve_w_mhald_track_iters(benefits, init_assignment, lambda_, L, graphs=None, verbose=False, eps=0.01):
     """
     Sequentially solves the problem using the MHAL algorithm.
 

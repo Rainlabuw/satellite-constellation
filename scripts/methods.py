@@ -105,7 +105,7 @@ def is_assignment_mat_valid(assignment_mat):
     return True
 
 #~~~~~~~~~~~~~~~~~~~~HANDOVER PENALTY STUFF~~~~~~~~~~~~~~
-def calc_assign_seq_handover_penalty(init_assignment, assignments, lambda_):
+def calc_assign_seq_handover_penalty(init_assignment, assignments, lambda_, benefits=None):
     """
     Given an initial assignment and a list of assignment matrices,
     calculates the handover penalty associated with them,
@@ -113,6 +113,10 @@ def calc_assign_seq_handover_penalty(init_assignment, assignments, lambda_):
 
     If init_assignment is None, the the handover penalty from the first
     step is zero.
+
+    If a benefit matrix is provided, then if the assignment switches between 
+    two tasks with zero value, then no handover penalty is applied because 
+    the satellite is doing nothing anyway.
 
     NOTE: this provides a positive value, so to get the penalty you should subtract
     this from the total benefits.
@@ -122,11 +126,19 @@ def calc_assign_seq_handover_penalty(init_assignment, assignments, lambda_):
     if init_assignment is not None:
         handover_pen += np.linalg.norm(np.sqrt(lambda_/2)*(assignments[0] - init_assignment))**2
 
-    for i in range(len(assignments)-1):
-        new_assign = assignments[i+1]
-        old_assign = assignments[i]
+    for k in range(len(assignments)-1):
+        new_assign = assignments[k+1]
+        old_assign = assignments[k]
 
-        handover_pen += np.linalg.norm(np.sqrt(lambda_/2)*(new_assign - old_assign))**2
+        #iterate through agents        
+        for i in range(new_assign.shape[0]):
+            old_task_assigned = np.argmax(old_assign[i,:])
+            new_task_assigned = np.argmax(new_assign[i,:])
+
+            if benefits is not None and benefits[i,new_task_assigned,k+1] == 0:
+                pass #add no penalty
+            elif old_task_assigned != new_task_assigned:
+                handover_pen += lambda_
 
     return handover_pen
 
@@ -142,7 +154,7 @@ def calc_distance_btwn_solutions(agents1, agents2):
 
     return dist
 
-def calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_):
+def calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_, non_assign_pen=False):
     """
     Given a sequence of assignments, an initial assignment, and a benefit matrix,
     returns the total value and the number of handovers.
@@ -151,7 +163,11 @@ def calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 
     for i, chosen_ass in enumerate(chosen_assignments):
         curr_benefit = benefits[:,:,i]
         total_benefit += (curr_benefit * chosen_ass).sum()
-    handover_pen = calc_assign_seq_handover_penalty(init_assignment, chosen_assignments, lambda_)
+
+    if non_assign_pen: #If a penalty should be applied 
+        handover_pen = calc_assign_seq_handover_penalty(init_assignment, chosen_assignments, lambda_, benefits=None)
+    else:
+        handover_pen = calc_assign_seq_handover_penalty(init_assignment, chosen_assignments, lambda_, benefits=benefits)
     total_benefit -= handover_pen
 
     return total_benefit, handover_pen/lambda_
@@ -179,8 +195,13 @@ def generate_benefits_over_time(n, m, T, t_final, scale_min=0.5, scale_max=2):
                 benefits[i,j,t_index] = benefit_scale*np.exp(-(t-time_center)**2/time_spread**2)
     return benefits
 
-def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_):
-    adjusted_benefits = np.where(prev_assign == 1, benefits + lambda_, benefits)
+def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_, non_assign_pen=False):
+    #If there is no penalty for switching to a non assignment, the don't add a penalty
+    #if the new benefits are zero (the task is not valid)
+    if not non_assign_pen:
+        adjusted_benefits = np.where((prev_assign == 0) & (benefits != 0), benefits-lambda_, benefits)
+    else:
+        adjusted_benefits = np.where(prev_assign == 0, benefits-lambda_, benefits)
     return adjusted_benefits
 
 #~~~~~~~~~~~~~~~~~~~~ ORBITAL MECHANICS STUFF ~~~~~~~~~~~~~~
@@ -233,16 +254,23 @@ def generate_optimal_L(timestep, sat):
     Calculates this by determining the angle of a satellites ground visibility,
     and then calculating the time taken to cover that angular distance based on period.
     """
+    timestep = timestep.to(u.min)
+
     earth = sat.orbit.attractor
 
     earth_r = earth.R.to_value(u.km)
     sat_r = np.linalg.norm(sat.orbit.r.to_value(u.km))
 
+    #Max FOV is when the angle is a tangent to the surface of the earth
+    max_fov = np.arcsin(earth_r/sat_r)*180/np.pi
+    if max_fov < sat.fov: print(f"Lowering FOV to {max_fov}")
+    sat.fov = min(sat.fov, max_fov)
+
     third_angle = (180 - np.arcsin(sat_r/earth_r*np.sin(sat.fov*np.pi/180))*180/np.pi)
-    delta_angle = (2*(180 - sat.fov - third_angle))
+    delta_angle = ((180 - sat.fov - third_angle))
 
     min_to_travel_delta_angle = sat.orbit.period.to(u.min) * delta_angle/360
 
-    L = np.ceil(min_to_travel_delta_angle/timestep)
+    L = int(np.ceil(min_to_travel_delta_angle/timestep))
 
     return L
