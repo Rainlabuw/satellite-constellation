@@ -1010,9 +1010,6 @@ def paper_experiment1():
     with open("mhal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
         graphs = pickle.load(f)
 
-    benefits = benefits[:,:,:10]
-    graphs = graphs[:10]
-
     _, no_handover_val, _ = solve_wout_handover(benefits, None, lambda_)
 
     # _, cbba_val, _ = solve_w_centralized_CBBA(benefits, None, lambda_)
@@ -1058,7 +1055,7 @@ def paper_experiment1():
 
     with open("mhal_experiment1/results.txt", 'w') as f:
         f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {m}, T: {T}, altitude: {altitude}, fov: {fov}, timestep: {timestep}, max_L: {max_L}\n")
-        f.write(f"~~~~~~~~~~~~~~~~~~~~~")
+        f.write(f"~~~~~~~~~~~~~~~~~~~~~\n")
         f.write(f"No Handover Value: {no_handover_val}\n")
         f.write(f"Greedy Value: {greedy_val}\n")
         f.write(f"CBBA Values by lookahead:\n{valuecbba_by_lookahead}\n")
