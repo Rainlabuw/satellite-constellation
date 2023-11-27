@@ -999,7 +999,7 @@ def paper_experiment1():
     timestep = 1*u.min
 
     max_L = test_optimal_L(timestep, altitude, fov)
-    max_L = 2
+    max_L = 6
     
     lambda_ = 0.5
 
@@ -1050,6 +1050,7 @@ def paper_experiment1():
     axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g', label="MHAL-D")
     axes[1].plot(range(1,max_L+1), iterscbba_by_lookahead, 'b', label="CBBA")
     axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
+    axes[0].set_xticks(range(1,max_L+1))
     axes[1].set_ylabel("Average iterations")
     axes[1].set_xlabel("Lookahead window")
 
