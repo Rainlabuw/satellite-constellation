@@ -11,6 +11,7 @@ from solve_optimally import solve_optimally
 from solve_wout_handover import solve_wout_handover
 from solve_w_mhal import solve_w_mhal, solve_w_mhald_track_iters
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
+from solve_w_CBBA import solve_w_CBBA
 from solve_greedily import solve_greedily
 from classic_auction import Auction
 
@@ -1000,7 +1001,7 @@ def paper_experiment1():
 
     print(test_optimal_L(timestep, altitude, fov))
     max_L = test_optimal_L(timestep, altitude, fov)
-    max_L = 6
+    max_L = 3
     
     lambda_ = 0.5
 
@@ -1029,7 +1030,8 @@ def paper_experiment1():
         # itersd_by_lookahead.append(avg_iters)
         # valued_by_lookahead.append(d_val)
 
-        _, c_val, _ = solve_w_mhal(benefits, None, lambda_, L, distributed=False, verbose=True)
+        _, c_val, _ = solve_w_mhal(benefits, None, lambda_, L, distributed=True, graphs=graphs, verbose=True)
+        print(c_val)
         valuec_by_lookahead.append(c_val)
 
     fig, axes = plt.subplots(2,1)
@@ -1050,5 +1052,26 @@ def paper_experiment1():
     plt.savefig("paper_exp1.png")
     plt.show()
 
+def cbba_testing():
+    np.random.seed(43)
+    benefits = np.random.random((3,3,2))
+
+    # benefits = np.zeros((3,3,2))
+    # benefits[:,:,0] = np.array([[10, 1, 1],
+    #                             [1, 10, 1],
+    #                             [1, 1, 10]])
+    # benefits[:,:,1] = np.array([[1, 10, 1],
+    #                             [1, 11, 10],
+    #                             [10, 1, 1]])
+
+    init_assign = None
+
+    lambda_ = 0.5
+
+    ass, val, _ = solve_w_centralized_CBBA(benefits, init_assign, lambda_)
+    print(val)
+    cass, cval, _ = solve_w_CBBA(benefits, init_assign, lambda_, benefits.shape[-1], verbose=True)
+    print(cval)
+
 if __name__ == "__main__":
-    paper_experiment1()
+    cbba_testing()
