@@ -439,8 +439,6 @@ def solve_w_CBBA_track_iters(unscaled_benefits, init_assignment, lambda_, L, gra
         tstep_end = min(curr_tstep+L, T)
         benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
 
-        print(benefit_mat_window.shape)
-
         if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
         cbba_auction = CBBAAuction(benefit_mat_window, lambda_, graph=graphs[curr_tstep])
         cbba_auction.run_auction()

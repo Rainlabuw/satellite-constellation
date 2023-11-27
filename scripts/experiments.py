@@ -1011,6 +1011,9 @@ def paper_experiment1():
     with open("paper_exp1_graphs.pkl", 'rb') as f:
         graphs = pickle.load(f)
 
+    benefits = benefits[:,:,:10]
+    graphs = graphs[:10]
+
     _, no_handover_val, _ = solve_wout_handover(benefits, None, lambda_)
 
     # _, cbba_val, _ = solve_w_centralized_CBBA(benefits, None, lambda_)
@@ -1027,7 +1030,7 @@ def paper_experiment1():
     valuec_by_lookahead = []
     for L in range(1,max_L+1):
         print(f"lookahead {L}")
-        _, cbba_val, _, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, verbose=True)
+        _, cbba_val, _, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
         iterscbba_by_lookahead.append(avg_iters)
         valuecbba_by_lookahead.append(cbba_val)
         
