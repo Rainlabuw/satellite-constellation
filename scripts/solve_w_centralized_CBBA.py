@@ -38,44 +38,58 @@ def score_task(i, j, k, benefits, init_assignment, agents, lambda_):
 
     return marginal_benefit
 
-def solve_w_centralized_CBBA(benefits, init_assignment, lambda_, verbose=False):
-    n = benefits.shape[0]
-    m = benefits.shape[1]
-    T = benefits.shape[2]
+def solve_w_centralized_CBBA(unscaled_benefits, init_assignment, lambda_, L, verbose=False):
+    n = unscaled_benefits.shape[0]
+    m = unscaled_benefits.shape[1]
+    T = unscaled_benefits.shape[2]
+
+    min_benefit = np.min(unscaled_benefits)
+    benefit_to_add = max(2*lambda_-min_benefit, 0)
+    benefits = unscaled_benefits + benefit_to_add
 
     agents = [SequentialCBBAAgent(T) for i in range(n)]
 
-    for iter in range(n*T):
-        if verbose: print(f"Solving w centralized CBBA, {iter}/{n*T}", end='\r')
-        best_marginal_benefit = -np.inf
-        best_i = None
-        best_j = None
-        best_k = None
-        for i in range(n):
-            for j in range(m):
-                for k in range(T):
-                    marginal_benefit = score_task(i, j, k, benefits, init_assignment, agents, lambda_)
-                    if marginal_benefit > best_marginal_benefit:
-                        best_marginal_benefit = marginal_benefit
-                        best_i = i
-                        best_j = j
-                        best_k = k
+    curr_assignment = init_assignment
+    
+    chosen_assignments = []
 
-        agents[best_i].bundle_task_path[best_k] = best_j
-        agents[best_i].bundle.append((best_j, best_k))
+    while len(chosen_assignments) < T:
+        curr_tstep = len(chosen_assignments)
+        tstep_end = min(curr_tstep+L, T)
+        L_curr = tstep_end - curr_tstep
+        benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
 
-    #Convert to assignment matrix form
-    assignment_mats = []
-    for k in range(T):
+        for iter in range(n*L_curr):
+            if verbose: print(f"Solving w centralized CBBA, {iter}/{n*T}", end='\r')
+            best_marginal_benefit = -np.inf
+            best_i = None
+            best_j = None
+            best_k = None
+            for i in range(n):
+                for j in range(m):
+                    for k in range(L_curr):
+                        marginal_benefit = score_task(i, j, k, benefit_mat_window, init_assignment, agents, lambda_)
+                        if marginal_benefit > best_marginal_benefit:
+                            best_marginal_benefit = marginal_benefit
+                            best_i = i
+                            best_j = j
+                            best_k = k
+
+            agents[best_i].bundle_task_path[best_k] = best_j
+            agents[best_i].bundle.append((best_j, best_k))
+
+        #Convert to assignment matrix form
         assignment_mat = np.zeros((n,m))
         for i, agent in enumerate(agents):
-            j = agent.bundle_task_path[k]
+            j = agent.bundle_task_path[0]
             assignment_mat[i,j] = 1
-        assignment_mats.append(assignment_mat)
+        chosen_assignments.append(assignment_mat)
 
-    total_value, nh = calc_value_and_num_handovers(assignment_mats, benefits, None, lambda_)
+    total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, None, lambda_)
 
-    return assignment_mats, total_value, nh
+    real_value = total_value - n*T*benefit_to_add
+
+    return chosen_assignments, real_value, nh
 
 if __name__ == "__main__":
     benefits = np.random.rand(10, 10, 10)

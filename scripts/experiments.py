@@ -11,7 +11,7 @@ from solve_optimally import solve_optimally
 from solve_wout_handover import solve_wout_handover
 from solve_w_mhal import solve_w_mhal, solve_w_mhald_track_iters
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
-from solve_w_CBBA import solve_w_CBBA
+from solve_w_CBBA import solve_w_CBBA, solve_w_CBBA_track_iters
 from solve_greedily import solve_greedily
 from classic_auction import Auction
 
@@ -986,7 +986,6 @@ def test_optimal_L(timestep=1*u.min, altitude=550, fov=65):
     sat = Satellite(Orbit.from_classical(Earth, a, 0*u.one, 0*u.deg, 0*u.deg, 0*u.deg, 0*u.deg), [], [], fov=fov)
     
     L = generate_optimal_L(timestep, sat)
-    print(L)
     return L
 
 def paper_experiment1():
@@ -1001,7 +1000,7 @@ def paper_experiment1():
 
     print(test_optimal_L(timestep, altitude, fov))
     max_L = test_optimal_L(timestep, altitude, fov)
-    max_L = 3
+    max_L = 6
     
     lambda_ = 0.5
 
@@ -1022,56 +1021,66 @@ def paper_experiment1():
     itersd_by_lookahead = []
     valued_by_lookahead = []
 
+    iterscbba_by_lookahead = []
+    valuecbba_by_lookahead = []
+
     valuec_by_lookahead = []
     for L in range(1,max_L+1):
         print(f"lookahead {L}")
-        # ass, d_val, _, avg_iters = solve_w_mhald_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
-        # print(is_assignment_mat_sequence_valid(ass))
-        # itersd_by_lookahead.append(avg_iters)
-        # valued_by_lookahead.append(d_val)
+        _, cbba_val, _, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, verbose=True)
+        iterscbba_by_lookahead.append(avg_iters)
+        valuecbba_by_lookahead.append(cbba_val)
+        
+        _, d_val, _, avg_iters = solve_w_mhald_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
+        itersd_by_lookahead.append(avg_iters)
+        valued_by_lookahead.append(d_val)
 
-        _, c_val, _ = solve_w_mhal(benefits, None, lambda_, L, distributed=True, graphs=graphs, verbose=True)
-        print(c_val)
+        _, c_val, _ = solve_w_mhal(benefits, None, lambda_, L, distributed=False, verbose=True)
         valuec_by_lookahead.append(c_val)
 
     fig, axes = plt.subplots(2,1)
-    # axes[0].plot(range(1,max_L+1), valued_by_lookahead, 'g', label="MHAL-D")
-    axes[0].plot(range(1,max_L+1), valuec_by_lookahead, 'b', label="MHAL")
-    axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r--', label="Naive")
-    # axes[0].plot(range(1,max_L+1), [cbba_val]*max_L, 'b--', label="CBBA")
-    axes[0].plot(range(1,max_L+1), [greedy_val]*max_L, 'k--', label="Greedy")
+    axes[0].plot(range(1,max_L+1), valued_by_lookahead, 'g--', label="MHAL-D")
+    axes[0].plot(range(1,max_L+1), valuec_by_lookahead, 'g', label="MHAL")
+    axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r', label="Naive")
+    axes[0].plot(range(1,max_L+1), valuecbba_by_lookahead, 'b', label="CBBA")
+    axes[0].plot(range(1,max_L+1), [greedy_val]*max_L, 'k', label="Greedy")
     axes[0].set_ylabel("Total value")
     axes[0].set_xticks(range(1,max_L+1))
     axes[0].set_ylim((0, 1.1*max(valuec_by_lookahead)))
     axes[0].legend()
 
-    # axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g', label="MHAL-D")
-    # axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
-    # axes[1].set_ylabel("Average iterations")
+    axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g', label="MHAL-D")
+    axes[1].plot(range(1,max_L+1), iterscbba_by_lookahead, 'b', label="CBBA")
+    axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
+    axes[1].set_ylabel("Average iterations")
 
     plt.savefig("paper_exp1.png")
     plt.show()
 
 def cbba_testing():
-    np.random.seed(43)
-    benefits = np.random.random((3,3,2))
+    np.random.seed(42)
+    val = 0
+    cval = 0
+    for _ in range(50):
+        benefits = np.random.random((10,10,10))
 
-    # benefits = np.zeros((3,3,2))
-    # benefits[:,:,0] = np.array([[10, 1, 1],
-    #                             [1, 10, 1],
-    #                             [1, 1, 10]])
-    # benefits[:,:,1] = np.array([[1, 10, 1],
-    #                             [1, 11, 10],
-    #                             [10, 1, 1]])
+        # benefits = np.zeros((3,3,2))
+        # benefits[:,:,0] = np.array([[10, 1, 1],
+        #                             [1, 10, 1],
+        #                             [1, 1, 10]])
+        # benefits[:,:,1] = np.array([[1, 10, 1],
+        #                             [1, 11, 10],
+        #                             [10, 1, 1]])
 
-    init_assign = None
+        init_assign = None
 
-    lambda_ = 0.5
+        lambda_ = 0.5
 
-    ass, val, _ = solve_w_centralized_CBBA(benefits, init_assign, lambda_)
-    print(val)
-    cass, cval, _ = solve_w_CBBA(benefits, init_assign, lambda_, benefits.shape[-1], verbose=True)
-    print(cval)
+        ass, vall, _ = solve_w_centralized_CBBA(benefits, init_assign, lambda_)
+        val += vall
+        cass, cvall, _ = solve_w_CBBA(benefits, init_assign, lambda_, benefits.shape[-1])
+        cval += cvall
+    print(val, cval)
 
 if __name__ == "__main__":
-    cbba_testing()
+    paper_experiment1()

@@ -1,6 +1,7 @@
 import numpy as np
 import networkx as nx
 from methods import *
+import cProfile
 
 class CBBAAuction(object):
     def __init__(self, benefits, lambda_, graph=None, verbose=False):
@@ -22,7 +23,7 @@ class CBBAAuction(object):
         steps_wout_release_until_convergence = nx.diameter(self.graph)
 
         self.prices = np.zeros_like(self.benefits)
-        self.high_bidders = np.zeros_like(self.benefits, dtype=int)
+        self.high_bidders = -1*np.ones_like(self.benefits, dtype=int)
 
         self.agents = [CBBAAgent(i, self.benefits[i,:,:], self.prices[i,:,:], self.high_bidders[i,:,:], np.zeros(self.n), 
                                  list(self.graph.neighbors(i)), self.lambda_, steps_wout_release_until_convergence) for i in range(self.n)]
@@ -39,7 +40,6 @@ class CBBAAuction(object):
                 agent.perform_auction_iteration_for_agent()
 
             self.n_iterations += 1
-            print(self.n_iterations, end='\r')
 
         if self.verbose:
             print(f"Auction results ({self.n_iterations} iterations):")
@@ -129,7 +129,8 @@ class CBBAAgent(object):
             self.bundle_task_path[most_marginal_benefit_timestep] = most_marginal_benefit_task_idx
             self.bundle_tasks.append((most_marginal_benefit_task_idx, most_marginal_benefit_timestep))
 
-            self.prices[most_marginal_benefit_task_idx, most_marginal_benefit_timestep] = most_marginal_benefit
+            self.prices[most_marginal_benefit_task_idx, most_marginal_benefit_timestep] = most_marginal_benefit + self.prices[most_marginal_benefit_task_idx, most_marginal_benefit_timestep]
+            # if most_marginal_benefit_task_idx == 2 and most_marginal_benefit_timestep == 0: print("mmb", self.prices[most_marginal_benefit_task_idx, most_marginal_benefit_timestep])
             self.high_bidders[most_marginal_benefit_task_idx, most_marginal_benefit_timestep] = self.id
 
         #Select final choice to be the first task in the bundle path
@@ -167,7 +168,7 @@ class CBBAAgent(object):
 
         self.n_iters += 1
 
-        if self.n_iters_wout_releasing > self.n_iters_wout_release_to_converge or self.n_iters > 1000:
+        if self.n_iters_wout_releasing > self.n_iters_wout_release_to_converge:
             self.converged = True
 
     def release_tasks(self):
@@ -185,19 +186,16 @@ class CBBAAgent(object):
                     #all tasks added to the bundle after it
                     if self.prices[j,k] != self.price_comm_packet[0,j,k]:
                         released_a_task = True
-                        print(f"{self.id} Price of ({j},{k}) before and after {self.prices[j,k]} {self.price_comm_packet[0,j,k]}")
                         removal_index = self.bundle_tasks.index((j,k))
                         removed_tasks = self.bundle_tasks[removal_index:]
 
-                        print(f"bundle tasks before {self.bundle_tasks}")
                         self.bundle_tasks = self.bundle_tasks[:removal_index]
-                        print(f"bundle tasks after {self.bundle_tasks}") 
-                        print(f"Bundle task path before {self.bundle_task_path}")
-                        for (removed_task_idx, removed_task_timestep) in removed_tasks:
+                        for removed_task_num, (removed_task_idx, removed_task_timestep) in enumerate(removed_tasks):
                             self.bundle_task_path[removed_task_timestep] = None
-                        
-                        print(f"Bundle task path after {self.bundle_task_path}")
-        
+                            if removed_task_num > 0:
+                                self.prices[removed_task_idx, removed_task_timestep] = 0
+                                self.high_bidders[removed_task_idx, removed_task_timestep] = -1
+                                
         return released_a_task
 
     def apply_consensus_rules(self):
@@ -206,6 +204,7 @@ class CBBAAgent(object):
         adopted from https://github.com/zehuilu/CBBA-Python
         """
         eps = 1e-6
+        self.timestamps[self.id] = self.n_iters + 1
 
         #Apply the consensus rules described in CBBA paper
         for neighbor_idx in range(len(self.neighbors)):
@@ -378,10 +377,14 @@ class CBBAAgent(object):
                     self.timestamps[n] = self.timestamp_comm_packet[neigh_comm_idx,n]
             self.timestamps[neigh_id] = self.n_iters
 
-def solve_w_CBBA(benefits, init_assignment, lambda_, L, graphs=None, verbose=False):
-    n = benefits.shape[0]
-    m = benefits.shape[1]
-    T = benefits.shape[2]
+def solve_w_CBBA(unscaled_benefits, init_assignment, lambda_, L, graphs=None, verbose=False):
+    n = unscaled_benefits.shape[0]
+    m = unscaled_benefits.shape[1]
+    T = unscaled_benefits.shape[2]
+
+    min_benefit = np.min(unscaled_benefits)
+    benefit_to_add = max(2*lambda_-min_benefit, 0)
+    benefits = unscaled_benefits + benefit_to_add
 
     if graphs is None:
         graphs = [nx.complete_graph(n) for i in range(T)]
@@ -408,17 +411,56 @@ def solve_w_CBBA(benefits, init_assignment, lambda_, L, graphs=None, verbose=Fal
         chosen_assignments.append(chosen_assignment)
     
     total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_)
-    
-    return chosen_assignments, total_value, nh
+    real_value = total_value - benefit_to_add*n*T
 
+    return chosen_assignments, real_value, nh
+
+def solve_w_CBBA_track_iters(unscaled_benefits, init_assignment, lambda_, L, graphs=None, verbose=False):
+    n = unscaled_benefits.shape[0]
+    m = unscaled_benefits.shape[1]
+    T = unscaled_benefits.shape[2]
+
+    min_benefit = np.min(unscaled_benefits)
+    benefit_to_add = max(2*lambda_-min_benefit, 0)
+    benefits = unscaled_benefits + benefit_to_add
+
+    if graphs is None:
+        graphs = [nx.complete_graph(n) for i in range(T)]
+
+    curr_assignment = init_assignment
+    
+    total_iterations = 0
+
+    chosen_assignments = []
+
+    while len(chosen_assignments) < T:
+        if verbose: print(f"Solving w distributed CBBA, {len(chosen_assignments)}/{T}", end='\r')
+        curr_tstep = len(chosen_assignments)
+        tstep_end = min(curr_tstep+L, T)
+        benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
+
+        print(benefit_mat_window.shape)
+
+        if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
+        cbba_auction = CBBAAuction(benefit_mat_window, lambda_, graph=graphs[curr_tstep])
+        cbba_auction.run_auction()
+
+
+        chosen_assignment = convert_agents_to_assignment_matrix(cbba_auction.agents)
+
+        chosen_assignments.append(chosen_assignment)
+        total_iterations += cbba_auction.n_iterations
+    
+    total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_)
+    real_value = total_value - benefit_to_add*n*T
+
+    return chosen_assignments, real_value, nh, total_iterations/T
 
 if __name__ == "__main__":
-    b = np.array([[1, 10],[1, 1.5]])
-    p = np.zeros_like(b)
-    w = np.zeros_like(b)
-    timestamps = np.zeros((1))
-    a = CBBAAgent(1, b, p, w, timestamps, None, 1)
-    a.build_bundle()
+    benefits = np.random.rand(100,100,10)
+    init_assignment = None
+    lambda_ = 0.5
+    L = benefits.shape[-1]
+    graphs = [rand_connected_graph(100) for i in range(benefits.shape[-1])]
 
-    print(a.bundle_task_path)
-    print(a.bundle_tasks)
+    cProfile.run('solve_w_CBBA(benefits, init_assignment, lambda_, 1,graphs=graphs,verbose=True)')
