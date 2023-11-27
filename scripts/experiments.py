@@ -998,17 +998,16 @@ def paper_experiment1():
     fov = 65
     timestep = 1*u.min
 
-    print(test_optimal_L(timestep, altitude, fov))
     max_L = test_optimal_L(timestep, altitude, fov)
-    max_L = 6
+    max_L = 2
     
     lambda_ = 0.5
 
     # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov)
 
-    with open("paper_exp1_bens.pkl", 'rb') as f:
+    with open("mhal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
         benefits = pickle.load(f)
-    with open("paper_exp1_graphs.pkl", 'rb') as f:
+    with open("mhal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
         graphs = pickle.load(f)
 
     benefits = benefits[:,:,:10]
@@ -1019,8 +1018,6 @@ def paper_experiment1():
     # _, cbba_val, _ = solve_w_centralized_CBBA(benefits, None, lambda_)
 
     _, greedy_val, _ = solve_greedily(benefits, None, lambda_)
-    print([greedy_val]*max_L)
-    print([no_handover_val]*max_L)
     itersd_by_lookahead = []
     valued_by_lookahead = []
 
@@ -1050,14 +1047,29 @@ def paper_experiment1():
     axes[0].set_ylabel("Total value")
     axes[0].set_xticks(range(1,max_L+1))
     axes[0].set_ylim((0, 1.1*max(valuec_by_lookahead)))
+    axes[1].set_xlabel("Lookahead window")
     axes[0].legend()
 
     axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g', label="MHAL-D")
     axes[1].plot(range(1,max_L+1), iterscbba_by_lookahead, 'b', label="CBBA")
     axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
     axes[1].set_ylabel("Average iterations")
+    axes[1].set_xlabel("Lookahead window")
 
-    plt.savefig("paper_exp1.png")
+    with open("mhal_experiment1/results.txt", 'w') as f:
+        f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {m}, T: {T}, altitude: {altitude}, fov: {fov}, timestep: {timestep}, max_L: {max_L}\n")
+        f.write(f"~~~~~~~~~~~~~~~~~~~~~")
+        f.write(f"No Handover Value: {no_handover_val}\n")
+        f.write(f"Greedy Value: {greedy_val}\n")
+        f.write(f"CBBA Values by lookahead:\n{valuecbba_by_lookahead}\n")
+        f.write(f"MHAL Values by lookahead:\n{valuec_by_lookahead}\n")
+        f.write(f"MHAL-D Values by lookahead:\n{valued_by_lookahead}\n")
+
+        f.write(f"CBBA Iters by lookahead:\n{iterscbba_by_lookahead}\n")
+        f.write(f"MHAL Iters by lookahead:\n{itersd_by_lookahead}\n")
+
+
+    plt.savefig("mhal_experiment1/paper_exp1.png")
     plt.show()
 
 def cbba_testing():
