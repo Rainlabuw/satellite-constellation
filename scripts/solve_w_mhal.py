@@ -1,6 +1,7 @@
 import numpy as np
 from methods import *
 import networkx as nx
+import time
 
 class MHAL_D_Auction(object):
     def __init__(self, benefits, curr_assignment, all_time_intervals, all_time_interval_sequences, prices=None, eps=0.01, graph=None, lambda_=1, verbose=False):
@@ -34,7 +35,7 @@ class MHAL_D_Auction(object):
         #individual agents think that they've converged. Need to ensure that
         #this number is higher than 1, because in a fully connected graph
         #the last agent will win it's first bid due to index tiebreaks
-        #and then think it's converged.
+        #and then think it's converged. (prob not necessary after bugfix)
         self.max_steps_since_last_update = max(nx.diameter(self.graph), 2)
 
         self.agents = [MHAL_D_Agent(self, i, all_time_intervals, all_time_interval_sequences, \
@@ -213,89 +214,81 @@ class MHAL_D_Agent(object):
         """
         Updates the agent's prices and bids.
         """
-        if self.steps_since_last_update < self.max_steps_since_last_update:
-            #Update the agent's prices and bids
-            for ti in self.all_time_intervals:
-                max_prices = np.max(self.price_comm_packets[ti], axis=0)
-                
-                # Filter the high bidders by the ones that have the max price, and set the rest to -1.
-                # Grab the highest index max bidder to break ties.
-                max_price_bidders = np.where(self.price_comm_packets[ti] == max_prices, self.high_bidder_comm_packets[ti], -1)
-                self._high_bidders[ti] = np.max(max_price_bidders, axis=0)
-
-                if max_prices[self.choice_by_ti[ti]] >= self.public_prices[ti][self.choice_by_ti[ti]] and self._high_bidders[ti][self.choice_by_ti[ti]] != self.id:
-                    #Adjust the combined benefits to enforce handover penalty 
-                    if self.init_assignment is None:
-                        #If initial assignment is None, then you shouldn't add a penalty at any index
-                        indices_where_agent_not_prev_assigned = np.zeros(self.m)
-                    else:
-                        indices_where_agent_not_prev_assigned = np.where(self.init_assignment[self.id,:]==1, 0, 1)
-                    benefit_hat = self.time_interval_benefits[ti] - self.lambda_ * indices_where_agent_not_prev_assigned
-
-                    best_net_value = np.max(benefit_hat - max_prices)
-                    second_best_net_value = np.partition(benefit_hat - max_prices, -2)[-2] #https://stackoverflow.com/questions/33181350/quickest-way-to-find-the-nth-largest-value-in-a-numpy-matrix
-
-                    self.choice_by_ti[ti] = np.argmax(benefit_hat-max_prices) #choose the task with the highest benefit to the agent
-
-                    self._high_bidders[ti][self.choice_by_ti[ti]] = self.id
-                    
-                    inc = best_net_value - second_best_net_value + self.eps
-
-                    self._prices[ti] = max_prices
-                    self._prices[ti][self.choice_by_ti[ti]] = max_prices[self.choice_by_ti[ti]] + inc
-                else:
-                    #Otherwise, don't change anything and just update prices
-                    #based on the new info from other agents.
-                    self._prices[ti] = max_prices
-
-            agents_w_most_updated_value_info = np.argmax(self.timestep_value_info_recieved_comm_packet, axis=0)
-            self._timestep_value_info_recieved = np.max(self.timestep_value_info_recieved_comm_packet, axis=0)
-
-            for time_interval_sequence in self.all_time_interval_sequences:
-                #This line takes the most updated benefit info from the neighbors and puts it into the agent's own benefit info
-                self._values_from_time_interval_seq[time_interval_sequence] = self.value_from_time_interval_seq_comm_packets[time_interval_sequence][agents_w_most_updated_value_info, np.arange(self.n)]
-
-            #Based on the new choices for each time interval, calculate the time interval sequence benefits for yourself
-            self.compute_time_interval_sequence_values()
+        self.converged = self.steps_since_last_update >= self.max_steps_since_last_update
         
-        #Otherwise, the algorithm has converged
-        else:
-            self.converged = True
+        #Update the agent's prices and bids
+        for ti in self.all_time_intervals:
+            max_prices = np.max(self.price_comm_packets[ti], axis=0)
+            
+            # Filter the high bidders by the ones that have the max price, and set the rest to -1.
+            # Grab the highest index max bidder to break ties.
+            max_price_bidders = np.where(self.price_comm_packets[ti] == max_prices, self.high_bidder_comm_packets[ti], -1)
+            self._high_bidders[ti] = np.max(max_price_bidders, axis=0)
 
-            best_tis_value = -np.inf
-            best_tis = None
-            for tis in self.all_time_interval_sequences:
-                tis_value = np.sum(self._values_from_time_interval_seq[tis])
+            if max_prices[self.choice_by_ti[ti]] >= self.public_prices[ti][self.choice_by_ti[ti]] and self._high_bidders[ti][self.choice_by_ti[ti]] != self.id:
+                #Adjust the combined benefits to enforce handover penalty 
+                if self.init_assignment is None:
+                    #If initial assignment is None, then you shouldn't add a penalty at any index
+                    indices_where_agent_not_prev_assigned = np.zeros(self.m)
+                else:
+                    indices_where_agent_not_prev_assigned = np.where(self.init_assignment[self.id,:]==1, 0, 1)
+                benefit_hat = self.time_interval_benefits[ti] - self.lambda_ * indices_where_agent_not_prev_assigned
 
-                if tis_value > best_tis_value:
-                    best_tis_value = tis_value
-                    best_tis = tis
+                best_net_value = np.max(benefit_hat - max_prices)
+                second_best_net_value = np.partition(benefit_hat - max_prices, -2)[-2] #https://stackoverflow.com/questions/33181350/quickest-way-to-find-the-nth-largest-value-in-a-numpy-matrix
 
-            self.choice = self.choice_by_ti[best_tis[0]]
+                self.choice_by_ti[ti] = np.argmax(benefit_hat-max_prices) #choose the task with the highest benefit to the agent
+
+                self._high_bidders[ti][self.choice_by_ti[ti]] = self.id
+                
+                inc = best_net_value - second_best_net_value + self.eps
+
+                self._prices[ti] = max_prices
+                self._prices[ti][self.choice_by_ti[ti]] = max_prices[self.choice_by_ti[ti]] + inc
+            else:
+                #Otherwise, don't change anything and just update prices
+                #based on the new info from other agents.
+                self._prices[ti] = max_prices
+
+        agents_w_most_updated_value_info = np.argmax(self.timestep_value_info_recieved_comm_packet, axis=0)
+        self._timestep_value_info_recieved = np.max(self.timestep_value_info_recieved_comm_packet, axis=0)
+
+        for time_interval_sequence in self.all_time_interval_sequences:
+            #This line takes the most updated benefit info from the neighbors and puts it into the agent's own benefit info
+            self._values_from_time_interval_seq[time_interval_sequence] = self.value_from_time_interval_seq_comm_packets[time_interval_sequence][agents_w_most_updated_value_info, np.arange(self.n)]
+
+        #Based on the new choices for each time interval, calculate the time interval sequence benefits for yourself
+        self.compute_time_interval_sequence_values()
+
+        best_tis_value = -np.inf
+        best_tis = None
+        for tis in self.all_time_interval_sequences:
+            tis_value = np.sum(self._values_from_time_interval_seq[tis])
+
+            if tis_value > best_tis_value:
+                best_tis_value = tis_value
+                best_tis = tis
+
+        self.choice = self.choice_by_ti[best_tis[0]]
 
     def publish_agent_prices_bids(self):
-        if self.steps_since_last_update < self.max_steps_since_last_update:
-            updated = False
-            for ti in self.all_time_intervals:
-                if not np.array_equal(self._prices[ti], self.public_prices[ti]) or \
-                    not np.array_equal(self._high_bidders[ti], self.public_high_bidders[ti]):
-                    updated = True
+        updated = False
+        for ti in self.all_time_intervals:
+            if not np.array_equal(self._prices[ti], self.public_prices[ti]) or \
+                not np.array_equal(self._high_bidders[ti], self.public_high_bidders[ti]):
+                updated = True
 
-                self.public_prices[ti] = np.copy(self._prices[ti])
-                self.public_high_bidders[ti] = np.copy(self._high_bidders[ti])
+            self.public_prices[ti] = np.copy(self._prices[ti])
+            self.public_high_bidders[ti] = np.copy(self._high_bidders[ti])
 
-            self.public_timestep_value_info_recieved = np.copy(self._timestep_value_info_recieved)
-            for tis in self.all_time_interval_sequences:
-                self.public_values_from_time_interval_seq[tis] = np.copy(self._values_from_time_interval_seq[tis])
+        self.public_timestep_value_info_recieved = np.copy(self._timestep_value_info_recieved)
+        for tis in self.all_time_interval_sequences:
+            self.public_values_from_time_interval_seq[tis] = np.copy(self._values_from_time_interval_seq[tis])
 
-            if not updated:
-                self.steps_since_last_update += 1
-            else:
-                self.steps_since_last_update = 0
-        
-        #Otherwise, the algorithm has converged
+        if not updated:
+            self.steps_since_last_update += 1
         else:
-            self.converged = True
+            self.steps_since_last_update = 0
 
         self.n_iters += 1
         self.public_timestep_value_info_recieved[self.id] = self.n_iters
@@ -422,6 +415,7 @@ def solve_w_mhal(benefits, init_assignment, lambda_, L, graphs=None, distributed
         if not distributed:
             chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, lambda_, approx=central_approx)
         else:
+            if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
             mhal_d_auction = MHAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
             mhal_d_auction.run_auction()
 

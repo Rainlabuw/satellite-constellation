@@ -21,7 +21,7 @@ from constellation_sim.Task import Task
 from methods import *
 
 class ConstellationSim(object):
-    def __init__(self, dt=5*u.min) -> None:
+    def __init__(self, dt=1*u.min) -> None:
         self.sats = []
         self.tasks = []
 
@@ -142,8 +142,8 @@ class ConstellationSim(object):
         for k in range(T):
             print(f"Propagating orbits and computing benefits + neighbors, T={k}/{T}...",end='\r')
             self.graphs_over_time.append(self.determine_connectivity_graph())
+            print(self.sats[0].orbit.r)
             for sat in self.sats:
-
                 sat.propagate_orbit(self.dt)
                 self.orbits_over_time[sat.id].append(sat.orbit)
                 for task in self.tasks:

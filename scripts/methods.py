@@ -90,18 +90,19 @@ def convert_agents_to_assignment_matrix(agents):
         assignment_matrix[i, agent.choice] = 1
     return assignment_matrix
 
-def is_assignment_mat_valid(assignment_mat):
+def is_assignment_mat_sequence_valid(assignment_mat_seq):
     """
     Checks if an assignment matrix is valid.
     """
-    for i in range(assignment_mat.shape[0]):
-        if assignment_mat[i,:].sum() != 1:
-            print(f"agent {i} not doing exactly 1 task")
-            return False
-    for j in range(assignment_mat.shape[1]):
-        if assignment_mat[:,j].sum() > 1:
-            print(f"too many doing task {j}")
-            return False
+    for assignment_mat in assignment_mat_seq:
+        for i in range(assignment_mat.shape[0]):
+            if assignment_mat[i,:].sum() != 1:
+                print(f"agent {i} not doing exactly 1 task")
+                return False
+        for j in range(assignment_mat.shape[1]):
+            if assignment_mat[:,j].sum() > 1:
+                print(f"too many doing task {j}")
+                return False
     return True
 
 #~~~~~~~~~~~~~~~~~~~~HANDOVER PENALTY STUFF~~~~~~~~~~~~~~
@@ -154,7 +155,7 @@ def calc_distance_btwn_solutions(agents1, agents2):
 
     return dist
 
-def calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_, non_assign_pen=False):
+def calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_, non_assign_pen=True):
     """
     Given a sequence of assignments, an initial assignment, and a benefit matrix,
     returns the total value and the number of handovers.
@@ -195,7 +196,7 @@ def generate_benefits_over_time(n, m, T, t_final, scale_min=0.5, scale_max=2):
                 benefits[i,j,t_index] = benefit_scale*np.exp(-(t-time_center)**2/time_spread**2)
     return benefits
 
-def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_, non_assign_pen=False):
+def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_, non_assign_pen=True):
     #If there is no penalty for switching to a non assignment, the don't add a penalty
     #if the new benefits are zero (the task is not valid)
     if not non_assign_pen:
@@ -267,7 +268,7 @@ def generate_optimal_L(timestep, sat):
     sat.fov = min(sat.fov, max_fov)
 
     third_angle = (180 - np.arcsin(sat_r/earth_r*np.sin(sat.fov*np.pi/180))*180/np.pi)
-    delta_angle = ((180 - sat.fov - third_angle))
+    delta_angle = (2*(180 - sat.fov - third_angle))
 
     min_to_travel_delta_angle = sat.orbit.period.to(u.min) * delta_angle/360
 

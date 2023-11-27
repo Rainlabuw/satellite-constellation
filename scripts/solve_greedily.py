@@ -23,15 +23,17 @@ def solve_greedily(benefits, init_assignment, lambda_):
         curr_assignment_mat = prev_assignment_mat.copy()
 
         #Determine which tasks are now available for reassignment
-        #(tasks which have zero benefit)
+        #(only assigned tasks with nonzero benefit are NOT available.)
+        #(agents with zero benefit ARE available)
         avail_agents = []
-        avail_tasks = []
+        avail_tasks = [j for j in range(m)]
         for i in range(n):
             agent_prev_choice = np.argmax(prev_assignment_mat[i,:])
 
             if benefits[i,agent_prev_choice,k-1] == 0:
-                avail_tasks.append(agent_prev_choice)
                 avail_agents.append(i)
+            if benefits[i,agent_prev_choice,k] > 0:
+                avail_tasks.remove(agent_prev_choice)
 
         agents_w_no_avail_task = []
         #Now, reassign agents to the best available task if one exists

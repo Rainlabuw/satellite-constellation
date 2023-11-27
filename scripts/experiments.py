@@ -14,8 +14,9 @@ from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from solve_greedily import solve_greedily
 from classic_auction import Auction
 
-from constellation_sim.ConstellationSim import get_constellation_bens_and_graphs_random_tasks, get_constellation_bens_and_graphs_coverage
+from constellation_sim.ConstellationSim import get_constellation_bens_and_graphs_random_tasks, get_constellation_bens_and_graphs_coverage, ConstellationSim
 from constellation_sim.Satellite import Satellite
+from constellation_sim.Task import Task
 
 from poliastro.bodies import Earth
 from poliastro.twobody import Orbit
@@ -798,9 +799,9 @@ def tasking_history_plot():
     num_sats_per_plane = 10
     altitude=550
     T = 20
-    lambda_ = 0.5
+    lambda_ = 0.75
 
-    benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits)
+    # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits)
 
     # benefits, graphs = get_constellation_bens_and_graphs_coverage(num_planes,num_sats_per_plane,T,5, altitude=altitude, benefit_func=calc_fov_benefits)
 
@@ -810,7 +811,14 @@ def tasking_history_plot():
     # with open('bens.pkl', 'rb') as f:
     #     benefits = pickle.load(f)
 
+    with open("paper_exp1_bens.pkl", 'rb') as f:
+        benefits = pickle.load(f)
+    with open("paper_exp1_graphs.pkl", 'rb') as f:
+        graphs = pickle.load(f)
+
+    n = benefits.shape[0]
     m = benefits.shape[1]
+    T = benefits.shape[2]
     init_assign = np.eye(n, m)
 
     # benefits = np.random.random((n, m, T))
@@ -990,51 +998,54 @@ def paper_experiment1():
     fov = 65
     timestep = 1*u.min
 
+    print(test_optimal_L(timestep, altitude, fov))
+    max_L = test_optimal_L(timestep, altitude, fov)
     max_L = 6
     
-    lambda_ = 1
+    lambda_ = 0.5
 
-    benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, 
-                                                                      calc_fov_benefits, altitude=altitude, fov=fov)
+    # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov)
 
-    with open("paper_exp1_bens.pkl", 'wb') as f:
-        pickle.dump(benefits, f)
-    with open("paper_exp1_graphs.pkl", 'wb') as f:
-        pickle.dump(graphs, f)
+    with open("paper_exp1_bens.pkl", 'rb') as f:
+        benefits = pickle.load(f)
+    with open("paper_exp1_graphs.pkl", 'rb') as f:
+        graphs = pickle.load(f)
 
     _, no_handover_val, _ = solve_wout_handover(benefits, None, lambda_)
 
     # _, cbba_val, _ = solve_w_centralized_CBBA(benefits, None, lambda_)
 
     _, greedy_val, _ = solve_greedily(benefits, None, lambda_)
-
+    print([greedy_val]*max_L)
+    print([no_handover_val]*max_L)
     itersd_by_lookahead = []
     valued_by_lookahead = []
 
     valuec_by_lookahead = []
     for L in range(1,max_L+1):
         print(f"lookahead {L}")
-        _, d_val, _, avg_iters = solve_w_mhald_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
-
-        itersd_by_lookahead.append(avg_iters)
-        valued_by_lookahead.append(d_val)
+        # ass, d_val, _, avg_iters = solve_w_mhald_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
+        # print(is_assignment_mat_sequence_valid(ass))
+        # itersd_by_lookahead.append(avg_iters)
+        # valued_by_lookahead.append(d_val)
 
         _, c_val, _ = solve_w_mhal(benefits, None, lambda_, L, distributed=False, verbose=True)
         valuec_by_lookahead.append(c_val)
 
     fig, axes = plt.subplots(2,1)
-    axes[0].plot(range(1,max_L+1), valued_by_lookahead, 'g', label="MHAL-D")
+    # axes[0].plot(range(1,max_L+1), valued_by_lookahead, 'g', label="MHAL-D")
     axes[0].plot(range(1,max_L+1), valuec_by_lookahead, 'b', label="MHAL")
     axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r--', label="Naive")
-    axes[0].plot(range(1,max_L+1), [cbba_val]*max_L, 'b--', label="CBBA")
+    # axes[0].plot(range(1,max_L+1), [cbba_val]*max_L, 'b--', label="CBBA")
     axes[0].plot(range(1,max_L+1), [greedy_val]*max_L, 'k--', label="Greedy")
     axes[0].set_ylabel("Total value")
     axes[0].set_xticks(range(1,max_L+1))
-    axes[0].set_ylim((0, 1.1*max(valued_by_lookahead)))
+    axes[0].set_ylim((0, 1.1*max(valuec_by_lookahead)))
+    axes[0].legend()
 
-    axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g', label="MHAL-D")
-    axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
-    axes[1].set_ylabel("Average iterations")
+    # axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g', label="MHAL-D")
+    # axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
+    # axes[1].set_ylabel("Average iterations")
 
     plt.savefig("paper_exp1.png")
     plt.show()
