@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 from tqdm import tqdm
@@ -990,25 +991,29 @@ def test_optimal_L(timestep=1*u.min, altitude=550, fov=65):
 
 def paper_experiment1():
     num_planes = 15
-    num_sats_per_plane = 10
-    m = 300
+    num_sats_per_plane = 15
+    m = 400
     T = 93
 
     altitude = 550
-    fov = 65
+    fov = 60
     timestep = 1*u.min
 
     max_L = test_optimal_L(timestep, altitude, fov)
-    max_L = 6
     
     lambda_ = 0.5
 
-    # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov)
+    benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=3000)
 
-    with open("mhal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
-        benefits = pickle.load(f)
-    with open("mhal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
-        graphs = pickle.load(f)
+    with open("mhal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
+        pickle.dump(benefits,f)
+    with open("mhal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
+        pickle.dump(graphs,f)
+
+    # with open("mhal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+    #     benefits = pickle.load(f)
+    # with open("mhal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+    #     graphs = pickle.load(f)
 
     _, no_handover_val, _ = solve_wout_handover(benefits, None, lambda_)
 
@@ -1038,16 +1043,16 @@ def paper_experiment1():
     fig, axes = plt.subplots(2,1)
     axes[0].plot(range(1,max_L+1), valued_by_lookahead, 'g--', label="MHAL-D")
     axes[0].plot(range(1,max_L+1), valuec_by_lookahead, 'g', label="MHAL")
-    axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r', label="Naive")
     axes[0].plot(range(1,max_L+1), valuecbba_by_lookahead, 'b', label="CBBA")
+    axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r', label="No Handover")
     axes[0].plot(range(1,max_L+1), [greedy_val]*max_L, 'k', label="Greedy")
     axes[0].set_ylabel("Total value")
     axes[0].set_xticks(range(1,max_L+1))
     axes[0].set_ylim((0, 1.1*max(valuec_by_lookahead)))
-    axes[1].set_xlabel("Lookahead window")
-    axes[0].legend()
+    axes[1].set_xlabel("Lookahead window L")
+    axes[0].legend(loc='lower right')
 
-    axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g', label="MHAL-D")
+    axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g--', label="MHAL-D")
     axes[1].plot(range(1,max_L+1), iterscbba_by_lookahead, 'b', label="CBBA")
     axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
     axes[0].set_xticks(range(1,max_L+1))
@@ -1055,7 +1060,7 @@ def paper_experiment1():
     axes[1].set_xlabel("Lookahead window")
 
     with open("mhal_experiment1/results.txt", 'w') as f:
-        f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {m}, T: {T}, altitude: {altitude}, fov: {fov}, timestep: {timestep}, max_L: {max_L}\n")
+        f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {m}, T: {T}, altitude: {altitude}, fov: {fov}, timestep: {timestep}, max_L: {max_L}, lambda: {lambda_}\n")
         f.write(f"~~~~~~~~~~~~~~~~~~~~~\n")
         f.write(f"No Handover Value: {no_handover_val}\n")
         f.write(f"Greedy Value: {greedy_val}\n")
@@ -1075,7 +1080,7 @@ def cbba_testing():
     val = 0
     cval = 0
     for _ in range(50):
-        benefits = np.random.random((10,10,10))
+        benefits = np.random.random((30,30,10))
 
         # benefits = np.zeros((3,3,2))
         # benefits[:,:,0] = np.array([[10, 1, 1],
@@ -1089,11 +1094,34 @@ def cbba_testing():
 
         lambda_ = 0.5
 
-        ass, vall, _ = solve_w_centralized_CBBA(benefits, init_assign, lambda_)
+        ass, vall, _ = solve_w_centralized_CBBA(benefits, init_assign, lambda_, benefits.shape[-1])
         val += vall
         cass, cvall, _ = solve_w_CBBA(benefits, init_assign, lambda_, benefits.shape[-1])
         cval += cvall
     print(val, cval)
 
+def connectivity_testing():
+    # def f(isl_dist, nm):
+    #     T = 93
+    #     _, graphs = get_constellation_bens_and_graphs_random_tasks(nm, nm, 1, T, isl_dist=isl_dist)
+
+    #     pct_connected = sum([nx.is_connected(graph) for graph in graphs])/T
+    #     return pct_connected
+    
+    # isl_dist = np.linspace(1500, 7500, 12)
+    # nm = np.linspace(5,30,25)
+    # x, y = np.meshgrid(isl_dist,nm)
+    # z = f(x,y)
+    
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection='3d')
+    # surf = ax.plot_surface(x, y, z, cmap='viridis')
+
+    # plt.show()
+
+    _, graphs = get_constellation_bens_and_graphs_random_tasks(15, 15, 1, 93, isl_dist=3000)
+    pct_connected = sum([nx.is_connected(graph) for graph in graphs])/93
+    print(pct_connected)
+
 if __name__ == "__main__":
-    paper_experiment1()
+    connectivity_testing()

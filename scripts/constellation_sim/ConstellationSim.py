@@ -21,7 +21,7 @@ from constellation_sim.Task import Task
 from methods import *
 
 class ConstellationSim(object):
-    def __init__(self, dt=1*u.min) -> None:
+    def __init__(self, dt=1*u.min, isl_dist=None) -> None:
         self.sats = []
         self.tasks = []
 
@@ -29,6 +29,9 @@ class ConstellationSim(object):
         self.m = 0
 
         self.dt = dt
+
+        if isl_dist is None: self.isl_dist = np.inf
+        else: self.isl_dist = isl_dist
 
         self.orbits_over_time = None
         self.graph_over_time = None
@@ -142,7 +145,6 @@ class ConstellationSim(object):
         for k in range(T):
             print(f"Propagating orbits and computing benefits + neighbors, T={k}/{T}...",end='\r')
             self.graphs_over_time.append(self.determine_connectivity_graph())
-            print(self.sats[0].orbit.r)
             for sat in self.sats:
                 sat.propagate_orbit(self.dt)
                 self.orbits_over_time[sat.id].append(sat.orbit)
@@ -161,20 +163,19 @@ class ConstellationSim(object):
                 sat2_r = self.sats[j].orbit.r.to_value(u.km)
                 R = self.sats[i].orbit._state.attractor.R.to_value(u.km)
 
-                # if line_of_sight(sat1_r, sat2_r, R) >=0 and np.linalg.norm(sat1_r-sat2_r) < 2500:
-                if line_of_sight(sat1_r, sat2_r, R) >=0:
+                if line_of_sight(sat1_r, sat2_r, R) >=0 and np.linalg.norm(sat1_r-sat2_r) < self.isl_dist:
                     adj[i,j] = 1
                     adj[j,i] = 1
 
         return nx.from_numpy_array(adj)
 
-def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m,T,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min):
+def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m,T,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
     Generate benefit matrix of size (num_planes*sats_per_plane) x m x T
     from a constellation of satellites, as well as
     a list of the T connectivity graphs for each timestep.
     """
-    const = ConstellationSim(dt=dt)
+    const = ConstellationSim(dt=dt, isl_dist=isl_dist)
     earth = Earth
 
     #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
@@ -205,13 +206,13 @@ def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plan
     benefits, graphs = const.propagate_orbits(T, benefit_func)
     return benefits, graphs
 
-def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,lat_long_inc=5,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min):
+def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,lat_long_inc=5,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
     Generate benefit matrix of with (num_planes*sats_per_plane)
     satellites covering the entire surface of the earth, with tasks
     at increments of lat_long_inc degrees in lat and long.
     """
-    const = ConstellationSim(dt=dt)
+    const = ConstellationSim(dt=dt, isl_dist=isl_dist)
     earth = Earth
 
     #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
