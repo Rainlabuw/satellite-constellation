@@ -1137,7 +1137,7 @@ def paper_experiment2():
     num_sats_per_plane = 25
     altitude=550
     fov=60
-    T = 3
+    T = 93
     inc = 70
     isl_dist = 2500
 
@@ -1158,8 +1158,6 @@ def paper_experiment2():
         symmetric_benefits = pickle.load(f)
     with open("mhal_experiment2/paper_exp2_graphs.pkl", 'rb') as f:
         graphs = pickle.load(f)
-    
-    print(symmetric_benefits.shape)
 
     L = 6
     mhal_ass, mhal_val, mhal_nh = solve_w_mhal(symmetric_benefits, None, lambda_, L, graphs=graphs, distributed=True, verbose=True)
@@ -1171,6 +1169,8 @@ def paper_experiment2():
     
     with open("mhal_experiment2/results.txt", 'wb') as f:
         f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {symmetric_benefits.shape[1]}, inc: {inc}, isl_dist: {isl_dist}, T: {T}, altitude: {altitude}, fov: {fov}, L: {L}, lambda: {lambda_}\n")
+        f.write(f"MHAL value: {mhal_val}\n")
+        f.write(f"MHAL handovers: {mhal_nh}")
 
 
 if __name__ == "__main__":
