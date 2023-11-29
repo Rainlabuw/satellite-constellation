@@ -26,6 +26,14 @@ from poliastro.plotting import StaticOrbitPlotter
 from poliastro.spheroid_location import SpheroidLocation
 from astropy import units as u
 
+import h3
+import geopandas as gpd
+from shapely.geometry import Polygon, MultiPolygon, LineString
+from shapely.ops import split
+from shapely.geometry import box
+import matplotlib.image as mpimg
+from math import radians, cos, sin, asin, sqrt, atan2, degrees
+
 def optimal_baseline_plot():
     """
     Compare various solutions types against the true optimal,
@@ -982,7 +990,7 @@ def tasking_history_plot():
 
     plt.show()
 
-def test_optimal_L(timestep=1*u.min, altitude=550, fov=65):
+def test_optimal_L(timestep=1*u.min, altitude=550, fov=60):
     a = Earth.R.to(u.km) + altitude*u.km
     sat = Satellite(Orbit.from_classical(Earth, a, 0*u.one, 0*u.deg, 0*u.deg, 0*u.deg, 0*u.deg), [], [], fov=fov)
     
@@ -1119,9 +1127,44 @@ def connectivity_testing():
 
     # plt.show()
 
-    _, graphs = get_constellation_bens_and_graphs_random_tasks(15, 15, 1, 93, isl_dist=3000)
+    _, graphs = get_constellation_bens_and_graphs_random_tasks(18, 18, 1, 93, isl_dist=2500)
     pct_connected = sum([nx.is_connected(graph) for graph in graphs])/93
     print(pct_connected)
+
+def paper_experiment2():
+    const = ConstellationSim(dt=1*u.min)
+    earth = Earth
+
+    num_planes = 1
+    num_sats_per_plane = 1
+    altitude=550
+    fov=60
+
+    #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
+    #10 evenly spaced planes of satellites, each with n/10 satellites per plane
+    a = earth.R.to(u.km) + altitude*u.km
+    ecc = 0*u.one
+    inc = 58*u.deg
+    argp = 0*u.deg
+
+    for plane_num in range(num_planes):
+        raan = plane_num*360/num_planes*u.deg
+        for sat_num in range(num_sats_per_plane):
+            ta = sat_num*360/num_sats_per_plane*u.deg
+            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num, fov=fov)
+            const.add_sat(sat)
+
+    #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
+    for lon in range(-180, 180, 5):
+        for lat in range(-50, 55, 5):
+            task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
+            
+            task_benefit = np.random.uniform(1, 2)
+            task = Task(task_loc, task_benefit)
+            const.add_task(task)
+
+    const.propagate_orbits(2, calc_fov_benefits)
+    const.run_animation(frames=2)
 
 if __name__ == "__main__":
     connectivity_testing()

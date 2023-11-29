@@ -196,7 +196,7 @@ def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plan
     num_tasks = m
     for _ in range(num_tasks):
         lon = np.random.uniform(-180, 180)
-        lat = np.random.uniform(-50, 50)
+        lat = np.random.uniform(-55, 55)
         task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
         task_benefit = np.random.uniform(1, 2)
@@ -231,7 +231,7 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
 
     #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
     for lon in range(-180, 180, 5):
-        for lat in range(-50, 55, 5):
+        for lat in range(-55, 60, 5):
             task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
             
             task_benefit = np.random.uniform(1, 2)
