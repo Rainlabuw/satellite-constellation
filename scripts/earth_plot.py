@@ -13,9 +13,7 @@ from constellation_sim.Satellite import Satellite
 
 import h3
 import geopandas as gpd
-from shapely.geometry import Polygon, MultiPolygon, LineString
-from shapely.ops import split
-from shapely.geometry import box
+from shapely.geometry import Polygon
 import matplotlib.image as mpimg
 from math import radians, cos, sin, asin, sqrt, atan2, degrees
 
@@ -128,7 +126,7 @@ def get_sat_lat_lon(sat):
     return lat, lon
 
 if __name__ == "__main__":
-    earth_image = mpimg.imread('/home/josh/code/satellite-constellation/scripts/earth.jpg')
+    earth_image = mpimg.imread('earth.jpg')
 
     # Plotting
     fig, ax = plt.subplots(1, 1, figsize=(15, 10))

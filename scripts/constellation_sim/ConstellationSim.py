@@ -4,6 +4,7 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from shapely.geometry import Polygon
 import time
 
 from collections import defaultdict
@@ -226,13 +227,25 @@ def generate_smooth_coverage(lat_max):
             lon += lon_steps
         lat += lat_steps
 
-    return hexagons
+    #Add tasks at centroid of all hexagons
+    task_lats = []
+    task_lons = []
+    for hexagon in hexagons:
+        boundary = h3.h3_to_geo_boundary(hexagon, geo_json=True)
+        polygon = Polygon(boundary)
 
-def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,lat_long_inc=5,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
+        task_lats.append(polygon.centroid.y)
+        task_lons.append(polygon.centroid.x)
+        
+    return task_lats, task_lons
+
+def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
     Generate benefit matrix of with (num_planes*sats_per_plane)
     satellites covering the entire surface of the earth, with tasks
-    at increments of lat_long_inc degrees in lat and long.
+    evenly covering the globe at the lowest H3 reslution possible (~10 deg lat/lon).
+
+    Input an inclination for the satellites and the tasks.
     """
     const = ConstellationSim(dt=dt, isl_dist=isl_dist)
     earth = Earth
@@ -241,7 +254,7 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
     #10 evenly spaced planes of satellites, each with n/10 satellites per plane
     a = earth.R.to(u.km) + altitude*u.km
     ecc = 0*u.one
-    inc = 58*u.deg
+    inc = inc*u.deg
     argp = 0*u.deg
 
     for plane_num in range(num_planes):
@@ -252,13 +265,13 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
             const.add_sat(sat)
 
     #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    for lon in range(-180, 180, 5):
-        for lat in range(-55, 60, 5):
-            task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
-            
-            task_benefit = np.random.uniform(1, 2)
-            task = Task(task_loc, task_benefit)
-            const.add_task(task)
+    lats, lons = generate_smooth_coverage(inc.to_value(u.deg))
+    for lat, lon in zip(lats, lons):
+        task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
+        
+        task_benefit = np.random.uniform(1, 2)
+        task = Task(task_loc, task_benefit)
+        const.add_task(task)
 
     benefits, graphs = const.propagate_orbits(T, benefit_func)
     return benefits, graphs
