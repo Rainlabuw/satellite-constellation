@@ -998,9 +998,9 @@ def test_optimal_L(timestep=1*u.min, altitude=550, fov=60):
     return L
 
 def paper_experiment1():
-    num_planes = 15
-    num_sats_per_plane = 15
-    m = 400
+    num_planes = 18
+    num_sats_per_plane = 18
+    m = 450
     T = 93
 
     altitude = 550
@@ -1008,10 +1008,11 @@ def paper_experiment1():
     timestep = 1*u.min
 
     max_L = test_optimal_L(timestep, altitude, fov)
+    print(max_L)
     
     lambda_ = 0.5
 
-    benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=3000)
+    benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=2500)
 
     with open("mhal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
         pickle.dump(benefits,f)

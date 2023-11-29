@@ -4,6 +4,7 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+import time
 
 from collections import defaultdict
 
@@ -12,8 +13,7 @@ from poliastro.twobody import Orbit
 from poliastro.plotting import StaticOrbitPlotter
 from poliastro.spheroid_location import SpheroidLocation
 from poliastro.core.events import line_of_sight
-from poliastro.sensors import min_and_max_ground_range, ground_range_diff_at_azimuth_fast
-import time
+import h3
 
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
@@ -205,6 +205,28 @@ def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plan
 
     benefits, graphs = const.propagate_orbits(T, benefit_func)
     return benefits, graphs
+
+def generate_smooth_coverage(lat_max):
+    # Initialize an empty set to store unique H3 indexes
+    hexagons = set()
+
+    # Latitude and Longitude ranges
+    lat_range = (-lat_max, lat_max)
+    lon_range = (-180, 180)
+
+    # Step through the defined ranges and discretize the globe
+    lat_steps, lon_steps = 0.5, 0.5
+    lat = lat_range[0]
+    while lat <= lat_range[1]:
+        lon = lon_range[0]
+        while lon <= lon_range[1]:
+            # Find the hexagon containing this lat/lon
+            hexagon = h3.geo_to_h3(lat, lon, 1)
+            hexagons.add(hexagon)
+            lon += lon_steps
+        lat += lat_steps
+
+    return hexagons
 
 def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,lat_long_inc=5,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
