@@ -624,54 +624,6 @@ def lookahead_optimality_testing():
                 print(benefit)
                 print(f"Lookahead {lookahead} value: {val}, lower bound: {lower_bd}, opt_val: {opt_val}")
                 return
-            
-def lookahead_counterexample():
-    benefit = np.zeros((5,5,3))
-    benefit[:,:,0] = np.array([[100, 1, 1, 1, 1],
-                               [1, 100, 1, 1, 1],
-                               [1, 1, 1.01, 1, 1],
-                               [1, 1, 1, 1.01, 1],
-                               [1, 1, 1, 1, 1.01]])
-    
-    benefit[:,:,1] = np.array([[100, 1, 1, 1, 1],
-                               [1, 100, 1, 1, 1],
-                               [1, 1, 1.01, 1, 1],
-                               [1, 1, 1, 1.01, 1],
-                               [1, 1, 1, 1, 1.01]])
-    
-    benefit[:,:,2] = np.array([[1, 100, 1, 1, 1],
-                               [100, 1, 1, 1, 1],
-                               [1, 1, 1, 2.01, 1],
-                               [1, 1, 1, 1, 2.01],
-                               [1, 1, 2.01, 1, 1]])
-    
-    benefit[:,:,3] = np.array([[100, 1, 1, 1, 1],
-                               [1, 100, 1, 1, 1],
-                               [1, 1, 1, 1, 2.01],
-                               [1, 1, 2.01, 1, 1],
-                               [1, 1, 1, 2.01, 1]])
-
-    init_assignment = np.array([[0, 0, 0, 0, 1],
-                               [0, 0, 0, 1, 0],
-                               [0, 0, 1, 0, 0],
-                               [0, 1, 0, 0, 0],
-                               [1, 0, 0, 0, 0]])
-
-    ass, opt_val, _ = solve_optimally(benefit, init_assignment, 1)
-    print(opt_val)
-    for a in ass:
-        print(a)
-
-    L = benefit.shape[-1]
-    print("mhal")
-    ass, val, _ = solve_w_mhal(benefit, init_assignment, 1, L)
-    print(val)
-    for a in ass:
-        print(a)
-
-    rat = 1/2+1/2*((L-1)/3)
-
-    print(f"Ratio: {val/opt_val}, desired rat: {rat}")
 
 def mha_vs_naive_counterexample():
     init_assign = np.eye(4)
@@ -1167,5 +1119,47 @@ def paper_experiment2():
     const.propagate_orbits(2, calc_fov_benefits)
     const.run_animation(frames=2)
 
+def lookahead_counterexample():
+    benefit = np.zeros((5,5,3))
+    benefit[:,:,0] = np.array([[100, 1, 1, 1, 1],
+                               [1, 100, 1, 1, 1],
+                               [1, 1, 1.01, 1, 1],
+                               [1, 1, 1, 1.01, 1],
+                               [1, 1, 1, 1, 1.01]])
+    
+    benefit[:,:,1] = np.array([[1, 100, 1, 1, 1],
+                               [100, 1, 1, 1, 1],
+                               [1, 1, 1, 100, 1],
+                               [1, 1, 1, 1, 1.01],
+                               [1, 1, 1, 1, 1]])
+    
+    benefit[:,:,2] = np.array([[100, 1, 1, 1, 1],
+                               [1, 100, 1, 1, 1],
+                               [1, 1, 1, 1, 1],
+                               [1, 1, 1, 1, 100],
+                               [1, 1, 1, 1, 1]])
+
+    init_assignment = np.array([[0, 0, 0, 0, 1],
+                               [0, 0, 0, 1, 0],
+                               [0, 0, 1, 0, 0],
+                               [0, 1, 0, 0, 0],
+                               [1, 0, 0, 0, 0]])
+
+    ass, opt_val, _ = solve_optimally(benefit, init_assignment, 1)
+    print(opt_val)
+    for a in ass:
+        print(a)
+
+    L = benefit.shape[-1]
+    print("mhal")
+    ass, val, _ = solve_w_mhal(benefit, init_assignment, 1, L)
+    print(val)
+    for a in ass:
+        print(a)
+
+    rat = 1/2+1/2*((L-1)/3)
+
+    print(f"Ratio: {val/opt_val}, desired rat: {rat}")
+
 if __name__ == "__main__":
-    connectivity_testing()
+    lookahead_counterexample()
