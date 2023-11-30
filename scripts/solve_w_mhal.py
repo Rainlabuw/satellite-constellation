@@ -7,7 +7,7 @@ class MHAL_D_Auction(object):
     def __init__(self, benefits, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=0.01, graph=None, lambda_=1, verbose=False):
         # benefit matrix for the next few timesteps
         self.benefits = benefits
-
+        print(self.benefits.dtype)
         self.n = benefits.shape[0]
         self.m = benefits.shape[1]
         self.T = benefits.shape[2]
@@ -39,13 +39,19 @@ class MHAL_D_Auction(object):
     def run_auction(self):
         self.n_iterations = 0
         while sum([agent.converged for agent in self.agents]) < self.n:
+            print(f"Auction iteration {self.n_iterations}")
             #Send the appropriate communication packets to each agent
+            st = time.time()
             self.update_communication_packets()
+            print("comm",time.time()-st)
 
             #Have each agent calculate it's prices, bids, and values
             #based on the communication packet it currently has
-            for agent in self.agents:
+            st = time.time()
+            for j, agent in enumerate(self.agents):
+                print(f"agent {j}",end='\r')
                 agent.perform_auction_iteration_for_agent()
+            print("auction",time.time()-st)
 
             self.n_iterations += 1
 
@@ -67,9 +73,9 @@ class MHAL_D_Auction(object):
             price_packets = {}
             high_bidder_packets = {}
             for ti in agent.all_time_intervals:
-                price_packet = np.zeros((len(agent.neighbors)+1,self.m))
-                high_bidder_packet = np.zeros((len(agent.neighbors)+1,self.m))
-                timestep_value_info_recieved_packet = np.zeros((len(agent.neighbors)+1,self.n))
+                price_packet = np.zeros((len(agent.neighbors)+1,self.m), dtype=np.float16)
+                high_bidder_packet = np.zeros((len(agent.neighbors)+1,self.m), dtype=np.int16)
+                timestep_value_info_recieved_packet = np.zeros((len(agent.neighbors)+1,self.n), dtype=np.int16)
 
                 price_packet[0,:] = agent.prices[ti]
                 high_bidder_packet[0,:] = agent.high_bidders[ti]
@@ -87,7 +93,7 @@ class MHAL_D_Auction(object):
 
             value_from_time_interval_seq_packets = {}
             for time_interval_sequence in agent.all_time_interval_sequences:
-                value_from_time_interval_seq_packets[time_interval_sequence] = np.zeros((len(agent.neighbors)+1,self.n))
+                value_from_time_interval_seq_packets[time_interval_sequence] = np.zeros((len(agent.neighbors)+1,self.n), dtype=np.float16)
 
                 value_from_time_interval_seq_packets[time_interval_sequence][0,:] = agent.values_from_time_interval_seq[time_interval_sequence]
                 for neighbor_num, neighbor_idx in enumerate(agent.neighbors):
@@ -127,19 +133,25 @@ class MHAL_D_Agent(object):
         #Generate bids and prices for every time interval you're running an auction for
         for time_interval in all_time_intervals:
             #Initialize yourself as the highest bidder on the first task
-            self.high_bidders[time_interval] = -1*np.ones(self.m)
+            self.high_bidders[time_interval] = -1*np.ones(self.m, dtype=np.int16)
             self.high_bidders[time_interval][0] = self.id
 
-            self.prices[time_interval] = np.zeros(self.m)
+            self.prices[time_interval] = np.zeros(self.m, dtype=np.float16)
 
             self.choice_by_ti[time_interval] = 0
 
         #Stores the value yielded by time interval sequences
         self.values_from_time_interval_seq = {}
         for time_interval_sequence in all_time_interval_sequences:
-            self.values_from_time_interval_seq[time_interval_sequence] = np.zeros(self.n)
+            self.values_from_time_interval_seq[time_interval_sequence] = np.zeros(self.n, dtype=np.float16)
 
-        self.timestep_value_info_recieved = np.zeros(self.n)
+        self.timestep_value_info_recieved = np.zeros(self.n, dtype=np.int16)
+
+        # print("benefits",self.benefits.dtype)
+        # print("prices",self.prices[time_interval].dtype)
+        # print("high bidders",self.high_bidders[time_interval].dtype)
+        # print("values from time interval seq",self.values_from_time_interval_seq[time_interval_sequence].dtype)
+        # print("timestep value info recieved",self.timestep_value_info_recieved.dtype)
 
         #~~~~~~~~Communication packet related attributes~~~~~~~~~~
         self.neighbors = neighbors
