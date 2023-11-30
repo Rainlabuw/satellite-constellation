@@ -483,7 +483,7 @@ def realistic_orbital_simulation():
         num_sats_per_plane = 18
         if n != num_planes*num_sats_per_plane: raise Exception("Make sure n = num planes * num sats per plane")
         # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes,num_sats_per_plane,m,T, benefit_func=calc_distance_based_benefits)
-        benefits, graphs = get_constellation_bens_and_graphs_coverage(num_planes,num_sats_per_plane,T,5,benefit_func=calc_distance_based_benefits)
+        benefits, graphs = get_constellation_bens_and_graphs_coverage(num_planes,num_sats_per_plane,T,70,benefit_func=calc_distance_based_benefits)
 
         #Ensure all graphs are connected
         for i, graph in enumerate(graphs):
@@ -1133,39 +1133,45 @@ def connectivity_testing():
     print(pct_connected)
 
 def paper_experiment2():
-    const = ConstellationSim(dt=1*u.min)
-    earth = Earth
-
-    num_planes = 1
-    num_sats_per_plane = 1
+    num_planes = 40
+    num_sats_per_plane = 25
     altitude=550
     fov=60
+    T = 93
+    inc = 70
+    isl_dist = 2500
 
-    #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
-    #10 evenly spaced planes of satellites, each with n/10 satellites per plane
-    a = earth.R.to(u.km) + altitude*u.km
-    ecc = 0*u.one
-    inc = 58*u.deg
-    argp = 0*u.deg
+    lambda_ = 0.5
 
-    for plane_num in range(num_planes):
-        raan = plane_num*360/num_planes*u.deg
-        for sat_num in range(num_sats_per_plane):
-            ta = sat_num*360/num_sats_per_plane*u.deg
-            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num, fov=fov)
-            const.add_sat(sat)
+    # benefits, graphs = get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane, T, inc, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=isl_dist)
 
-    #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    for lon in range(-180, 180, 5):
-        for lat in range(-50, 55, 5):
-            task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
-            
-            task_benefit = np.random.uniform(1, 2)
-            task = Task(task_loc, task_benefit)
-            const.add_task(task)
+    # m = benefits.shape[1]
+    # symmetric_benefits = np.zeros((num_planes*num_sats_per_plane, num_planes*num_sats_per_plane, T))
+    # symmetric_benefits[:,:m,:] = benefits
 
-    const.propagate_orbits(2, calc_fov_benefits)
-    const.run_animation(frames=2)
+    # with open("mhal_experiment2/paper_exp2_bens.pkl", 'wb') as f:
+    #     pickle.dump(symmetric_benefits,f)
+    # with open("mhal_experiment2/paper_exp2_graphs.pkl", 'wb') as f:
+    #     pickle.dump(graphs,f)
+
+    with open("mhal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
+        symmetric_benefits = pickle.load(f)
+    with open("mhal_experiment2/paper_exp2_graphs.pkl", 'rb') as f:
+        graphs = pickle.load(f)
+
+    L = 6
+    mhal_ass, mhal_val, mhal_nh = solve_w_mhal(symmetric_benefits, None, lambda_, L, graphs=graphs, distributed=True, verbose=True)
+
+    print(mhal_val, mhal_nh)
+
+    with open("mhal_experiment2/paper_exp2_assigns.pkl", 'wb') as f:
+        pickle.dump(mhal_ass, f)
+    
+    with open("mhal_experiment2/results.txt", 'wb') as f:
+        f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {symmetric_benefits.shape[1]}, inc: {inc}, isl_dist: {isl_dist}, T: {T}, altitude: {altitude}, fov: {fov}, L: {L}, lambda: {lambda_}\n")
+        f.write(f"MHAL value: {mhal_val}\n")
+        f.write(f"MHAL handovers: {mhal_nh}")
+
 
 if __name__ == "__main__":
-    connectivity_testing()
+    paper_experiment2()
