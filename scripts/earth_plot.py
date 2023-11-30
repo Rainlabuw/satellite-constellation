@@ -236,5 +236,4 @@ if __name__ == "__main__":
     plt.legend(loc='lower left')
     plt.xlim(-180, 180)
     plt.ylim(-90, 90)
-
     plt.show()
