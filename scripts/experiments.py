@@ -981,6 +981,7 @@ def paper_experiment1():
     # _, cbba_val, _ = solve_w_centralized_CBBA(benefits, None, lambda_)
 
     _, greedy_val, _ = solve_greedily(benefits, None, lambda_)
+    print(greedy_val)
     itersd_by_lookahead = []
     valued_by_lookahead = []
 
@@ -988,18 +989,18 @@ def paper_experiment1():
     valuecbba_by_lookahead = []
 
     valuec_by_lookahead = []
-    for L in range(1,max_L+1):
-        print(f"lookahead {L}")
-        _, cbba_val, _, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
-        iterscbba_by_lookahead.append(avg_iters)
-        valuecbba_by_lookahead.append(cbba_val)
+    # for L in range(1,max_L+1):
+    #     print(f"lookahead {L}")
+    #     _, cbba_val, _, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
+    #     iterscbba_by_lookahead.append(avg_iters)
+    #     valuecbba_by_lookahead.append(cbba_val)
         
-        _, d_val, _, avg_iters = solve_w_mhald_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
-        itersd_by_lookahead.append(avg_iters)
-        valued_by_lookahead.append(d_val)
+    #     _, d_val, _, avg_iters = solve_w_mhald_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
+    #     itersd_by_lookahead.append(avg_iters)
+    #     valued_by_lookahead.append(d_val)
 
-        _, c_val, _ = solve_w_mhal(benefits, None, lambda_, L, distributed=False, verbose=True)
-        valuec_by_lookahead.append(c_val)
+    #     _, c_val, _ = solve_w_mhal(benefits, None, lambda_, L, distributed=False, verbose=True)
+    #     valuec_by_lookahead.append(c_val)
 
     fig, axes = plt.subplots(2,1)
     axes[0].plot(range(1,max_L+1), valued_by_lookahead, 'g--', label="MHAL-D")
@@ -1084,46 +1085,156 @@ def connectivity_testing():
     pct_connected = sum([nx.is_connected(graph) for graph in graphs])/93
     print(pct_connected)
 
-def paper_experiment2():
-    num_planes = 40
-    num_sats_per_plane = 25
-    altitude=550
-    fov=60
-    T = 93
-    inc = 70
-    isl_dist = 2500
-
+def paper_experiment2_compute_assigns():
     lambda_ = 0.5
-
-    # benefits, graphs = get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane, T, inc, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=isl_dist)
-
-    # m = benefits.shape[1]
-    # symmetric_benefits = np.zeros((num_planes*num_sats_per_plane, num_planes*num_sats_per_plane, T))
-    # symmetric_benefits[:,:m,:] = benefits
-
-    # with open("mhal_experiment2/paper_exp2_bens.pkl", 'wb') as f:
-    #     pickle.dump(symmetric_benefits,f)
-    # with open("mhal_experiment2/paper_exp2_graphs.pkl", 'wb') as f:
-    #     pickle.dump(graphs,f)
 
     with open("mhal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
         symmetric_benefits = pickle.load(f)
     with open("mhal_experiment2/paper_exp2_graphs.pkl", 'rb') as f:
         graphs = pickle.load(f)
 
-    L = 6
-    mhal_ass, mhal_val, mhal_nh = solve_w_mhal(symmetric_benefits, None, lambda_, L, graphs=graphs, distributed=True, verbose=True)
+    nohand_assigns, nohand_val, nohand_nh = solve_wout_handover(symmetric_benefits, None, lambda_)
+    with open("mhal_experiment2/paper_exp2_nohand_assigns.pkl", 'wb') as f:
+        pickle.dump(nohand_assigns, f)
 
-    print(mhal_val, mhal_nh)
-
-    with open("mhal_experiment2/paper_exp2_assigns.pkl", 'wb') as f:
-        pickle.dump(mhal_ass, f)
+    greedy_assigns, greedy_val, greedy_nh = solve_greedily(symmetric_benefits, None, lambda_)
+    with open("mhal_experiment2/paper_exp2_greedy_assigns.pkl", 'wb') as f:
+        pickle.dump(greedy_assigns, f)
     
-    with open("mhal_experiment2/results.txt", 'wb') as f:
-        f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {symmetric_benefits.shape[1]}, inc: {inc}, isl_dist: {isl_dist}, T: {T}, altitude: {altitude}, fov: {fov}, L: {L}, lambda: {lambda_}\n")
-        f.write(f"MHAL value: {mhal_val}\n")
-        f.write(f"MHAL handovers: {mhal_nh}")
+    mha_assigns, mha_val, mha_nh = solve_w_mhal(symmetric_benefits, None, lambda_, 6, verbose=True)
+    with open("mhal_experiment2/paper_exp2_mhalc_assigns.pkl", 'wb') as f:
+        pickle.dump(mha_assigns, f)
 
+    with open("mhal_experiment2/other_alg_results.txt", 'w') as f:
+        f.write(f"No handover value: {nohand_val}\n")
+        f.write(f"No handover handovers: {nohand_nh}\n")
+
+        f.write(f"Greedy value: {greedy_val}\n")
+        f.write(f"Greedy handovers: {greedy_nh}\n")
+
+        f.write(f"MHAL Centralized value: {mha_val}\n")
+        f.write(f"MHL Centralized handovers: {mha_nh}\n")
+
+def paper_experiment2_tasking_history():
+    with open('mhal_experiment2/paper_exp2_greedy_assigns.pkl', 'rb') as f:
+        greedy_assigns = pickle.load(f)
+    with open('mhal_experiment2/paper_exp2_mhalc_assigns.pkl', 'rb') as f:
+        mhalc_assigns = pickle.load(f)
+    with open('mhal_experiment2/paper_exp2_nohand_assigns.pkl', 'rb') as f:
+        nohand_assigns = pickle.load(f)
+
+    with open("mhal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
+        benefits = pickle.load(f)
+
+    greedy_assigns, _, _ = solve_greedily(benefits, None, 0.5)
+
+    with open("mhal_experiment2/paper_exp2_greedy_assigns.pkl", 'wb') as f:
+        pickle.dump(greedy_assigns, f)
+
+    nohand_val, _ = calc_value_and_num_handovers(nohand_assigns, benefits, None, 0.5)
+    greedy_val, _ = calc_value_and_num_handovers(greedy_assigns, benefits, None, 0.5)
+    mhalc_val, _ = calc_value_and_num_handovers(mhalc_assigns, benefits, None, 0.5)
+
+    n = benefits.shape[0]
+    m = benefits.shape[1]
+    T = benefits.shape[-1]
+
+    lambda_ = 0.5
+    init_assign = None
+
+    # #~~~~~~~~~~~~~~~~~~~~~~ PLOT OF TASKING HISTORY ~~~~~~~~~~~~~~~~~~~~~~~~~
+    # fig, axes = plt.subplots(4,1, sharex=True)
+    # agent1_no_handover_ass = [np.argmax(no_handover_a[0,:]) for no_handover_a in nohand_assigns]
+
+    # agent1_mhal5_ass = [np.argmax(mhal5_a[0,:]) for mhal5_a in mhalc_assigns]
+
+    # agent1_greedy_ass = [np.argmax(greedy_a[0,:]) for greedy_a in greedy_assigns]
+
+    # axes[0].plot(range(T), agent1_no_handover_ass, label="Not Considering Handover")
+    # axes[1].plot(range(T), agent1_mhal5_ass, label="MHAL-C")
+    # axes[2].plot(range(T), agent1_greedy_ass, label="Greedy1")
+    # axes[2].set_xlabel("Time (min.)")
+    # axes[0].set_ylabel("Task assignment")
+    # axes[1].set_ylabel("Task assignment")
+    # axes[2].set_ylabel("Task assignment")
+
+    # axes[0].set_title("Satellite 0 tasking, Naive")
+    # axes[1].set_title("Satellite 0 tasking, MHAL-C")
+    # axes[2].set_title("Satellite 0 tasking, Greedy")
+    # plt.show(block=False)
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PLOT OF BENEFITS CAPTURED ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    fig = plt.figure()
+    gs = fig.add_gridspec(3,2)
+    no_handover_ax = fig.add_subplot(gs[0,0])
+    greedy_ax = fig.add_subplot(gs[1,0])
+    mhal_ax = fig.add_subplot(gs[2,0])
+    val_ax = fig.add_subplot(gs[:,1])
+
+    prev_no_handover = 0
+    prev_mhal = 0
+    prev_greedy = 0
+
+    no_handover_ben_line = []
+    mhal_ben_line = []
+    greedy_ben_line = []
+    
+    agent_to_investigate = 900
+    for k in range(T):
+        no_handover_choice = np.argmax(nohand_assigns[k][agent_to_investigate,:])
+        mhal_choice = np.argmax(mhalc_assigns[k][agent_to_investigate,:])
+        greedy_choice = np.argmax(greedy_assigns[k][agent_to_investigate,:])
+
+        if prev_no_handover != no_handover_choice:
+            no_handover_ax.axvline(k-0.5, linestyle='--')
+            if k != 0: 
+                # no_handover_ben_line.append(no_handover_ben_line[-1])
+                if len(no_handover_ben_line) > 1:
+                    no_handover_ax.plot(range(k-len(no_handover_ben_line), k), no_handover_ben_line, 'r')
+                elif len(no_handover_ben_line) == 1:
+                    no_handover_ax.plot(range(k-len(no_handover_ben_line), k), no_handover_ben_line, 'r.', markersize=1)
+            no_handover_ben_line = [benefits[agent_to_investigate,no_handover_choice, k]]
+        else:
+            no_handover_ben_line.append(benefits[agent_to_investigate, no_handover_choice, k])
+
+        if prev_mhal != mhal_choice:
+            mhal_ax.axvline(k-0.5, linestyle='--')
+            if k != 0: 
+                if len(mhal_ben_line) > 1:
+                    mhal_ax.plot(range(k-len(mhal_ben_line), k), mhal_ben_line,'g')
+                elif len(mhal_ben_line) == 1:
+                    mhal_ax.plot(range(k-len(mhal_ben_line), k), mhal_ben_line,'g.', markersize=1)
+            mhal_ben_line = [benefits[agent_to_investigate,mhal_choice, k]]
+        else:
+            mhal_ben_line.append(benefits[agent_to_investigate,mhal_choice, k])
+
+        if prev_greedy != greedy_choice:
+            greedy_ax.axvline(k-0.5, linestyle='--')
+            if k != 0: 
+                if len(greedy_ben_line) > 1:
+                    greedy_ax.plot(range(k-len(greedy_ben_line), k), greedy_ben_line,'b')
+                elif len(greedy_ben_line) == 1:
+                    greedy_ax.plot(range(k-len(greedy_ben_line), k), greedy_ben_line,'b.', markersize=1)
+            greedy_ben_line = [benefits[agent_to_investigate,greedy_choice, k]]
+        else:
+            greedy_ben_line.append(benefits[agent_to_investigate,greedy_choice, k])
+
+        prev_no_handover = no_handover_choice
+        prev_mhal = mhal_choice
+        prev_greedy = greedy_choice
+
+    #plot last interval
+    no_handover_ax.plot(range(k+1-len(no_handover_ben_line), k+1), no_handover_ben_line, 'r')
+    mhal_ax.plot(range(k+1-len(mhal_ben_line), k+1), mhal_ben_line,'g')
+    greedy_ax.plot(range(k+1-len(greedy_ben_line), k+1), greedy_ben_line,'b')
+
+    #plot value over time
+    alg_names = ["No Handover", "Greedy", "MHAL-C"]
+    vals = [nohand_val, greedy_val, mhalc_val]
+    val_ax.bar(alg_names,vals)
+    val_ax.legend()
+
+    plt.show()
 
 def lookahead_counterexample():
     benefit = np.zeros((5,5,3))
@@ -1168,4 +1279,4 @@ def lookahead_counterexample():
     print(f"Ratio: {val/opt_val}, desired rat: {rat}")
 
 if __name__ == "__main__":
-    lookahead_counterexample()
+    paper_experiment1()
