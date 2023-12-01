@@ -143,7 +143,7 @@ if __name__ == "__main__":
     ecc = 0*u.one
     argp = 0*u.deg
     #~~~~~~~~~~~~~~~~~ EXPERIMENT 1~~~~~~~~~~~~~~~~~~~~~~
-    m = 400
+    m = 450
     for j in range(m):
         lon = np.random.uniform(-180, 180)
         lat = np.random.uniform(-58, 58)
@@ -227,8 +227,8 @@ if __name__ == "__main__":
         circle_gdf.plot(ax=ax, edgecolor='red', facecolor="none", linewidth=2)
 
     # Overlay the hexagon grid
-    gdf.boundary.plot(ax=ax, color='red', alpha=0.25)
-    plt.scatter(centroid_xs, centroid_ys, color='red', s=1, label="Large constellation tasks")
+    # gdf.boundary.plot(ax=ax, color='red', alpha=0.25)
+    plt.scatter(centroid_xs, centroid_ys, color='red', s=3, label="Large constellation tasks")
     #phantom dot for legend entry
     plt.scatter(200, 200, color='red', facecolors='none', label="Large constellation sat FOVs, planes 20 and 21")
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
