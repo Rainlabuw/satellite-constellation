@@ -1,7 +1,7 @@
 num_planes: 18, num_sats_per_plane: 18, m: 450, T: 93, altitude: 550, fov: 60, timestep: 1.0 min, max_L: 6, lambda: 0.5
 ~~~~~~~~~~~~~~~~~~~~~
 No Handover Value: 4078.018608711949
-Greedy Value: 2157.792733515469
+Greedy Value: 3650.418056196203
 CBBA Values by lookahead:
 [4208.38020192484, 4412.873727755446, 4657.90330919782, 4717.85859678172, 4710.212483240204, 4726.329218229788]
 MHAL Values by lookahead:

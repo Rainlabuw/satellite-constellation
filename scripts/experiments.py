@@ -75,9 +75,9 @@ def optimal_baseline_plot():
         avg_best += ben/num_avgs
 
     fig = plt.figure()
-    plt.bar(["Naive","MHA", f"MHAL (L={L})", "Optimal"], [avg_no_handover, avg_mha, avg_mhal, avg_best])
-    plt.title(f"Average benefit across {num_avgs} runs, n={n}, m={m}, T={T}")
-    print(["Naive","MHA", f"MHAL (L={L})", "Optimal"])
+    plt.bar(["Standard Assignment\nProblem Solution","HAA", f"HAAL (L={L})", "Optimal"], [avg_no_handover, avg_mha, avg_mhal, avg_best])
+    plt.ylabel("Value")
+    print(["No Handover","HAA", f"HAAL (L={L})", "Optimal"])
     print([avg_no_handover, avg_mha, avg_mhal, avg_best])
     plt.savefig("opt_comparison.png")
     plt.show()
@@ -964,31 +964,31 @@ def paper_experiment1():
     
     lambda_ = 0.5
 
-    benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=2500)
+    # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=2500)
 
-    with open("mhal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
-        pickle.dump(benefits,f)
-    with open("mhal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
-        pickle.dump(graphs,f)
+    # with open("mhal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
+    #     pickle.dump(benefits,f)
+    # with open("mhal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
+    #     pickle.dump(graphs,f)
 
-    # with open("mhal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
-    #     benefits = pickle.load(f)
-    # with open("mhal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
-    #     graphs = pickle.load(f)
+    # # with open("mhal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+    # #     benefits = pickle.load(f)
+    # # with open("mhal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+    # #     graphs = pickle.load(f)
 
-    _, no_handover_val, _ = solve_wout_handover(benefits, None, lambda_)
+    # _, no_handover_val, _ = solve_wout_handover(benefits, None, lambda_)
 
-    # _, cbba_val, _ = solve_w_centralized_CBBA(benefits, None, lambda_)
+    # # _, cbba_val, _ = solve_w_centralized_CBBA(benefits, None, lambda_)
 
-    _, greedy_val, _ = solve_greedily(benefits, None, lambda_)
-    print(greedy_val)
-    itersd_by_lookahead = []
-    valued_by_lookahead = []
+    # _, greedy_val, _ = solve_greedily(benefits, None, lambda_)
+    # print(greedy_val)
+    # itersd_by_lookahead = []
+    # valued_by_lookahead = []
 
-    iterscbba_by_lookahead = []
-    valuecbba_by_lookahead = []
+    # iterscbba_by_lookahead = []
+    # valuecbba_by_lookahead = []
 
-    valuec_by_lookahead = []
+    # valuec_by_lookahead = []
     # for L in range(1,max_L+1):
     #     print(f"lookahead {L}")
     #     _, cbba_val, _, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
@@ -1002,12 +1002,21 @@ def paper_experiment1():
     #     _, c_val, _ = solve_w_mhal(benefits, None, lambda_, L, distributed=False, verbose=True)
     #     valuec_by_lookahead.append(c_val)
 
+    valuecbba_by_lookahead = [4208.38020192484, 4412.873727755446, 4657.90330919782, 4717.85859678172, 4710.212483240204, 4726.329218229788]
+    valuec_by_lookahead = [6002.840671517548, 7636.731195199751, 7581.29374466441, 7435.882168254755, 7511.4534257400755, 7591.261917337481]
+    itersd_by_lookahead = [54.89247311827957, 61.17204301075269, 68.46236559139786, 72.64516129032258, 79.10752688172043, 80.02150537634408]
+    iterscbba_by_lookahead = [18.50537634408602, 26.0, 29.193548387096776, 33.11827956989247, 34.806451612903224, 37.29032258064516]
+    valued_by_lookahead = [6021.705454081699, 7622.246684035546, 7585.4110847804, 7294.093230272816, 7437.211996201664, 7559.402984912062]
+    greedy_val = 3650.418056196203
+    no_handover_val = 4078.018608711949
+
+
     fig, axes = plt.subplots(2,1)
-    axes[0].plot(range(1,max_L+1), valued_by_lookahead, 'g--', label="MHAL-D")
-    axes[0].plot(range(1,max_L+1), valuec_by_lookahead, 'g', label="MHAL")
+    axes[0].plot(range(1,max_L+1), valued_by_lookahead, 'g--', label="HAAL-D")
+    axes[0].plot(range(1,max_L+1), valuec_by_lookahead, 'g', label="HAAL")
     axes[0].plot(range(1,max_L+1), valuecbba_by_lookahead, 'b', label="CBBA")
-    axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r', label="No Handover")
-    axes[0].plot(range(1,max_L+1), [greedy_val]*max_L, 'k', label="Greedy")
+    axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r', label="NHA")
+    axes[0].plot(range(1,max_L+1), [greedy_val]*max_L, 'k', label="GA")
     axes[0].set_ylabel("Total value")
     axes[0].set_xticks(range(1,max_L+1))
     axes[0].set_ylim((0, 1.1*max(valuec_by_lookahead)))
@@ -1033,8 +1042,9 @@ def paper_experiment1():
         f.write(f"CBBA Iters by lookahead:\n{iterscbba_by_lookahead}\n")
         f.write(f"MHAL Iters by lookahead:\n{itersd_by_lookahead}\n")
 
-
-    plt.savefig("mhal_experiment1/paper_exp1.png")
+    fig.set_figwidth(8)
+    fig.set_figheight(5)
+    plt.savefig("mhal_experiment1/paper_exp1.pdf")
     plt.show()
 
 def cbba_testing():
@@ -1126,14 +1136,10 @@ def paper_experiment2_tasking_history():
     with open("mhal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
         benefits = pickle.load(f)
 
-    greedy_assigns, _, _ = solve_greedily(benefits, None, 0.5)
+    # greedy_assigns, _, _ = solve_greedily(benefits, None, 0.5)
 
-    with open("mhal_experiment2/paper_exp2_greedy_assigns.pkl", 'wb') as f:
-        pickle.dump(greedy_assigns, f)
-
-    nohand_val, _ = calc_value_and_num_handovers(nohand_assigns, benefits, None, 0.5)
-    greedy_val, _ = calc_value_and_num_handovers(greedy_assigns, benefits, None, 0.5)
-    mhalc_val, _ = calc_value_and_num_handovers(mhalc_assigns, benefits, None, 0.5)
+    # with open("mhal_experiment2/paper_exp2_greedy_assigns.pkl", 'wb') as f:
+    #     pickle.dump(greedy_assigns, f)
 
     n = benefits.shape[0]
     m = benefits.shape[1]
@@ -1141,6 +1147,25 @@ def paper_experiment2_tasking_history():
 
     lambda_ = 0.5
     init_assign = None
+
+    nohand_val, nohand_nh = calc_value_and_num_handovers(nohand_assigns, benefits, init_assign, lambda_)
+    greedy_val, greedy_nh = calc_value_and_num_handovers(greedy_assigns, benefits, init_assign, lambda_)
+    mhalc_val, mhalc_nh = calc_value_and_num_handovers(mhalc_assigns, benefits, init_assign, lambda_)
+
+    # mhal_coverages = []
+    # greedy_coverages = []
+    # nohand_coverages = []
+    # for k in range(T):
+    #     mhal_productive_assigns = np.where(mhalc_assigns[k][:,:813]*benefits[:,:813,k] > 0, 1, 0)
+    #     greedy_productive_assigns = np.where(greedy_assigns[k][:,:813]*benefits[:,:813,k] > 0, 1, 0)
+    #     nohand_productive_assigns = np.where(nohand_assigns[k][:,:813]*benefits[:,:813,k] > 0, 1, 0)
+    #     print(np.sum(mhal_productive_assigns), np.sum(greedy_productive_assigns), np.sum(nohand_productive_assigns))
+    #     mhal_coverages.append(np.sum(mhal_productive_assigns)/812)
+    #     greedy_coverages.append(np.sum(greedy_productive_assigns)/812)
+    #     nohand_coverages.append(np.sum(nohand_productive_assigns)/812)
+    # mhal_avg_cover = sum(mhal_coverages) / len(mhal_coverages)
+    # greedy_avg_cover = sum(greedy_coverages) / len(greedy_coverages)
+    # nohand_avg_cover = sum(nohand_coverages) / len(nohand_coverages)
 
     # #~~~~~~~~~~~~~~~~~~~~~~ PLOT OF TASKING HISTORY ~~~~~~~~~~~~~~~~~~~~~~~~~
     # fig, axes = plt.subplots(4,1, sharex=True)
@@ -1164,12 +1189,18 @@ def paper_experiment2_tasking_history():
     # plt.show(block=False)
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PLOT OF BENEFITS CAPTURED ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    fig = plt.figure()
-    gs = fig.add_gridspec(3,2)
-    no_handover_ax = fig.add_subplot(gs[0,0])
-    greedy_ax = fig.add_subplot(gs[1,0])
-    mhal_ax = fig.add_subplot(gs[2,0])
-    val_ax = fig.add_subplot(gs[:,1])
+    # fig = plt.figure()
+    # gs = fig.add_gridspec(3,1)
+    # no_handover_ax = fig.add_subplot(gs[0,0])
+    # greedy_ax = fig.add_subplot(gs[1,0])
+    # mhal_ax = fig.add_subplot(gs[2,0])
+    # val_ax = fig.add_subplot(gs[:,1])
+
+    fig, axes = plt.subplots(3,1)
+    no_handover_ax = axes[0]
+    greedy_ax = axes[1]
+    mhal_ax = axes[2]
+    
 
     prev_no_handover = 0
     prev_mhal = 0
@@ -1198,7 +1229,8 @@ def paper_experiment2_tasking_history():
             no_handover_ben_line.append(benefits[agent_to_investigate, no_handover_choice, k])
 
         if prev_mhal != mhal_choice:
-            mhal_ax.axvline(k-0.5, linestyle='--')
+            vline = mhal_ax.axvline(k-0.5, linestyle='--')
+            vline_color = vline.get_color()
             if k != 0: 
                 if len(mhal_ben_line) > 1:
                     mhal_ax.plot(range(k-len(mhal_ben_line), k), mhal_ben_line,'g')
@@ -1227,13 +1259,50 @@ def paper_experiment2_tasking_history():
     no_handover_ax.plot(range(k+1-len(no_handover_ben_line), k+1), no_handover_ben_line, 'r')
     mhal_ax.plot(range(k+1-len(mhal_ben_line), k+1), mhal_ben_line,'g')
     greedy_ax.plot(range(k+1-len(greedy_ben_line), k+1), greedy_ben_line,'b')
+    mhal_ax.set_xlim([0, T])
+    greedy_ax.set_xlim([0, T])
+    no_handover_ax.set_xlim([0, T])
+    mhal_ax.set_xticks(range(0,T+1,10))
+    greedy_ax.set_xticks(range(0,T+1,10))
+    no_handover_ax.set_xticks(range(0,T+1,10))
+    mhal_ax.set_ylim([-0.1, 2])
+    greedy_ax.set_ylim([-0.1, 2])
+    no_handover_ax.set_ylim([-0.1, 2])
+    mhal_ax.set_ylabel("HAAL-D\nBenefit Captured")
+    greedy_ax.set_ylabel("GA\nBenefit Captured")
+    no_handover_ax.set_ylabel("NHA\nBenefit Captured")
 
+    #phantom lines for legend
+    # greedy_ax.plot([T+1], [0], 'r', label="No Handover")
+    # greedy_ax.plot([T+1], [0], 'g', label="MHAL-D")
+    mhal_ax.plot([T+1], [0], color=vline_color, linestyle='--', label="Task Changes")
+    mhal_ax.legend(loc="upper left",bbox_to_anchor=(0,-0.15))
+    # mhal_ax.set_title("MHAL-D")
+    # greedy_ax.set_title("Greedy")
+    # no_handover_ax.set_title("No Handover")
+    mhal_ax.set_xlabel("Timestep")
+    plt.savefig("mhal_experiment2/paper_exp2_task_hist.pdf")
+    
+
+    #~~~~~~~~~Plot bar charts~~~~~~~~~~~~~~
     #plot value over time
-    alg_names = ["No Handover", "Greedy", "MHAL-C"]
-    vals = [nohand_val, greedy_val, mhalc_val]
-    val_ax.bar(alg_names,vals)
-    val_ax.legend()
+    fig, axes = plt.subplots(2,1)
+    labels = ("NHA", "GA", "HAAL-D")
+    val_vals = (nohand_val, greedy_val, mhalc_val)
+    nh_vals = (nohand_nh, greedy_nh, mhalc_nh)
 
+    val_bars = axes[0].bar(labels, val_vals)
+    axes[0].set_ylabel("Total Value")
+    nh_bars = axes[1].bar(labels, nh_vals)
+    axes[1].set_ylabel("Total Handovers")
+
+    val_bars[0].set_color('r')
+    nh_bars[0].set_color('r')
+    val_bars[1].set_color('b')
+    nh_bars[1].set_color('b')
+    val_bars[2].set_color('g')
+    nh_bars[2].set_color('g')
+    plt.savefig("mhal_experiment2/paper_exp2_bars.pdf")
     plt.show()
 
 def lookahead_counterexample():
@@ -1279,4 +1348,4 @@ def lookahead_counterexample():
     print(f"Ratio: {val/opt_val}, desired rat: {rat}")
 
 if __name__ == "__main__":
-    selection_testing()
+    paper_experiment2_tasking_history()
