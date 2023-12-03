@@ -1279,4 +1279,4 @@ def lookahead_counterexample():
     print(f"Ratio: {val/opt_val}, desired rat: {rat}")
 
 if __name__ == "__main__":
-    paper_experiment1()
+    selection_testing()

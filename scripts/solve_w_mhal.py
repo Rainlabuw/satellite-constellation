@@ -341,7 +341,7 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
         if total_tis_value > best_value:
             best_value = total_tis_value
             best_assignment = tis_first_assignment
-            best_time_interval = time_interval_sequence
+            best_time_interval = time_interval_sequence[0]
 
     return best_assignment
 
@@ -404,7 +404,9 @@ def solve_w_mhal(benefits, init_assignment, lambda_, L, graphs=None, distributed
     chosen_assignments = []
 
     while len(chosen_assignments) < T:
-        if verbose: print(f"Solving w distributed MHAL, {len(chosen_assignments)}/{T}", end='\r')
+        if verbose: 
+            if distributed: print(f"Solving w distributed MHAL, {len(chosen_assignments)}/{T}", end='\r')
+            else: print(f"Solving w MHAL, {len(chosen_assignments)}/{T}", end='\r')
         curr_tstep = len(chosen_assignments)
         tstep_end = min(curr_tstep+L, T)
         benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
@@ -417,7 +419,7 @@ def solve_w_mhal(benefits, init_assignment, lambda_, L, graphs=None, distributed
         build_time_interval_sequences(all_time_intervals, [], len_window)
 
         if not distributed:
-            chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, lambda_, approx=central_approx)
+            chosen_assignment, best_ti = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, lambda_, approx=central_approx)
         else:
             if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
             mhal_d_auction = MHAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
