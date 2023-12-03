@@ -1306,30 +1306,31 @@ def paper_experiment2_tasking_history():
     plt.show()
 
 def lookahead_counterexample():
-    benefit = np.zeros((5,5,3))
-    benefit[:,:,0] = np.array([[100, 1, 1, 1, 1],
-                               [1, 100, 1, 1, 1],
-                               [1, 1, 1.01, 1, 1],
-                               [1, 1, 1, 1.01, 1],
-                               [1, 1, 1, 1, 1.01]])
+    benefit = np.zeros((4,4,4))
+    benefit[:,:,0] = np.array([[1, 100, 1, 1],
+                               [100, 1, 1, 1],
+                               [1, 1, 1.99, 1],
+                               [1, 1, 1, 1.99]])
     
-    benefit[:,:,1] = np.array([[1, 100, 1, 1, 1],
-                               [100, 1, 1, 1, 1],
-                               [1, 1, 1, 100, 1],
-                               [1, 1, 1, 1, 1.01],
-                               [1, 1, 1, 1, 1]])
+    benefit[:,:,1] = np.array([[100, 1, 1, 1],
+                               [1, 100, 1, 1],
+                               [1, 1, 1.99, 1],
+                               [1, 1, 1, 1.99]])
     
-    benefit[:,:,2] = np.array([[100, 1, 1, 1, 1],
-                               [1, 100, 1, 1, 1],
-                               [1, 1, 1, 1, 1],
-                               [1, 1, 1, 1, 100],
-                               [1, 1, 1, 1, 1]])
+    benefit[:,:,2] = np.array([[1, 100, 1, 1],
+                               [100, 1, 1, 1],
+                               [1, 1, 1.99, 1],
+                               [1, 1, 1, 1.99]])
 
-    init_assignment = np.array([[0, 0, 0, 0, 1],
-                               [0, 0, 0, 1, 0],
-                               [0, 0, 1, 0, 0],
-                               [0, 1, 0, 0, 0],
-                               [1, 0, 0, 0, 0]])
+    benefit[:,:,3] = np.array([[100, 1, 1, 1],
+                               [1, 100, 1, 1],
+                               [1, 1, 1.99, 1],
+                               [1, 1, 1, 1.99]])
+
+    init_assignment = np.array([[0, 1, 0, 0],
+                               [1, 0, 0, 0],
+                               [0, 0, 0, 1],
+                               [0, 0, 1, 0]])
 
     ass, opt_val, _ = solve_optimally(benefit, init_assignment, 1)
     print(opt_val)
@@ -1343,9 +1344,11 @@ def lookahead_counterexample():
     for a in ass:
         print(a)
 
-    rat = 1/2+1/2*((L-1)/3)
+    rat = 1/2+1/2*((L-1)/L)
+
+    print(f"Difference: {opt_val - val}")
 
     print(f"Ratio: {val/opt_val}, desired rat: {rat}")
 
 if __name__ == "__main__":
-    paper_experiment2_tasking_history()
+    lookahead_counterexample()
