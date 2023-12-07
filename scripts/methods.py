@@ -25,6 +25,14 @@ def plot_graph(G: nx.classes.graph.Graph) -> None:
 
 #~~~~~~~~~~~~~~~~~~~SOLUTION METHODS~~~~~~~~~~~~~~
 def solve_centralized(benefits):
+    """
+    Solve assignment problem for a single n x m benefit matrix
+    using the scipy implementation. Much faster than our python
+    distributed implementation.
+
+    Returns a list, col_ind, which contains the task id j assigned
+    to agent i in index i of the list.
+    """
     _, col_ind = scipy.optimize.linear_sum_assignment(benefits, maximize=True)
     return col_ind
 
@@ -83,7 +91,8 @@ def convert_central_sol_to_assignment_mat(n, m, assignments):
 
 def convert_agents_to_assignment_matrix(agents):
     """
-    Convert list of agents as returned by auction to assignment matrix
+    Convert list of agents as returned by auction to assignment matrix.
+    (grab the choice in each Agent's .choice attribute and put it into a matrix.)
     """
     assignment_matrix = np.zeros((len(agents), len(agents[0].benefits)))
     for i, agent in enumerate(agents):
@@ -197,6 +206,11 @@ def generate_benefits_over_time(n, m, T, t_final, scale_min=0.5, scale_max=2):
     return benefits
 
 def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_, non_assign_pen=True):
+    """
+    Adjusts the benefits matrix to account for handover penalties.
+
+    Defined as function "h" in the paper.
+    """
     #If there is no penalty for switching to a non assignment, the don't add a penalty
     #if the new benefits are zero (the task is not valid)
     if not non_assign_pen:
@@ -231,6 +245,14 @@ def calc_distance_based_benefits(sat, task):
     return task_benefit
 
 def calc_fov_benefits(sat, task):
+    """
+    Given a satellite and a task, computes the benefit of the satellite.
+
+    We calculate the angle between the satellite and the task, and then
+    use a gaussian to determine the benefit, starting at 5% of the benefit
+    when the angle between the satellite and the task is the maximum FOV,
+    and rising to the maximum when the satellite is directly overhead.
+    """
     sat_r = sat.orbit.r.to_value(u.km)
     sat_to_task = task.loc.cartesian_cords.to_value(u.km) - sat_r
 
@@ -248,9 +270,9 @@ def calc_fov_benefits(sat, task):
     
     return task_benefit
 
-def generate_optimal_L(timestep, sat):
+def generate_safe_L(timestep, sat):
     """
-    Generates the optimal L given a satellite and a timestep size.
+    Generates the optimal L given a satellite and a timestep size, as described in the paper.
 
     Calculates this by determining the angle of a satellites ground visibility,
     and then calculating the time taken to cover that angular distance based on period.
@@ -267,6 +289,7 @@ def generate_optimal_L(timestep, sat):
     if max_fov < sat.fov: print(f"Lowering FOV to {max_fov}")
     sat.fov = min(sat.fov, max_fov)
 
+    #Subtract from 180 to ensure the angle is in the correct quadrant
     third_angle = (180 - np.arcsin(sat_r/earth_r*np.sin(sat.fov*np.pi/180))*180/np.pi)
     delta_angle = (2*(180 - sat.fov - third_angle))
 

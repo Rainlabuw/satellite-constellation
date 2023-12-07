@@ -1,13 +1,16 @@
 from methods import *
 import numpy as np
-import sys
-np.set_printoptions(threshold=sys.maxsize)
 
 def solve_greedily(benefits, init_assignment, lambda_):
     """
     Solve with greedy handover strategy - start with optimal assignments,
     and when a handover is needed (a satellite moved too far away from task)
-    just switch to the best assignment.
+    just switch to the best assignment for that satellite, in increasing order
+    of satellite task index.
+
+    Some extra infrastructure is included to ensure that satellites don't switch
+    between zero-benefit tasks without a good reason - this increases the performance
+    of the algorithm in a minimum-handover environment.
     """
     n = benefits.shape[0]
     m = benefits.shape[1]
@@ -18,16 +21,14 @@ def solve_greedily(benefits, init_assignment, lambda_):
 
     assignment_mats = [assignment_mat]
     for k in range(1,T):
-        #check if any satellites are too far away from their task
         prev_assignment_mat = assignment_mats[k-1]
         curr_assignment_mat = prev_assignment_mat.copy()
 
         # Determine which tasks are now available for reassignment
-        # (only assigned tasks with nonzero benefit are NOT available.)
-        # (agents with zero benefit ARE available)
+        # (only previously assigned tasks with nonzero benefit are NOT available.)
+        # (agents currently achieving zero benefit ARE available)
         avail_agents = []
         avail_tasks = [j for j in range(m)]
-        # print(f"Before {len(avail_tasks)}, {n} {m}")
         for i in range(n):
             agent_prev_choice = np.argmax(prev_assignment_mat[i,:])
 
@@ -39,7 +40,6 @@ def solve_greedily(benefits, init_assignment, lambda_):
                 avail_agents.append(i)
 
         agents_w_no_avail_task = []
-        # print(f"Avail agents {len(avail_agents)} Avail tasks {len(avail_tasks)}")
         #Now, reassign agents to the best available task if one exists
         for i in avail_agents:
             agent_prev_choice = np.argmax(prev_assignment_mat[i,:])
@@ -55,10 +55,8 @@ def solve_greedily(benefits, init_assignment, lambda_):
             else:
                 agents_w_no_avail_task.append(i)
 
-        # print(f"Agents with no avail. task {len(agents_w_no_avail_task)} Avail tasks {len(avail_tasks)}")
-
-        #Now, reassign agents with no available tasks to the a random task
         agents_to_assign_randomly = []
+        #Now, assign agents to the same zero-benefit task if it is still available
         for i in agents_w_no_avail_task:
             agent_prev_choice = np.argmax(prev_assignment_mat[i,:])
 
@@ -80,9 +78,8 @@ def solve_greedily(benefits, init_assignment, lambda_):
             curr_assignment_mat[i,agent_prev_choice] = 0
             curr_assignment_mat[i,best_task_choice] = 1
 
-        # print(f"Agents to assign randomly {len(agents_to_assign_randomly)} Avail tasks {len(avail_tasks)}")
-
-        #Finally, reassign agents with no available tasks to a random task
+        # Finally, reassign agents with no available tasks,
+        # and whose previous task is unavailable, to a random task
         for i in agents_to_assign_randomly:
             agent_prev_choice = np.argmax(prev_assignment_mat[i,:])
 
@@ -93,7 +90,6 @@ def solve_greedily(benefits, init_assignment, lambda_):
             curr_assignment_mat[i,agent_prev_choice] = 0
             curr_assignment_mat[i,best_task_choice] = 1
 
-        # print(f"Avail tasks {len(avail_tasks)}")
         assignment_mats.append(curr_assignment_mat)
 
     total_value, num_handovers = calc_value_and_num_handovers(assignment_mats, benefits, init_assignment, lambda_)

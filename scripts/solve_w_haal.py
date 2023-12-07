@@ -1,17 +1,23 @@
 import numpy as np
-from methods import *
+from .utils import *
 import networkx as nx
 import time
 
-class MHAL_D_Auction(object):
+class HAAL_D_Auction(object):
+    """
+    This class runs an assignment auction for all possible time interval sequences
+    in a single timestep, all in parallel.
+    
+    The algorithm stores the assigned task for each agent in their .choice attribute.
+    """
     def __init__(self, benefits, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=0.01, graph=None, lambda_=1, verbose=False):
-        # benefit matrix for the next few timesteps
+        # benefit matrix for the next L timesteps
         self.benefits = benefits
-        print(self.benefits.dtype)
         self.n = benefits.shape[0]
         self.m = benefits.shape[1]
         self.T = benefits.shape[2]
 
+        #If no graph is provided, assume the communication graph is complete.
         if graph is None:
             self.graph = nx.complete_graph(self.n)
         else:
@@ -26,32 +32,29 @@ class MHAL_D_Auction(object):
         self.eps = eps
         self.verbose = verbose
 
-        #Set the number of iterations since last getting an update before
-        #individual agents think that they've converged. Need to ensure that
-        #this number is higher than 1, because in a fully connected graph
-        #the last agent will win it's first bid due to index tiebreaks
-        #and then think it's converged. (prob not necessary after bugfix)
-        self.max_steps_since_last_update = max(nx.diameter(self.graph), 2)
+        #The number of steps without an update before the algorithm converges
+        self.max_steps_since_last_update = nx.diameter(self.graph)
 
-        self.agents = [MHAL_D_Agent(self, i, all_time_intervals, all_time_interval_sequences, \
+        #Build the list of agents participating in the auction, providing them only
+        #the benefits they recieve for completing each task and a list of their neighbors.
+        self.agents = [HAAL_D_Agent(self, i, all_time_intervals, all_time_interval_sequences, \
                                     self.benefits[i,:,:], list(self.graph.neighbors(i))) for i in range(self.n)]
 
     def run_auction(self):
+        """
+        Run the auction to completion. Alternate between calculating updated prices and bids
+        for each agent, and formulating and sending packets of information that each agent recieves
+        from it's neighbors containing this updated information.
+        """
         self.n_iterations = 0
         while sum([agent.converged for agent in self.agents]) < self.n:
-            print(f"Auction iteration {self.n_iterations}")
             #Send the appropriate communication packets to each agent
-            st = time.time()
             self.update_communication_packets()
-            print("comm",time.time()-st)
 
             #Have each agent calculate it's prices, bids, and values
             #based on the communication packet it currently has
-            st = time.time()
-            for j, agent in enumerate(self.agents):
-                print(f"agent {j}",end='\r')
+            for agent in self.agents:
                 agent.perform_auction_iteration_for_agent()
-            print("auction",time.time()-st)
 
             self.n_iterations += 1
 
@@ -105,7 +108,7 @@ class MHAL_D_Auction(object):
             agent.value_from_time_interval_seq_comm_packets = value_from_time_interval_seq_packets
 
 
-class MHAL_D_Agent(object):
+class HAAL_D_Agent(object):
     def __init__(self, auction, id, all_time_intervals, all_time_interval_sequences, benefits, neighbors):
         self.id = id
 
@@ -146,12 +149,6 @@ class MHAL_D_Agent(object):
             self.values_from_time_interval_seq[time_interval_sequence] = np.zeros(self.n, dtype=np.float16)
 
         self.timestep_value_info_recieved = np.zeros(self.n, dtype=np.int16)
-
-        # print("benefits",self.benefits.dtype)
-        # print("prices",self.prices[time_interval].dtype)
-        # print("high bidders",self.high_bidders[time_interval].dtype)
-        # print("values from time interval seq",self.values_from_time_interval_seq[time_interval_sequence].dtype)
-        # print("timestep value info recieved",self.timestep_value_info_recieved.dtype)
 
         #~~~~~~~~Communication packet related attributes~~~~~~~~~~
         self.neighbors = neighbors
@@ -384,9 +381,9 @@ def generate_all_time_intervals(L):
         
     return all_time_intervals
 
-def solve_w_mhal(benefits, init_assignment, lambda_, L, graphs=None, distributed=False, central_approx=False, verbose=False, eps=0.01):
+def solve_w_haal(benefits, init_assignment, lambda_, L, graphs=None, distributed=False, central_approx=False, verbose=False, eps=0.01):
     """
-    Sequentially solves the problem using the MHAL algorithm.
+    Sequentially solves the problem using the HAAL algorithm.
 
     When distributed = True, computes the solution using the fully distributed method.
     When central_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
@@ -405,8 +402,8 @@ def solve_w_mhal(benefits, init_assignment, lambda_, L, graphs=None, distributed
 
     while len(chosen_assignments) < T:
         if verbose: 
-            if distributed: print(f"Solving w distributed MHAL, {len(chosen_assignments)}/{T}", end='\r')
-            else: print(f"Solving w MHAL, {len(chosen_assignments)}/{T}", end='\r')
+            if distributed: print(f"Solving w distributed HAAL, {len(chosen_assignments)}/{T}", end='\r')
+            else: print(f"Solving w HAAL, {len(chosen_assignments)}/{T}", end='\r')
         curr_tstep = len(chosen_assignments)
         tstep_end = min(curr_tstep+L, T)
         benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
@@ -422,10 +419,10 @@ def solve_w_mhal(benefits, init_assignment, lambda_, L, graphs=None, distributed
             chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, lambda_, approx=central_approx)
         else:
             if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
-            mhal_d_auction = MHAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
-            mhal_d_auction.run_auction()
+            haal_d_auction = HAAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
+            haal_d_auction.run_auction()
 
-            chosen_assignment = convert_agents_to_assignment_matrix(mhal_d_auction.agents)
+            chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
 
         chosen_assignments.append(chosen_assignment)
         curr_assignment = chosen_assignment
@@ -434,9 +431,9 @@ def solve_w_mhal(benefits, init_assignment, lambda_, L, graphs=None, distributed
     
     return chosen_assignments, total_value, nh
 
-def solve_w_mhald_track_iters(benefits, init_assignment, lambda_, L, graphs=None, verbose=False, eps=0.01):
+def solve_w_haald_track_iters(benefits, init_assignment, lambda_, L, graphs=None, verbose=False, eps=0.01):
     """
-    Sequentially solves the problem using the MHAL algorithm.
+    Sequentially solves the problem using the HAAL algorithm.
 
     When distributed = True, computes the solution using the fully distributed method.
     When central_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
@@ -456,7 +453,7 @@ def solve_w_mhald_track_iters(benefits, init_assignment, lambda_, L, graphs=None
     total_iterations = 0
 
     while len(chosen_assignments) < T:
-        if verbose: print(f"Solving w distributed MHAL, {len(chosen_assignments)}/{T}", end='\r')
+        if verbose: print(f"Solving w distributed HAAL, {len(chosen_assignments)}/{T}", end='\r')
         curr_tstep = len(chosen_assignments)
         tstep_end = min(curr_tstep+L, T)
         benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
@@ -468,15 +465,15 @@ def solve_w_mhald_track_iters(benefits, init_assignment, lambda_, L, graphs=None
         all_time_interval_sequences = []
         build_time_interval_sequences(all_time_intervals, [], len_window)
 
-        mhal_d_auction = MHAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
-        mhal_d_auction.run_auction()
+        haal_d_auction = HAAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
+        haal_d_auction.run_auction()
 
-        chosen_assignment = convert_agents_to_assignment_matrix(mhal_d_auction.agents)
+        chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
 
         chosen_assignments.append(chosen_assignment)
         curr_assignment = chosen_assignment
 
-        total_iterations += mhal_d_auction.n_iterations
+        total_iterations += haal_d_auction.n_iterations
     
     total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_)
     
@@ -486,6 +483,6 @@ if __name__ == "__main__":
     np.random.seed(42)
     benefits = 2*np.random.random((50, 50, 10))
     s = time.time()
-    chosen_assignments, val, _ = solve_w_mhal(benefits, 4, None, distributed=True, verbose=False, graphs=[rand_connected_graph(50) for _ in range(10)])
+    chosen_assignments, val, _ = solve_w_haal(benefits, 4, None, distributed=True, verbose=False, graphs=[rand_connected_graph(50) for _ in range(10)])
     print(val,time.time()-s)
     # print(calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 1))
