@@ -1,5 +1,5 @@
 import numpy as np
-from .utils import *
+from methods import *
 import networkx as nx
 import time
 
@@ -42,14 +42,22 @@ class HAAL_D_Auction(object):
 
     def run_auction(self):
         """
-        Run the auction to completion. Alternate between calculating updated prices and bids
-        for each agent, and formulating and sending packets of information that each agent recieves
-        from it's neighbors containing this updated information.
+        Run the auction to completion, which has two phases:
+
+        1. Agents communicate with their neighbors to determine the prices and high bidders
+            Alternate between calculating updated prices and bids
+            for each agent, and formulating and sending packets of information that each agent recieves
+            from it's neighbors containing this updated information.
+        2. Agents communicate with their neighbors to determine the value of each time interval sequence
+        for each agent
+            Continually update the value of each time interval sequence for each agent, and send that
+            info to agent neighbors.
         """
         self.n_iterations = 0
-        while sum([agent.converged for agent in self.agents]) < self.n:
+        #Run communications until agents have converged on prices and bids
+        while sum([agent.prices_bids_converged for agent in self.agents]) < self.n:
             #Send the appropriate communication packets to each agent
-            self.update_communication_packets()
+            self.update_price_bid_comm_packets()
 
             #Have each agent calculate it's prices, bids, and values
             #based on the communication packet it currently has
@@ -58,14 +66,25 @@ class HAAL_D_Auction(object):
 
             self.n_iterations += 1
 
+        #Run value communication until each agent has a value for each time interval sequence
+        while sum([agent.tis_values_converged for agent in self.agents]) < self.n:
+            self.update_tis_value_comm_packets()
+
+            for agent in self.agents:
+                agent.update_tis_values()
+
+            self.n_iterations += 1
+
+        print(f"After sum auction {self.n_iterations}")
+
         if self.verbose:
             print(f"Auction results ({self.n_iterations} iterations):")
             print(f"\tAssignments: {[a.choice for a in self.agents]}")
 
-    def update_communication_packets(self):
+    def update_price_bid_comm_packets(self):
         """
-        Compiles price, high bidder, value (and time value info recieved)
-        information for all of each agent's neighbors and stores it in an array.
+        Compiles price and high bidder information for all of each agent's 
+        neighbors and stores it in an array.
 
         Then, update the agents variables accordingly so it can access that information
         during the auction.
@@ -78,8 +97,8 @@ class HAAL_D_Auction(object):
             for ti in agent.all_time_intervals:
                 price_packet = np.zeros((len(agent.neighbors)+1,self.m), dtype=np.float16)
                 high_bidder_packet = np.zeros((len(agent.neighbors)+1,self.m), dtype=np.int16)
-                timestep_value_info_recieved_packet = np.zeros((len(agent.neighbors)+1,self.n), dtype=np.int16)
 
+                #Index zero in each packet corresponds to the information from the agent itself
                 price_packet[0,:] = agent.prices[ti]
                 high_bidder_packet[0,:] = agent.high_bidders[ti]
                 
@@ -90,22 +109,34 @@ class HAAL_D_Auction(object):
                 price_packets[ti] = price_packet
                 high_bidder_packets[ti] = high_bidder_packet
 
-            timestep_value_info_recieved_packet[0,:] = agent.timestep_value_info_recieved
-            for neighbor_num, neighbor_idx in enumerate(agent.neighbors):
-                timestep_value_info_recieved_packet[neighbor_num+1,:] = self.agents[neighbor_idx].timestep_value_info_recieved
-
-            value_from_time_interval_seq_packets = {}
-            for time_interval_sequence in agent.all_time_interval_sequences:
-                value_from_time_interval_seq_packets[time_interval_sequence] = np.zeros((len(agent.neighbors)+1,self.n), dtype=np.float16)
-
-                value_from_time_interval_seq_packets[time_interval_sequence][0,:] = agent.values_from_time_interval_seq[time_interval_sequence]
-                for neighbor_num, neighbor_idx in enumerate(agent.neighbors):
-                    value_from_time_interval_seq_packets[time_interval_sequence][neighbor_num+1,:] = self.agents[neighbor_idx].values_from_time_interval_seq[time_interval_sequence]
-
             agent.price_comm_packets = price_packets
             agent.high_bidder_comm_packets = high_bidder_packets
-            agent.timestep_value_info_recieved_comm_packet = timestep_value_info_recieved_packet
-            agent.value_from_time_interval_seq_comm_packets = value_from_time_interval_seq_packets
+
+    def update_tis_value_comm_packets(self):
+        """
+        Compiles value information for all of each agent's
+        neighbors and stores it in an array.
+
+        Then, update the agents variables accordingly so it can access that information
+        during the auction.
+
+        This allows each agent to independently determine which time interval sequence
+        is optimal across the entire constellation.
+        """
+        for agent in self.agents:
+            value_packets = {}
+            for tis in agent.all_time_interval_sequences:
+                value_packet = np.zeros((len(agent.neighbors)+1,self.n), dtype=np.float16)
+
+                #Index zero in each packet corresponds to the information from the agent itself
+                value_packet[0,:] = agent.tis_values_by_agent[tis]
+                
+                for neighbor_num, neighbor_idx in enumerate(agent.neighbors):
+                    value_packet[neighbor_num+1,:] = self.agents[neighbor_idx].tis_values_by_agent[tis]
+
+                value_packets[tis] = value_packet
+
+            agent.value_comm_packets = value_packets
 
 
 class HAAL_D_Agent(object):
@@ -143,12 +174,11 @@ class HAAL_D_Agent(object):
 
             self.choice_by_ti[time_interval] = 0
 
-        #Stores the value yielded by time interval sequences
-        self.values_from_time_interval_seq = {}
+        #The value of each time interval sequence for this agent,
+        #used for value communication phase.
+        self.tis_values_by_agent = {}
         for time_interval_sequence in all_time_interval_sequences:
-            self.values_from_time_interval_seq[time_interval_sequence] = np.zeros(self.n, dtype=np.float16)
-
-        self.timestep_value_info_recieved = np.zeros(self.n, dtype=np.int16)
+            self.tis_values_by_agent[time_interval_sequence] = -np.inf*np.ones(self.n, dtype=np.float16)
 
         #~~~~~~~~Communication packet related attributes~~~~~~~~~~
         self.neighbors = neighbors
@@ -158,16 +188,14 @@ class HAAL_D_Agent(object):
         self.price_comm_packets = None
         self.high_bidder_comm_packets = None
 
-        #timestep_value_info_recieved is a (num neighbor x n) matrix
-        self.timestep_value_info_recieved_comm_packet = None
-
-        #value_from_time_interval_seq_comm_packets is a dictionary of (num neighbor x n) matrices,
-        #each key corresponding to a different time interval sequence
-        self.value_from_time_interval_seq_comm_packets = None
+        #Value packet is a (num neighbors x n) matrix,
+        #one for each different time interval sequence
+        self.value_comm_packets = None
 
         #~~~~~~~~~~~~~~Convergence related attributes~~~~~~~~~~~~~~~~
         self.steps_since_last_update = 0
-        self.converged = False
+        self.prices_bids_converged = False
+        self.tis_values_converged = False
 
         self.n_iters = 0
 
@@ -189,31 +217,15 @@ class HAAL_D_Agent(object):
     def perform_auction_iteration_for_agent(self):
         """
         After recieving an updated communication packet, runs a single iteration
-        of the auctions for the agents. Consists of the following steps:
-
-        1. 
+        of the auctions for the agents.
         """
         self.update_prices_bids()
-
-        self.update_time_interval_sequence_values()
-
-        #Set the agents current choice to the choice for the best time interval sequence
-        best_tis_value = -np.inf
-        best_tis = None
-        for tis in self.all_time_interval_sequences:
-            tis_value = np.sum(self.values_from_time_interval_seq[tis])
-
-            if tis_value > best_tis_value:
-                best_tis_value = tis_value
-                best_tis = tis
-
-        self.choice = self.choice_by_ti[best_tis[0]]
 
         #Determine if anything has been updated. If so, increment the counter
         updated = False
         for ti in self.all_time_intervals:
             #The information in the 0th index of the comm packets is the information on this agent
-            #as of last cycle which. Thus we compare the current prices to this data to measure change
+            #as of last cycle. Thus we compare the current prices to this data to measure change
             if not np.array_equal(self.prices[ti], self.price_comm_packets[ti][0,:]) or \
                 not np.array_equal(self.high_bidders[ti], self.high_bidder_comm_packets[ti][0,:]):
                 updated = True
@@ -224,9 +236,26 @@ class HAAL_D_Agent(object):
             self.steps_since_last_update = 0
 
         self.n_iters += 1
-        self.timestep_value_info_recieved[self.id] = self.n_iters
 
-        self.converged = self.steps_since_last_update >= self.max_steps_since_last_update
+        self.prices_bids_converged = self.steps_since_last_update >= self.max_steps_since_last_update
+
+        #If the agent has converged, then it should calculate the value of each time interval sequence
+        if self.prices_bids_converged:
+            for time_interval_sequence in self.all_time_interval_sequences:
+                tis_value = 0
+                if self.init_assignment is None:
+                    curr_assignment = None
+                else: curr_assignment = np.argmax(self.init_assignment[self.id,:])
+                
+                for time_interval in time_interval_sequence:
+                    tis_value += self.time_interval_benefits[time_interval][self.choice_by_ti[time_interval]]
+                    
+                    if curr_assignment != self.choice_by_ti[time_interval] and curr_assignment is not None:
+                        tis_value -= self.lambda_
+
+                    curr_assignment = self.choice_by_ti[time_interval]
+                
+                self.tis_values_by_agent[time_interval_sequence][self.id] = tis_value
 
     def update_prices_bids(self):
         """
@@ -265,34 +294,35 @@ class HAAL_D_Agent(object):
                 #based on the new info from other agents.
                 self.prices[ti] = max_prices
 
-    def update_time_interval_sequence_values(self):
+    def update_tis_values(self):
         """
-        Updates the values it has for all other time interval sequences for all other agents,
-        in order to be able to choose the TIS which is optimal across the entire constellation.
+        Updates the agent's values based on the value communication packet.
         """
-        agents_w_most_updated_value_info = np.argmax(self.timestep_value_info_recieved_comm_packet, axis=0)
-        self.timestep_value_info_recieved = np.max(self.timestep_value_info_recieved_comm_packet, axis=0)
+        value_sum = 0
+        for tis in self.all_time_interval_sequences:
+            max_values = np.max(self.value_comm_packets[tis], axis=0)
 
-        for time_interval_sequence in self.all_time_interval_sequences:
-            #This line takes the most updated benefit info from the neighbors and puts it into the agent's own benefit info
-            self.values_from_time_interval_seq[time_interval_sequence] = self.value_from_time_interval_seq_comm_packets[time_interval_sequence][agents_w_most_updated_value_info, np.arange(self.n)]
+            self.tis_values_by_agent[tis] = max_values
 
-        #Based on the new choices for each time interval, calculate the time interval sequence benefits for the agent itself
-        for time_interval_sequence in self.all_time_interval_sequences:
-            tis_value = 0
-            if self.init_assignment is None:
-                curr_assignment = None
-            else: curr_assignment = np.argmax(self.init_assignment[self.id,:])
+            value_sum += sum(max_values)
+
+        self.n_iters += 1
+
+        #If value is not -np.inf, that means information
+        #has been recieved from all neighbors, and the agent has converged
+        if value_sum > -np.inf:
+            self.tis_values_converged = True
+
+            best_tis_value = -np.inf
+            best_tis = None
+            for tis in self.all_time_interval_sequences:
+                if sum(self.tis_values_by_agent[tis]) > best_tis_value:
+                    best_tis_value = sum(self.tis_values_by_agent[tis])
+                    best_tis = tis
             
-            for time_interval in time_interval_sequence:
-                tis_value += self.time_interval_benefits[time_interval][self.choice_by_ti[time_interval]]
-                
-                if curr_assignment != self.choice_by_ti[time_interval] and curr_assignment is not None:
-                    tis_value -= self.lambda_
-
-                curr_assignment = self.choice_by_ti[time_interval]
-            
-            self.values_from_time_interval_seq[time_interval_sequence][self.id] = tis_value
+            #Select the choice associated with the best time interval sequence
+            self.choice = self.choice_by_ti[best_tis[0]]
+        else: self.tis_values_converged = False
 
 def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, benefit_mat_window, lambda_, approx=False):
     """
@@ -433,7 +463,8 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, graphs=None, distributed
 
 def solve_w_haald_track_iters(benefits, init_assignment, lambda_, L, graphs=None, verbose=False, eps=0.01):
     """
-    Sequentially solves the problem using the HAAL algorithm.
+    Sequentially solves the problem using the HAAL algorithm, tracking number of iterations
+    required for convergence.
 
     When distributed = True, computes the solution using the fully distributed method.
     When central_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
@@ -480,9 +511,9 @@ def solve_w_haald_track_iters(benefits, init_assignment, lambda_, L, graphs=None
     return chosen_assignments, total_value, nh, total_iterations/T
 
 if __name__ == "__main__":
-    np.random.seed(42)
+    np.random.seed(48)
     benefits = 2*np.random.random((50, 50, 10))
     s = time.time()
-    chosen_assignments, val, _ = solve_w_haal(benefits, 4, None, distributed=True, verbose=False, graphs=[rand_connected_graph(50) for _ in range(10)])
+    chosen_assignments, val, _ = solve_w_haal(benefits, None, 0.5, 4, distributed=True, verbose=False, graphs=[rand_connected_graph(50) for _ in range(10)])
     print(val,time.time()-s)
     # print(calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 1))
