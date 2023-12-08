@@ -10,7 +10,7 @@ from methods import *
 
 from solve_optimally import solve_optimally
 from solve_wout_handover import solve_wout_handover
-from solve_w_mhal import solve_w_mhal, solve_w_mhald_track_iters
+from solve_w_haal import solve_w_haal, solve_w_haald_track_iters
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from solve_w_CBBA import solve_w_CBBA, solve_w_CBBA_track_iters
 from solve_greedily import solve_greedily
@@ -50,7 +50,7 @@ def optimal_baseline_plot():
     lambda_ = 0.5
 
     avg_best = 0
-    avg_mhal = 0
+    avg_haal = 0
     avg_mha = 0
     avg_no_handover = 0
 
@@ -59,11 +59,11 @@ def optimal_baseline_plot():
         benefit = np.random.rand(n,m,T)
 
         #SMHGL centralized, lookahead = 3
-        _, mhal_ben, _ = solve_w_mhal(benefit, init_ass, lambda_, L)
-        avg_mhal += mhal_ben/num_avgs
+        _, haal_ben, _ = solve_w_haal(benefit, init_ass, lambda_, L)
+        avg_haal += haal_ben/num_avgs
 
         #MHA
-        _, mha_ben, _ = solve_w_mhal(benefit, init_ass, lambda_, 1)
+        _, mha_ben, _ = solve_w_haal(benefit, init_ass, lambda_, 1)
         avg_mha += mha_ben/num_avgs
 
         #Naive
@@ -75,10 +75,10 @@ def optimal_baseline_plot():
         avg_best += ben/num_avgs
 
     fig = plt.figure()
-    plt.bar(["Standard Assignment\nProblem Solution","HAA", f"HAAL (L={L})", "Optimal"], [avg_no_handover, avg_mha, avg_mhal, avg_best])
+    plt.bar(["Standard Assignment\nProblem Solution","HAA", f"HAAL (L={L})", "Optimal"], [avg_no_handover, avg_mha, avg_haal, avg_best])
     plt.ylabel("Value")
     print(["No Handover","HAA", f"HAAL (L={L})", "Optimal"])
-    print([avg_no_handover, avg_mha, avg_mhal, avg_best])
+    print([avg_no_handover, avg_mha, avg_haal, avg_best])
     plt.savefig("opt_comparison.png")
     plt.show()
 
@@ -100,7 +100,7 @@ def MHA_unit_testing():
 
     print("Expect no solution to be optimal (2198.8) but them to be same for all lookaheads")
     for lookahead in range(1,benefits.shape[-1]+1):
-        multi_auction = MHAL_Auction(benefits, None, lookahead)
+        multi_auction = HAAL_Auction(benefits, None, lookahead)
         multi_auction.run_auctions()
         ben = multi_auction.calc_value_and_num_handovers()
         print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
@@ -119,7 +119,7 @@ def MHA_unit_testing():
 
     print("Expect combined solution to be optimal (3000) only at lookahead of 3")
     for lookahead in range(1,benefits.shape[-1]+1):
-        multi_auction = MHAL_Auction(benefits, None, lookahead)
+        multi_auction = HAAL_Auction(benefits, None, lookahead)
         multi_auction.run_auctions()
         ben,_ = multi_auction.calc_value_and_num_handovers()
         print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
@@ -131,14 +131,14 @@ def compare_MHA_to_other_algs():
     T = 95
     lambda_ = 1
 
-    print("Comparing performance of MHAL to other algorithms")
+    print("Comparing performance of HAAL to other algorithms")
     num_avgs = 10
 
-    mhal2_ben = 0
-    mhal2_nh = 0
+    haal2_ben = 0
+    haal2_nh = 0
 
-    mhal5_ben = 0
-    mhal5_nh = 0
+    haal5_ben = 0
+    haal5_nh = 0
 
     mha_ben = 0
     mha_nh = 0
@@ -155,21 +155,21 @@ def compare_MHA_to_other_algs():
         print("Generated realistic benefits")
 
         #SMHGL centralized, lookahead = 2
-        multi_auction = MHAL_Auction(benefits, None, 2, lambda_=lambda_)
+        multi_auction = HAAL_Auction(benefits, None, 2, lambda_=lambda_)
         multi_auction.run_auctions()
         ben, nh = multi_auction.calc_value_and_num_handovers()
-        mhal2_ben += ben/num_avgs
-        mhal2_nh += nh/num_avgs
+        haal2_ben += ben/num_avgs
+        haal2_nh += nh/num_avgs
 
         #SMHGL centralized, lookahead = 5
-        multi_auction = MHAL_Auction(benefits, None, 5, lambda_=lambda_)
+        multi_auction = HAAL_Auction(benefits, None, 5, lambda_=lambda_)
         multi_auction.run_auctions()
         ben, nh = multi_auction.calc_value_and_num_handovers()
-        mhal5_ben += ben/num_avgs
-        mhal5_nh += nh/num_avgs
+        haal5_ben += ben/num_avgs
+        haal5_nh += nh/num_avgs
 
         #MHA
-        multi_auction = MHAL_Auction(benefits, None, 1, lambda_=lambda_)
+        multi_auction = HAAL_Auction(benefits, None, 1, lambda_=lambda_)
         multi_auction.run_auctions()
         ben, nh = multi_auction.calc_value_and_num_handovers()
         mha_ben += ben/num_avgs
@@ -187,11 +187,11 @@ def compare_MHA_to_other_algs():
         sga_nh += handover_nh/num_avgs
 
     fig, axes = plt.subplots(2,1)
-    axes[0].bar(["Naive", "SGA", "MHA", "MHAL2", "MHAL5"],[no_handover_ben, sga_ben, mha_ben, mhal2_ben, mhal5_ben])
+    axes[0].bar(["Naive", "SGA", "MHA", "HAAL2", "HAAL5"],[no_handover_ben, sga_ben, mha_ben, haal2_ben, haal5_ben])
     axes[0].set_title("Average benefit across 10 runs")
     # axes[0].set_xlabel("Lookahead timesteps")
 
-    axes[1].bar(["Naive", "SGA", "MHA", "MHAL2", "MHAL5"],[no_handover_nh, sga_nh, mha_nh, mhal2_nh, mhal5_nh])
+    axes[1].bar(["Naive", "SGA", "MHA", "HAAL2", "HAAL5"],[no_handover_nh, sga_nh, mha_nh, haal2_nh, haal5_nh])
     
     axes[1].set_title("Average number of handovers across 10 runs")
     fig.suptitle(f"Test with n={n}, m={m}, T={T}, lambda={lambda_}, realistic-ish benefits")
@@ -230,21 +230,21 @@ def test_MHA_lookahead_performance():
             # benefits, graphs = get_benefits_and_graphs_from_constellation(10, 10, m, T, altitude=500)
             # benefits = np.random.rand(n,m,T)
 
-            #MHAL with true lookaheads
-            _, ben, nh = solve_w_mhal(benefits, init_assignment, lambda_, lookahead, distributed=False, verbose=True)
+            #HAAL with true lookaheads
+            _, ben, nh = solve_w_haal(benefits, init_assignment, lambda_, lookahead, distributed=False, verbose=True)
             avg_ben += ben/num_avgs
             avg_nh += nh/num_avgs
             
-            # #MHAL (distributed)
-            # _, ben, nh = solve_w_mhal(benefits, init_assignment, lambda_, lookahead, distributed=True)
+            # #HAAL (distributed)
+            # _, ben, nh = solve_w_haal(benefits, init_assignment, lambda_, lookahead, distributed=True)
             # avg_approx_ben += ben/num_avgs
 
         resulting_bens.append(avg_ben)
         # resulting_approx_bens.append(avg_approx_ben)
         handovers.append(avg_nh)
 
-    plt.plot(range(1,max_lookahead+1), resulting_bens, label="MHAL (Centralized)")
-    # plt.plot(range(1,max_lookahead+1), resulting_approx_bens, label="MHAL (Distributed)")
+    plt.plot(range(1,max_lookahead+1), resulting_bens, label="HAAL (Centralized)")
+    # plt.plot(range(1,max_lookahead+1), resulting_approx_bens, label="HAAL (Distributed)")
     plt.title(f"Lookahead vs. accuracy, n={n}, m={m}, T={T}")
     plt.xlabel("Lookahead timesteps")
     plt.ylabel(f"Average benefit across {num_avgs} runs")
@@ -411,8 +411,8 @@ def compare_alg_benefits_and_handover():
 
 def distributed_comparison():
     """
-    Compare the performance of the distributed MHAL algorithm
-    to other algorithms (including centralized MHAL)
+    Compare the performance of the distributed HAAL algorithm
+    to other algorithms (including centralized HAAL)
     """
     n = 20
     m = 20
@@ -435,11 +435,11 @@ def distributed_comparison():
         init_assignment = np.eye(n,m)
 
         # st = time.time()
-        _, d_val, _ = solve_w_mhal(benefits, init_assignment,lambda_, L, distributed=True)
+        _, d_val, _ = solve_w_haal(benefits, init_assignment,lambda_, L, distributed=True)
 
-        _, c_val, _ = solve_w_mhal(benefits, lambda_, init_assignment, L, distributed=False)
+        _, c_val, _ = solve_w_haal(benefits, lambda_, init_assignment, L, distributed=False)
 
-        _, ca_val, _ = solve_w_mhal(benefits, init_assignment, lambda_, L, distributed=False, central_approx=True)
+        _, ca_val, _ = solve_w_haal(benefits, init_assignment, lambda_, L, distributed=False, central_approx=True)
 
         _, no_handover_val, _ = solve_wout_handover(benefits, init_assignment, lambda_)
         _, cbba_val, _ = solve_w_centralized_CBBA(benefits, init_assignment, lambda_)
@@ -458,7 +458,7 @@ def distributed_comparison():
 def realistic_orbital_simulation():
     """
     Simulate a realistic orbital mechanics case
-    using distributed and centralized MHAL.
+    using distributed and centralized HAAL.
 
     Compute this over several lookahead windows.
     """
@@ -511,7 +511,7 @@ def realistic_orbital_simulation():
         # for L in range(1,max_L+1):
         for L in [1,3,6]:
             print(f"lookahead {L}")
-            _, d_val, _, avg_iters = solve_w_mhald_track_iters(benefits, init_assignment, lambda_, L, graphs=graphs, verbose=True)
+            _, d_val, _, avg_iters = solve_w_haald_track_iters(benefits, init_assignment, lambda_, L, graphs=graphs, verbose=True)
 
             iters_by_lookahead.append(avg_iters)
             value_by_lookahead.append(d_val)
@@ -522,8 +522,8 @@ def realistic_orbital_simulation():
     fig, axes = plt.subplots(2,1)
     
     print(tot_value_by_lookahead, no_handover_tot, greedy_tot)
-    # axes[0].plot(range(1,max_L+1), tot_value_by_lookahead, 'g', label="MHAL-D")
-    axes[0].plot([1,3,6], tot_value_by_lookahead, 'g', label="MHAL-D")
+    # axes[0].plot(range(1,max_L+1), tot_value_by_lookahead, 'g', label="HAAL-D")
+    axes[0].plot([1,3,6], tot_value_by_lookahead, 'g', label="HAAL-D")
     # axes[0].plot(range(1,max_L+1), [cbba_tot]*max_L, 'b--', label="CBBA")
     axes[0].plot([1,3,6], [no_handover_tot]*max_L, 'r--', label="Naive")
     # axes[0].plot(range(1,max_L+1), [no_handover_tot]*max_L, 'r--', label="Naive")
@@ -534,8 +534,8 @@ def realistic_orbital_simulation():
     axes[0].set_ylim((0, 1.1*max(tot_value_by_lookahead)))
     axes[0].legend()
 
-    axes[1].plot([1,3,6], tot_iters_by_lookahead, 'g', label="MHAL-D")
-    # axes[1].plot(range(1,max_L+1), tot_iters_by_lookahead, 'g', label="MHAL-D")
+    axes[1].plot([1,3,6], tot_iters_by_lookahead, 'g', label="HAAL-D")
+    # axes[1].plot(range(1,max_L+1), tot_iters_by_lookahead, 'g', label="HAAL-D")
     axes[1].set_ylim((0, 1.1*max(tot_iters_by_lookahead)))
     axes[1].set_ylabel("Average iterations")
     axes[1].set_xlabel("Lookahead window")
@@ -547,7 +547,7 @@ def realistic_orbital_simulation():
 def epsilon_effect():
     """
     Simulate a realistic orbital mechanics case
-    using distributed and centralized MHAL.
+    using distributed and centralized HAAL.
 
     Determine how the choice of epsilon for the auction
     effects the difference
@@ -572,20 +572,20 @@ def epsilon_effect():
 
         #Distributed
         print(f"Done generating benefits, solving distributed 0.1...")
-        _, d_val_0p1, _ = solve_w_mhal(benefits, init_assignment, lambda_, L, distributed=True, graphs=None, eps=0.1, verbose=True)
+        _, d_val_0p1, _ = solve_w_haal(benefits, init_assignment, lambda_, L, distributed=True, graphs=None, eps=0.1, verbose=True)
         d_tot_0p1 += d_val_0p1/num_avgs
 
         print(f"Done generating benefits, solving distributed 0.01...")
-        _, d_val_0p01, _ = solve_w_mhal(benefits, init_assignment, lambda_, L, distributed=True, graphs=None, eps=0.01, verbose=True)
+        _, d_val_0p01, _ = solve_w_haal(benefits, init_assignment, lambda_, L, distributed=True, graphs=None, eps=0.01, verbose=True)
         d_tot_0p01 += d_val_0p01/num_avgs
 
         print(f"Done generating benefits, solving distributed 0.001...")
-        _, d_val_0p001, _ = solve_w_mhal(benefits, init_assignment, lambda_, L, distributed=True, graphs=None, eps=0.001, verbose=True)
+        _, d_val_0p001, _ = solve_w_haal(benefits, init_assignment, lambda_, L, distributed=True, graphs=None, eps=0.001, verbose=True)
         d_tot_0p001 += d_val_0p001/num_avgs
 
         #Centralized
         print(f"Done solving distributed, solving centralized...")
-        _, c_val, _ = solve_w_mhal(benefits, init_assignment, lambda_, L, distributed=False)
+        _, c_val, _ = solve_w_haal(benefits, init_assignment, lambda_, L, distributed=False)
         c_tot += c_val/num_avgs
 
         #CBBA
@@ -618,7 +618,7 @@ def lookahead_optimality_testing():
         _, opt_val, _ = solve_optimally(benefit, None, 0.5)
         for lookahead in range(T, T+1):
             lower_bd = (0.5+0.5*(lookahead-1)/T)*opt_val
-            _, val, _ = solve_w_mhal(benefit, None, 0.5, lookahead, distributed=False)
+            _, val, _ = solve_w_haal(benefit, None, 0.5, lookahead, distributed=False)
             if val < opt_val:
                 print("Bound violation!!")
                 print(benefit)
@@ -640,7 +640,7 @@ def mha_vs_naive_counterexample():
                                 [1, 1, 1, 100],
                                 [1, 1, 100, 1]])
     
-    _, mv, _ = solve_w_mhal(benefits, init_assign, lambda_, 1)
+    _, mv, _ = solve_w_haal(benefits, init_assign, lambda_, 1)
     _, nv, _ = solve_wout_handover(benefits, init_assign, lambda_)
     print(mv, nv)
 
@@ -655,14 +655,14 @@ def performance_v_num_agents_line_chart():
     no_handover_vals = []
     sga_vals = []
     mha_vals = []
-    mhal_vals = []
-    mhald_vals = []
+    haal_vals = []
+    haald_vals = []
 
     no_handover_nhs = []
     sga_nhs = []
     mha_nhs = []
-    mhal_nhs = []
-    mhald_nhs = []
+    haal_nhs = []
+    haald_nhs = []
 
     for n in ns:
         print(f"Solving for {n} agents...")
@@ -671,14 +671,14 @@ def performance_v_num_agents_line_chart():
         no_handover_total_val = 0
         sga_total_val = 0
         mha_total_val = 0
-        mhal_total_vals = 0
-        mhald_total_vals = 0
+        haal_total_vals = 0
+        haald_total_vals = 0
 
         no_handover_total_nhs = 0
         sga_total_nhs = 0
         mha_total_nhs = 0
-        mhal_total_nhs = 0
-        mhald_total_nhs = 0
+        haal_total_nhs = 0
+        haald_total_nhs = 0
         
         for _ in range(num_avgs):
             print(_)
@@ -692,44 +692,44 @@ def performance_v_num_agents_line_chart():
             sga_total_val += sga_val/num_avgs
             sga_total_nhs += sga_nh/num_avgs
 
-            _, mha_val, mha_nh = solve_w_mhal(benefits, init_assign, lambda_, 1)
+            _, mha_val, mha_nh = solve_w_haal(benefits, init_assign, lambda_, 1)
             mha_total_val += mha_val/num_avgs
             mha_total_nhs += mha_nh/num_avgs
 
-            _, mhal_val, mhal_nh = solve_w_mhal(benefits, init_assign, lambda_, L)
-            mhal_total_vals += mhal_val/num_avgs
-            mhal_total_nhs += mhal_nh/num_avgs
+            _, haal_val, haal_nh = solve_w_haal(benefits, init_assign, lambda_, L)
+            haal_total_vals += haal_val/num_avgs
+            haal_total_nhs += haal_nh/num_avgs
 
-            _, mhald_val, mhald_nh = solve_w_mhal(benefits, init_assign, lambda_, L, distributed=True)
-            mhald_total_vals += mhald_val/num_avgs
-            mhald_total_nhs += mhald_nh/num_avgs
+            _, haald_val, haald_nh = solve_w_haal(benefits, init_assign, lambda_, L, distributed=True)
+            haald_total_vals += haald_val/num_avgs
+            haald_total_nhs += haald_nh/num_avgs
 
         no_handover_vals.append(no_handover_total_val/n)
         sga_vals.append(sga_total_val/n)
         mha_vals.append(mha_total_val/n)
-        mhal_vals.append(mhal_total_vals/n)
-        mhald_vals.append(mhald_total_vals/n)
+        haal_vals.append(haal_total_vals/n)
+        haald_vals.append(haald_total_vals/n)
 
         no_handover_nhs.append(no_handover_total_nhs/n)
         sga_nhs.append(sga_total_nhs/n)
         mha_nhs.append(mha_total_nhs/n)
-        mhal_nhs.append(mhal_total_nhs/n)
-        mhald_nhs.append(mhald_total_nhs/n)
+        haal_nhs.append(haal_total_nhs/n)
+        haald_nhs.append(haald_total_nhs/n)
 
     fig, axes = plt.subplots(2,1, sharex=True)
     fig.suptitle(f"Performance vs. number of agents over {num_avgs} runs, m=n, T={T}, L={L}, lambda={lambda_}")
     axes[0].plot(ns, no_handover_vals, label="Naive")
     axes[0].plot(ns, sga_vals, label="SGA")
     axes[0].plot(ns, mha_vals, label="MHA")
-    axes[0].plot(ns, mhal_vals, label=f"MHAL (L={L})")
-    axes[0].plot(ns, mhald_vals, label=f"MHAL-D (L={L})")
+    axes[0].plot(ns, haal_vals, label=f"HAAL (L={L})")
+    axes[0].plot(ns, haald_vals, label=f"HAAL-D (L={L})")
     axes[0].set_ylabel("Average benefit per agent")
     
     axes[1].plot(ns, no_handover_nhs, label="Naive")
     axes[1].plot(ns, sga_nhs, label="SGA")
     axes[1].plot(ns, mha_nhs, label="MHA")
-    axes[1].plot(ns, mhal_nhs, label=f"MHAL (L={L})")
-    axes[1].plot(ns, mhald_nhs, label=f"MHAL-D (L={L})")
+    axes[1].plot(ns, haal_nhs, label=f"HAAL (L={L})")
+    axes[1].plot(ns, haald_nhs, label=f"HAAL-D (L={L})")
     axes[1].set_ylabel("Average number of handovers per agent")
     
     axes[1].set_xlabel("Number of agents")
@@ -739,21 +739,21 @@ def performance_v_num_agents_line_chart():
     print(no_handover_vals)
     print(sga_vals)
     print(mha_vals)
-    print(mhal_vals)
-    print(mhald_vals)
+    print(haal_vals)
+    print(haald_vals)
 
     print(no_handover_nhs)
     print(sga_nhs)
     print(mha_nhs)
-    print(mhal_nhs)
-    print(mhald_nhs)
+    print(haal_nhs)
+    print(haald_nhs)
     plt.savefig("performance_v_num_agents.png")
     plt.show()
 
 def tasking_history_plot():
     """
     Tracks the history of task allocations in a system over time,
-    with and without MHAL
+    with and without HAAL
     """
     n = 150
     m = 300
@@ -787,29 +787,29 @@ def tasking_history_plot():
 
     no_handover_ass, no_handover_val, _ = solve_wout_handover(benefits, init_assign, lambda_)
 
-    mhal_ass, mhal_val, _ = solve_w_mhal(benefits, init_assign, lambda_, 1, graphs=None)
+    haal_ass, haal_val, _ = solve_w_haal(benefits, init_assign, lambda_, 1, graphs=None)
 
-    mhal5_ass, mhal5_val, _ = solve_w_mhal(benefits, init_assign, lambda_, 6, graphs=None)
+    haal5_ass, haal5_val, _ = solve_w_haal(benefits, init_assign, lambda_, 6, graphs=None)
 
     greedy_ass, greedy_val, _ = solve_greedily(benefits, init_assign, lambda_)
 
-    print(no_handover_val, mhal_val, mhal5_val, greedy_val)
+    print(no_handover_val, haal_val, haal5_val, greedy_val)
 
     #~~~~~~~~~~~~~~~~~~~~~~ PLOT OF TASKING HISTORY ~~~~~~~~~~~~~~~~~~~~~~~~~
     fig, axes = plt.subplots(4,1, sharex=True)
     agent1_no_handover_ass = [np.argmax(no_handover_a[0,:]) for no_handover_a in no_handover_ass]
 
-    agent1_mhal_ass = [np.argmax(mhal_a[0,:]) for mhal_a in mhal_ass]
+    agent1_haal_ass = [np.argmax(haal_a[0,:]) for haal_a in haal_ass]
 
-    agent1_mhal5_ass = [np.argmax(mhal5_a[0,:]) for mhal5_a in mhal5_ass]
+    agent1_haal5_ass = [np.argmax(haal5_a[0,:]) for haal5_a in haal5_ass]
 
     agent1_greedy_ass = [np.argmax(greedy_a[0,:]) for greedy_a in greedy_ass]
     agent2_greedy_ass = [np.argmax(greedy_a[1,:]) for greedy_a in greedy_ass]
     agent3_greedy_ass = [np.argmax(greedy_a[2,:]) for greedy_a in greedy_ass]
 
     axes[0].plot(range(T), agent1_no_handover_ass, label="Not Considering Handover")
-    axes[1].plot(range(T), agent1_mhal_ass, label="MHAL 1")
-    axes[2].plot(range(T), agent1_mhal5_ass, label="MHAL 5")
+    axes[1].plot(range(T), agent1_haal_ass, label="HAAL 1")
+    axes[2].plot(range(T), agent1_haal5_ass, label="HAAL 5")
     axes[3].plot(range(T), agent1_greedy_ass, label="Greedy1")
     axes[3].plot(range(T), agent2_greedy_ass, label="Greedy2")
     axes[3].plot(range(T), agent3_greedy_ass, label="Greedy3")
@@ -821,61 +821,61 @@ def tasking_history_plot():
 
     axes[0].set_title("Satellite 0 tasking, Naive")
     axes[1].set_title("Satellite 0 tasking, MHA")
-    axes[2].set_title("Satellite 0 tasking, MHAL (L=5)")
+    axes[2].set_title("Satellite 0 tasking, HAAL (L=5)")
     axes[3].set_title("Satellite 0 tasking, Greedy")
     plt.show(block=False)
 
     #~~~~~~~~~~~~~~~~~~~~ PLOT OF PRODUCTIVE TASKS COMPLETED ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     no_handover_valid_tasks = []
-    mhal_valid_tasks = []
-    mhal5_valid_tasks = []
+    haal_valid_tasks = []
+    haal5_valid_tasks = []
     for k in range(T):
         no_handover_assigned_benefits = no_handover_ass[k]*benefits[:,:,k]
         num_no_handover_valid_tasks = np.sum(np.where(no_handover_assigned_benefits, 1, 0))
 
         no_handover_valid_tasks.append(num_no_handover_valid_tasks)
 
-        mhal_assigned_benefits = mhal_ass[k]*benefits[:,:,k]
-        num_mhal_valid_tasks = np.sum(np.where(mhal_assigned_benefits, 1, 0))
+        haal_assigned_benefits = haal_ass[k]*benefits[:,:,k]
+        num_haal_valid_tasks = np.sum(np.where(haal_assigned_benefits, 1, 0))
 
-        mhal_valid_tasks.append(num_mhal_valid_tasks)
+        haal_valid_tasks.append(num_haal_valid_tasks)
 
-        mhal5_assigned_benefits = mhal5_ass[k]*benefits[:,:,k]
-        num_mhal5_valid_tasks = np.sum(np.where(mhal5_assigned_benefits, 1, 0))
+        haal5_assigned_benefits = haal5_ass[k]*benefits[:,:,k]
+        num_haal5_valid_tasks = np.sum(np.where(haal5_assigned_benefits, 1, 0))
 
-        mhal5_valid_tasks.append(num_mhal5_valid_tasks)
+        haal5_valid_tasks.append(num_haal5_valid_tasks)
 
     fig = plt.figure()
     plt.plot(range(T), no_handover_valid_tasks, label="Not Considering Handover")
-    plt.plot(range(T), mhal_valid_tasks, label="MHA")
-    plt.plot(range(T), mhal5_valid_tasks, label="MHAL")
+    plt.plot(range(T), haal_valid_tasks, label="MHA")
+    plt.plot(range(T), haal5_valid_tasks, label="HAAL")
     plt.legend()
     plt.show(block=False)
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PLOT OF BENEFITS CAPTURED ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     fig = plt.figure()
     gs = fig.add_gridspec(3,2)
     no_handover_ax = fig.add_subplot(gs[0,0])
-    mhal_ax = fig.add_subplot(gs[1,0])
-    mhal5_ax = fig.add_subplot(gs[2,0])
+    haal_ax = fig.add_subplot(gs[1,0])
+    haal5_ax = fig.add_subplot(gs[2,0])
     val_ax = fig.add_subplot(gs[:,1])
 
     prev_no_handover = 0
-    prev_mhal = 0
-    prev_mhal5 = 0
+    prev_haal = 0
+    prev_haal5 = 0
 
     no_handover_ben_line = []
-    mhal_ben_line = []
-    mhal5_ben_line = []
+    haal_ben_line = []
+    haal5_ben_line = []
 
     no_handover_val_line = []
-    mhal_val_line = []
-    mhal5_val_line = []
+    haal_val_line = []
+    haal5_val_line = []
     greedy_val_line = []
     
     for k in range(T):
         no_handover_choice = np.argmax(no_handover_ass[k][0,:])
-        mhal_choice = np.argmax(mhal_ass[k][0,:])
-        mhal5_choice = np.argmax(mhal5_ass[k][0,:])
+        haal_choice = np.argmax(haal_ass[k][0,:])
+        haal5_choice = np.argmax(haal5_ass[k][0,:])
 
         if prev_no_handover != no_handover_choice:
             no_handover_ax.axvline(k-0.5, linestyle='--')
@@ -889,54 +889,54 @@ def tasking_history_plot():
         else:
             no_handover_ben_line.append(benefits[0, no_handover_choice, k])
 
-        if prev_mhal != mhal_choice:
-            mhal_ax.axvline(k-0.5, linestyle='--')
+        if prev_haal != haal_choice:
+            haal_ax.axvline(k-0.5, linestyle='--')
             if k != 0: 
-                if len(mhal_ben_line) > 1:
-                    mhal_ax.plot(range(k-len(mhal_ben_line), k), mhal_ben_line,'b')
-                elif len(mhal_ben_line) == 1:
-                    mhal_ax.plot(range(k-len(mhal_ben_line), k), mhal_ben_line,'b.', markersize=1)
-            mhal_ben_line = [benefits[0,mhal_choice, k]]
+                if len(haal_ben_line) > 1:
+                    haal_ax.plot(range(k-len(haal_ben_line), k), haal_ben_line,'b')
+                elif len(haal_ben_line) == 1:
+                    haal_ax.plot(range(k-len(haal_ben_line), k), haal_ben_line,'b.', markersize=1)
+            haal_ben_line = [benefits[0,haal_choice, k]]
         else:
-            mhal_ben_line.append(benefits[0,mhal_choice, k])
+            haal_ben_line.append(benefits[0,haal_choice, k])
 
-        if prev_mhal5 != mhal5_choice:
-            mhal5_ax.axvline(k-0.5, linestyle='--')
+        if prev_haal5 != haal5_choice:
+            haal5_ax.axvline(k-0.5, linestyle='--')
             if k != 0: 
-                if len(mhal5_ben_line) > 1:
-                    mhal5_ax.plot(range(k-len(mhal5_ben_line), k), mhal5_ben_line,'g')
-                elif len(mhal5_ben_line) == 1:
-                    mhal5_ax.plot(range(k-len(mhal5_ben_line), k), mhal5_ben_line,'g.', markersize=1)
+                if len(haal5_ben_line) > 1:
+                    haal5_ax.plot(range(k-len(haal5_ben_line), k), haal5_ben_line,'g')
+                elif len(haal5_ben_line) == 1:
+                    haal5_ax.plot(range(k-len(haal5_ben_line), k), haal5_ben_line,'g.', markersize=1)
 
-            mhal5_ben_line = [benefits[0,mhal5_choice, k]]
+            haal5_ben_line = [benefits[0,haal5_choice, k]]
         else:
-            mhal5_ben_line.append(benefits[0,mhal5_choice, k])
+            haal5_ben_line.append(benefits[0,haal5_choice, k])
 
         no_handover_val_so_far, _ = calc_value_and_num_handovers(no_handover_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
         no_handover_val_line.append(no_handover_val_so_far)
 
-        mhal_val_so_far, _ = calc_value_and_num_handovers(mhal_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
-        mhal_val_line.append(mhal_val_so_far)
+        haal_val_so_far, _ = calc_value_and_num_handovers(haal_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
+        haal_val_line.append(haal_val_so_far)
 
-        mhal5_val_so_far, _ = calc_value_and_num_handovers(mhal5_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
-        mhal5_val_line.append(mhal5_val_so_far)
+        haal5_val_so_far, _ = calc_value_and_num_handovers(haal5_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
+        haal5_val_line.append(haal5_val_so_far)
 
         greedy_val_so_far, _ = calc_value_and_num_handovers(greedy_ass[:k+1], benefits[:,:,:k+1], init_assign, lambda_)
         greedy_val_line.append(greedy_val_so_far)
 
         prev_no_handover = no_handover_choice
-        prev_mhal = mhal_choice
-        prev_mhal5 = mhal5_choice
+        prev_haal = haal_choice
+        prev_haal5 = haal5_choice
 
     #plot last interval
     no_handover_ax.plot(range(k+1-len(no_handover_ben_line), k+1), no_handover_ben_line, 'r')
-    mhal_ax.plot(range(k+1-len(mhal_ben_line), k+1), mhal_ben_line,'b')
-    mhal5_ax.plot(range(k+1-len(mhal5_ben_line), k+1), mhal5_ben_line,'g')
+    haal_ax.plot(range(k+1-len(haal_ben_line), k+1), haal_ben_line,'b')
+    haal5_ax.plot(range(k+1-len(haal5_ben_line), k+1), haal5_ben_line,'g')
 
     #plot value over time
     val_ax.plot(range(T), no_handover_val_line, 'r', label='Not Considering Handover')
-    val_ax.plot(range(T), mhal_val_line, 'b', label='MHAL')
-    val_ax.plot(range(T), mhal5_val_line, 'g', label='MHAL 5')
+    val_ax.plot(range(T), haal_val_line, 'b', label='HAAL')
+    val_ax.plot(range(T), haal5_val_line, 'g', label='HAAL 5')
     val_ax.plot(range(T), greedy_val_line, 'k', label='Greedy')
     val_ax.legend()
 
@@ -946,7 +946,7 @@ def test_optimal_L(timestep=1*u.min, altitude=550, fov=60):
     a = Earth.R.to(u.km) + altitude*u.km
     sat = Satellite(Orbit.from_classical(Earth, a, 0*u.one, 0*u.deg, 0*u.deg, 0*u.deg, 0*u.deg), [], [], fov=fov)
     
-    L = generate_optimal_L(timestep, sat)
+    L = generate_safe_L(timestep, sat)
     return L
 
 def paper_experiment1():
@@ -966,14 +966,14 @@ def paper_experiment1():
 
     # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=2500)
 
-    # with open("mhal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
+    # with open("haal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
     #     pickle.dump(benefits,f)
-    # with open("mhal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
+    # with open("haal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
     #     pickle.dump(graphs,f)
 
-    # # with open("mhal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+    # # with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
     # #     benefits = pickle.load(f)
-    # # with open("mhal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+    # # with open("haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
     # #     graphs = pickle.load(f)
 
     # _, no_handover_val, _ = solve_wout_handover(benefits, None, lambda_)
@@ -995,11 +995,11 @@ def paper_experiment1():
     #     iterscbba_by_lookahead.append(avg_iters)
     #     valuecbba_by_lookahead.append(cbba_val)
         
-    #     _, d_val, _, avg_iters = solve_w_mhald_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
+    #     _, d_val, _, avg_iters = solve_w_haald_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
     #     itersd_by_lookahead.append(avg_iters)
     #     valued_by_lookahead.append(d_val)
 
-    #     _, c_val, _ = solve_w_mhal(benefits, None, lambda_, L, distributed=False, verbose=True)
+    #     _, c_val, _ = solve_w_haal(benefits, None, lambda_, L, distributed=False, verbose=True)
     #     valuec_by_lookahead.append(c_val)
 
     valuecbba_by_lookahead = [4208.38020192484, 4412.873727755446, 4657.90330919782, 4717.85859678172, 4710.212483240204, 4726.329218229788]
@@ -1023,28 +1023,28 @@ def paper_experiment1():
     axes[1].set_xlabel("Lookahead window L")
     axes[0].legend(loc='lower right')
 
-    axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g--', label="MHAL-D")
+    axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g--', label="HAAL-D")
     axes[1].plot(range(1,max_L+1), iterscbba_by_lookahead, 'b', label="CBBA")
     axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
     axes[0].set_xticks(range(1,max_L+1))
     axes[1].set_ylabel("Average iterations")
     axes[1].set_xlabel("Lookahead window")
 
-    with open("mhal_experiment1/results.txt", 'w') as f:
+    with open("haal_experiment1/results.txt", 'w') as f:
         f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {m}, T: {T}, altitude: {altitude}, fov: {fov}, timestep: {timestep}, max_L: {max_L}, lambda: {lambda_}\n")
         f.write(f"~~~~~~~~~~~~~~~~~~~~~\n")
         f.write(f"No Handover Value: {no_handover_val}\n")
         f.write(f"Greedy Value: {greedy_val}\n")
         f.write(f"CBBA Values by lookahead:\n{valuecbba_by_lookahead}\n")
-        f.write(f"MHAL Values by lookahead:\n{valuec_by_lookahead}\n")
-        f.write(f"MHAL-D Values by lookahead:\n{valued_by_lookahead}\n")
+        f.write(f"HAAL Values by lookahead:\n{valuec_by_lookahead}\n")
+        f.write(f"HAAL-D Values by lookahead:\n{valued_by_lookahead}\n")
 
         f.write(f"CBBA Iters by lookahead:\n{iterscbba_by_lookahead}\n")
-        f.write(f"MHAL Iters by lookahead:\n{itersd_by_lookahead}\n")
+        f.write(f"HAAL Iters by lookahead:\n{itersd_by_lookahead}\n")
 
     fig.set_figwidth(8)
     fig.set_figheight(5)
-    plt.savefig("mhal_experiment1/paper_exp1.pdf")
+    plt.savefig("haal_experiment1/paper_exp1.pdf")
     plt.show()
 
 def cbba_testing():
@@ -1098,47 +1098,47 @@ def connectivity_testing():
 def paper_experiment2_compute_assigns():
     lambda_ = 0.5
 
-    with open("mhal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
+    with open("haal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
         symmetric_benefits = pickle.load(f)
-    with open("mhal_experiment2/paper_exp2_graphs.pkl", 'rb') as f:
+    with open("haal_experiment2/paper_exp2_graphs.pkl", 'rb') as f:
         graphs = pickle.load(f)
 
     nohand_assigns, nohand_val, nohand_nh = solve_wout_handover(symmetric_benefits, None, lambda_)
-    with open("mhal_experiment2/paper_exp2_nohand_assigns.pkl", 'wb') as f:
+    with open("haal_experiment2/paper_exp2_nohand_assigns.pkl", 'wb') as f:
         pickle.dump(nohand_assigns, f)
 
     greedy_assigns, greedy_val, greedy_nh = solve_greedily(symmetric_benefits, None, lambda_)
-    with open("mhal_experiment2/paper_exp2_greedy_assigns.pkl", 'wb') as f:
+    with open("haal_experiment2/paper_exp2_greedy_assigns.pkl", 'wb') as f:
         pickle.dump(greedy_assigns, f)
     
-    mha_assigns, mha_val, mha_nh = solve_w_mhal(symmetric_benefits, None, lambda_, 6, verbose=True)
-    with open("mhal_experiment2/paper_exp2_mhalc_assigns.pkl", 'wb') as f:
+    mha_assigns, mha_val, mha_nh = solve_w_haal(symmetric_benefits, None, lambda_, 6, verbose=True)
+    with open("haal_experiment2/paper_exp2_haalc_assigns.pkl", 'wb') as f:
         pickle.dump(mha_assigns, f)
 
-    with open("mhal_experiment2/other_alg_results.txt", 'w') as f:
+    with open("haal_experiment2/other_alg_results.txt", 'w') as f:
         f.write(f"No handover value: {nohand_val}\n")
         f.write(f"No handover handovers: {nohand_nh}\n")
 
         f.write(f"Greedy value: {greedy_val}\n")
         f.write(f"Greedy handovers: {greedy_nh}\n")
 
-        f.write(f"MHAL Centralized value: {mha_val}\n")
+        f.write(f"HAAL Centralized value: {mha_val}\n")
         f.write(f"MHL Centralized handovers: {mha_nh}\n")
 
 def paper_experiment2_tasking_history():
-    with open('mhal_experiment2/paper_exp2_greedy_assigns.pkl', 'rb') as f:
+    with open('haal_experiment2/paper_exp2_greedy_assigns.pkl', 'rb') as f:
         greedy_assigns = pickle.load(f)
-    with open('mhal_experiment2/paper_exp2_mhalc_assigns.pkl', 'rb') as f:
-        mhalc_assigns = pickle.load(f)
-    with open('mhal_experiment2/paper_exp2_nohand_assigns.pkl', 'rb') as f:
+    with open('haal_experiment2/paper_exp2_haalc_assigns.pkl', 'rb') as f:
+        haalc_assigns = pickle.load(f)
+    with open('haal_experiment2/paper_exp2_nohand_assigns.pkl', 'rb') as f:
         nohand_assigns = pickle.load(f)
 
-    with open("mhal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
+    with open("haal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
         benefits = pickle.load(f)
 
     # greedy_assigns, _, _ = solve_greedily(benefits, None, 0.5)
 
-    # with open("mhal_experiment2/paper_exp2_greedy_assigns.pkl", 'wb') as f:
+    # with open("haal_experiment2/paper_exp2_greedy_assigns.pkl", 'wb') as f:
     #     pickle.dump(greedy_assigns, f)
 
     n = benefits.shape[0]
@@ -1150,20 +1150,20 @@ def paper_experiment2_tasking_history():
 
     nohand_val, nohand_nh = calc_value_and_num_handovers(nohand_assigns, benefits, init_assign, lambda_)
     greedy_val, greedy_nh = calc_value_and_num_handovers(greedy_assigns, benefits, init_assign, lambda_)
-    mhalc_val, mhalc_nh = calc_value_and_num_handovers(mhalc_assigns, benefits, init_assign, lambda_)
+    haalc_val, haalc_nh = calc_value_and_num_handovers(haalc_assigns, benefits, init_assign, lambda_)
 
-    # mhal_coverages = []
+    # haal_coverages = []
     # greedy_coverages = []
     # nohand_coverages = []
     # for k in range(T):
-    #     mhal_productive_assigns = np.where(mhalc_assigns[k][:,:813]*benefits[:,:813,k] > 0, 1, 0)
+    #     haal_productive_assigns = np.where(haalc_assigns[k][:,:813]*benefits[:,:813,k] > 0, 1, 0)
     #     greedy_productive_assigns = np.where(greedy_assigns[k][:,:813]*benefits[:,:813,k] > 0, 1, 0)
     #     nohand_productive_assigns = np.where(nohand_assigns[k][:,:813]*benefits[:,:813,k] > 0, 1, 0)
-    #     print(np.sum(mhal_productive_assigns), np.sum(greedy_productive_assigns), np.sum(nohand_productive_assigns))
-    #     mhal_coverages.append(np.sum(mhal_productive_assigns)/812)
+    #     print(np.sum(haal_productive_assigns), np.sum(greedy_productive_assigns), np.sum(nohand_productive_assigns))
+    #     haal_coverages.append(np.sum(haal_productive_assigns)/812)
     #     greedy_coverages.append(np.sum(greedy_productive_assigns)/812)
     #     nohand_coverages.append(np.sum(nohand_productive_assigns)/812)
-    # mhal_avg_cover = sum(mhal_coverages) / len(mhal_coverages)
+    # haal_avg_cover = sum(haal_coverages) / len(haal_coverages)
     # greedy_avg_cover = sum(greedy_coverages) / len(greedy_coverages)
     # nohand_avg_cover = sum(nohand_coverages) / len(nohand_coverages)
 
@@ -1171,12 +1171,12 @@ def paper_experiment2_tasking_history():
     # fig, axes = plt.subplots(4,1, sharex=True)
     # agent1_no_handover_ass = [np.argmax(no_handover_a[0,:]) for no_handover_a in nohand_assigns]
 
-    # agent1_mhal5_ass = [np.argmax(mhal5_a[0,:]) for mhal5_a in mhalc_assigns]
+    # agent1_haal5_ass = [np.argmax(haal5_a[0,:]) for haal5_a in haalc_assigns]
 
     # agent1_greedy_ass = [np.argmax(greedy_a[0,:]) for greedy_a in greedy_assigns]
 
     # axes[0].plot(range(T), agent1_no_handover_ass, label="Not Considering Handover")
-    # axes[1].plot(range(T), agent1_mhal5_ass, label="MHAL-C")
+    # axes[1].plot(range(T), agent1_haal5_ass, label="HAAL-C")
     # axes[2].plot(range(T), agent1_greedy_ass, label="Greedy1")
     # axes[2].set_xlabel("Time (min.)")
     # axes[0].set_ylabel("Task assignment")
@@ -1184,7 +1184,7 @@ def paper_experiment2_tasking_history():
     # axes[2].set_ylabel("Task assignment")
 
     # axes[0].set_title("Satellite 0 tasking, Naive")
-    # axes[1].set_title("Satellite 0 tasking, MHAL-C")
+    # axes[1].set_title("Satellite 0 tasking, HAAL-C")
     # axes[2].set_title("Satellite 0 tasking, Greedy")
     # plt.show(block=False)
 
@@ -1193,27 +1193,27 @@ def paper_experiment2_tasking_history():
     # gs = fig.add_gridspec(3,1)
     # no_handover_ax = fig.add_subplot(gs[0,0])
     # greedy_ax = fig.add_subplot(gs[1,0])
-    # mhal_ax = fig.add_subplot(gs[2,0])
+    # haal_ax = fig.add_subplot(gs[2,0])
     # val_ax = fig.add_subplot(gs[:,1])
 
     fig, axes = plt.subplots(3,1)
     no_handover_ax = axes[0]
     greedy_ax = axes[1]
-    mhal_ax = axes[2]
+    haal_ax = axes[2]
     
 
     prev_no_handover = 0
-    prev_mhal = 0
+    prev_haal = 0
     prev_greedy = 0
 
     no_handover_ben_line = []
-    mhal_ben_line = []
+    haal_ben_line = []
     greedy_ben_line = []
     
     agent_to_investigate = 900
     for k in range(T):
         no_handover_choice = np.argmax(nohand_assigns[k][agent_to_investigate,:])
-        mhal_choice = np.argmax(mhalc_assigns[k][agent_to_investigate,:])
+        haal_choice = np.argmax(haalc_assigns[k][agent_to_investigate,:])
         greedy_choice = np.argmax(greedy_assigns[k][agent_to_investigate,:])
 
         if prev_no_handover != no_handover_choice:
@@ -1228,17 +1228,17 @@ def paper_experiment2_tasking_history():
         else:
             no_handover_ben_line.append(benefits[agent_to_investigate, no_handover_choice, k])
 
-        if prev_mhal != mhal_choice:
-            vline = mhal_ax.axvline(k-0.5, linestyle='--')
+        if prev_haal != haal_choice:
+            vline = haal_ax.axvline(k-0.5, linestyle='--')
             vline_color = vline.get_color()
             if k != 0: 
-                if len(mhal_ben_line) > 1:
-                    mhal_ax.plot(range(k-len(mhal_ben_line), k), mhal_ben_line,'g')
-                elif len(mhal_ben_line) == 1:
-                    mhal_ax.plot(range(k-len(mhal_ben_line), k), mhal_ben_line,'g.', markersize=1)
-            mhal_ben_line = [benefits[agent_to_investigate,mhal_choice, k]]
+                if len(haal_ben_line) > 1:
+                    haal_ax.plot(range(k-len(haal_ben_line), k), haal_ben_line,'g')
+                elif len(haal_ben_line) == 1:
+                    haal_ax.plot(range(k-len(haal_ben_line), k), haal_ben_line,'g.', markersize=1)
+            haal_ben_line = [benefits[agent_to_investigate,haal_choice, k]]
         else:
-            mhal_ben_line.append(benefits[agent_to_investigate,mhal_choice, k])
+            haal_ben_line.append(benefits[agent_to_investigate,haal_choice, k])
 
         if prev_greedy != greedy_choice:
             greedy_ax.axvline(k-0.5, linestyle='--')
@@ -1252,44 +1252,44 @@ def paper_experiment2_tasking_history():
             greedy_ben_line.append(benefits[agent_to_investigate,greedy_choice, k])
 
         prev_no_handover = no_handover_choice
-        prev_mhal = mhal_choice
+        prev_haal = haal_choice
         prev_greedy = greedy_choice
 
     #plot last interval
     no_handover_ax.plot(range(k+1-len(no_handover_ben_line), k+1), no_handover_ben_line, 'r')
-    mhal_ax.plot(range(k+1-len(mhal_ben_line), k+1), mhal_ben_line,'g')
+    haal_ax.plot(range(k+1-len(haal_ben_line), k+1), haal_ben_line,'g')
     greedy_ax.plot(range(k+1-len(greedy_ben_line), k+1), greedy_ben_line,'b')
-    mhal_ax.set_xlim([0, T])
+    haal_ax.set_xlim([0, T])
     greedy_ax.set_xlim([0, T])
     no_handover_ax.set_xlim([0, T])
-    mhal_ax.set_xticks(range(0,T+1,10))
+    haal_ax.set_xticks(range(0,T+1,10))
     greedy_ax.set_xticks(range(0,T+1,10))
     no_handover_ax.set_xticks(range(0,T+1,10))
-    mhal_ax.set_ylim([-0.1, 2])
+    haal_ax.set_ylim([-0.1, 2])
     greedy_ax.set_ylim([-0.1, 2])
     no_handover_ax.set_ylim([-0.1, 2])
-    mhal_ax.set_ylabel("HAAL-D\nBenefit Captured")
+    haal_ax.set_ylabel("HAAL-D\nBenefit Captured")
     greedy_ax.set_ylabel("GA\nBenefit Captured")
     no_handover_ax.set_ylabel("NHA\nBenefit Captured")
 
     #phantom lines for legend
     # greedy_ax.plot([T+1], [0], 'r', label="No Handover")
-    # greedy_ax.plot([T+1], [0], 'g', label="MHAL-D")
-    mhal_ax.plot([T+1], [0], color=vline_color, linestyle='--', label="Task Changes")
-    mhal_ax.legend(loc="upper left",bbox_to_anchor=(0,-0.15))
-    # mhal_ax.set_title("MHAL-D")
+    # greedy_ax.plot([T+1], [0], 'g', label="HAAL-D")
+    haal_ax.plot([T+1], [0], color=vline_color, linestyle='--', label="Task Changes")
+    haal_ax.legend(loc="upper left",bbox_to_anchor=(0,-0.15))
+    # haal_ax.set_title("HAAL-D")
     # greedy_ax.set_title("Greedy")
     # no_handover_ax.set_title("No Handover")
-    mhal_ax.set_xlabel("Timestep")
-    plt.savefig("mhal_experiment2/paper_exp2_task_hist.pdf")
+    haal_ax.set_xlabel("Timestep")
+    plt.savefig("haal_experiment2/paper_exp2_task_hist.pdf")
     
 
     #~~~~~~~~~Plot bar charts~~~~~~~~~~~~~~
     #plot value over time
     fig, axes = plt.subplots(2,1)
     labels = ("NHA", "GA", "HAAL-D")
-    val_vals = (nohand_val, greedy_val, mhalc_val)
-    nh_vals = (nohand_nh, greedy_nh, mhalc_nh)
+    val_vals = (nohand_val, greedy_val, haalc_val)
+    nh_vals = (nohand_nh, greedy_nh, haalc_nh)
 
     val_bars = axes[0].bar(labels, val_vals)
     axes[0].set_ylabel("Total Value")
@@ -1302,7 +1302,7 @@ def paper_experiment2_tasking_history():
     nh_bars[1].set_color('b')
     val_bars[2].set_color('g')
     nh_bars[2].set_color('g')
-    plt.savefig("mhal_experiment2/paper_exp2_bars.pdf")
+    plt.savefig("haal_experiment2/paper_exp2_bars.pdf")
     plt.show()
 
 def lookahead_counterexample():
@@ -1338,8 +1338,8 @@ def lookahead_counterexample():
         print(a)
 
     L = benefit.shape[-1]
-    print("mhal")
-    ass, val, _ = solve_w_mhal(benefit, init_assignment, 1, L)
+    print("haal")
+    ass, val, _ = solve_w_haal(benefit, init_assignment, 1, L)
     print(val)
     for a in ass:
         print(a)
