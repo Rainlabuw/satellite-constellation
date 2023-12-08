@@ -1350,5 +1350,52 @@ def lookahead_counterexample():
 
     print(f"Ratio: {val/opt_val}, desired rat: {rat}")
 
+def l_compare_counterexample():
+    """
+    Trying to prove that a longer lookahead window is not necessarily better
+    """
+    benefit = np.zeros((4,4,3))
+    benefit[:,:,0] = np.array([[100, 1, 1, 1],
+                               [1, 100, 1, 1],
+                               [1, 1, 1.5, 1],
+                               [1, 1, 1, 1.5]])
+    
+    benefit[:,:,1] = np.array([[100, 1, 1, 1],
+                               [1, 100, 1, 1],
+                               [1, 1, 1.55, 1],
+                               [1, 1, 1, 1.55]])
+    
+    benefit[:,:,2] = np.array([[100, 1, 1, 1],
+                               [1, 100, 1, 1],
+                               [1, 1, 1, 100],
+                               [1, 1, 100, 1]])
+
+    init_assignment = np.array([[1, 0, 0, 0],
+                               [0, 1, 0, 0],
+                               [0, 0, 0, 1],
+                               [0, 0, 1, 0]])
+
+    ass, opt_val, _ = solve_optimally(benefit, init_assignment, 1)
+    print("Opt",opt_val)
+    for a in ass:
+        print(a)
+
+    L = benefit.shape[-1]
+    ass, val1, _ = solve_w_mhal(benefit, init_assignment, 1, 1)
+    print("L = 1",val1)
+    for a in ass:
+        print(a)
+
+    L = benefit.shape[-1]
+    ass, val2, _ = solve_w_mhal(benefit, init_assignment, 1, 2)
+    print("L = 2",val2)
+    for a in ass:
+        print(a)
+
+    rat = 1/2+1/2*((L-1)/L)
+
+    print(opt_val, val1, val2)
+
+
 if __name__ == "__main__":
-    lookahead_counterexample()
+    l_compare_counterexample()
