@@ -11,6 +11,7 @@ from methods import *
 from solve_optimally import solve_optimally
 from solve_wout_handover import solve_wout_handover
 from solve_w_haal import solve_w_haal, solve_w_haald_track_iters
+from solve_w_accelerated_haal import solve_w_accel_haal, solve_w_accel_haald_track_iters
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from solve_w_CBBA import solve_w_CBBA, solve_w_CBBA_track_iters
 from solve_greedily import solve_greedily
@@ -1350,5 +1351,24 @@ def lookahead_counterexample():
 
     print(f"Ratio: {val/opt_val}, desired rat: {rat}")
 
+def test_accelerated():
+    num_planes = 10
+    num_sats = 10
+
+    m = 100
+    n = 100
+
+    benefits, _ = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats, m, 93)
+
+    st = time.time()
+    _, val, _ = solve_w_haal(benefits, None, 0.5, 6)
+    print(f"Normal time {time.time()-st}")
+
+    st = time.time()
+    _, accel_val, _ = solve_w_accel_haal(benefits, None, 0.5, 6)
+    print(f"Accelerated time {time.time()-st}")
+
+    print(val, accel_val)
+
 if __name__ == "__main__":
-    lookahead_counterexample()
+    test_accelerated()

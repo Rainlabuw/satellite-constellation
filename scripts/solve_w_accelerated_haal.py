@@ -2,6 +2,7 @@ import numpy as np
 from methods import *
 import networkx as nx
 import time
+from collections import defaultdict
 
 def solve_w_accel_haal(benefits, init_assignment, lambda_, L, graphs=None, distributed=False, central_approx=False, verbose=False, eps=0.01):
     """
@@ -22,6 +23,8 @@ def solve_w_accel_haal(benefits, init_assignment, lambda_, L, graphs=None, distr
     
     chosen_assignments = []
 
+    prices = None
+
     while len(chosen_assignments) < T:
         if verbose: 
             if distributed: print(f"Solving w distributed HAAL, {len(chosen_assignments)}/{T}", end='\r')
@@ -41,10 +44,13 @@ def solve_w_accel_haal(benefits, init_assignment, lambda_, L, graphs=None, distr
             chosen_assignment, best_time_interval = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, lambda_, approx=central_approx)
         else:
             if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
-            haal_d_auction = HAAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
+            haal_d_auction = HAAL_D_Auction(benefit_mat_window, prices, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
             haal_d_auction.run_auction()
 
             chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
+            best_time_interval = haal_d_auction.chosen_ti
+            prices = haal_d_auction.prices
+            prices = shift_prices(prices)
 
         #Add chosen assignment to the list of assignments for each
         #timestep in the chosen time interval (i.e. twice for (0,1))
@@ -196,12 +202,15 @@ class HAAL_D_Auction(object):
     
     The algorithm stores the assigned task for each agent in their .choice attribute.
     """
-    def __init__(self, benefits, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=0.01, graph=None, lambda_=1, verbose=False):
+    def __init__(self, benefits, prices, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=0.01, graph=None, lambda_=1, verbose=False):
         # benefit matrix for the next L timesteps
         self.benefits = benefits
         self.n = benefits.shape[0]
         self.m = benefits.shape[1]
         self.T = benefits.shape[2]
+
+        #Prices of each time interval
+        self.prices = prices
 
         #If no graph is provided, assume the communication graph is complete.
         if graph is None:
@@ -225,6 +234,10 @@ class HAAL_D_Auction(object):
         #the benefits they recieve for completing each task and a list of their neighbors.
         self.agents = [HAAL_D_Agent(self, i, all_time_intervals, all_time_interval_sequences, \
                                     self.benefits[i,:,:], list(self.graph.neighbors(i))) for i in range(self.n)]
+
+        #Info to save for speedup of next iteration
+        self.prices = None
+        self.chosen_ti = None
 
     def run_auction(self):
         """
@@ -261,7 +274,8 @@ class HAAL_D_Auction(object):
 
             self.n_iterations += 1
 
-        print(f"After sum auction {self.n_iterations}")
+        self.save_prices()
+        self.chosen_ti = self.agents[0].chosen_ti #all agents should have the same chosen time interval
 
         if self.verbose:
             print(f"Auction results ({self.n_iterations} iterations):")
@@ -325,7 +339,14 @@ class HAAL_D_Auction(object):
             agent.value_comm_packets = value_packets
 
     def save_prices(self):
-        pass
+        """
+        Save previous prices for each agent, so that they can be used
+        in the next timestep.
+        """
+        self.prices = defaultdict(dict)
+        for agent in self.agents:
+            for ti in agent.all_time_intervals:
+                self.prices[agent.id][ti] = agent.prices[ti]
 
 
 class HAAL_D_Agent(object):
@@ -391,6 +412,7 @@ class HAAL_D_Agent(object):
 
         #Final task choice selected by the algorithm
         self.choice = None
+        self.chosen_ti = None
 
     def init_time_interval_benefits(self):
         """
@@ -513,6 +535,7 @@ class HAAL_D_Agent(object):
             
             #Select the choice associated with the best time interval sequence
             self.choice = self.choice_by_ti[best_tis[0]]
+            self.chosen_ti = best_tis[0]
         else: self.tis_values_converged = False
 
 if __name__ == "__main__":
