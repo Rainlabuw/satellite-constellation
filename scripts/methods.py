@@ -220,9 +220,9 @@ def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_, non_assig
     return adjusted_benefits
 
 #~~~~~~~~~~~~~~~~~~~~ ORBITAL MECHANICS STUFF ~~~~~~~~~~~~~~
-def calc_distance_based_benefits(sat, task):
+def calc_distance_based_benefits(sat, task, k):
     """
-    Given a satellite and a task, computes the benefit of the satellite.
+    Given a satellite, a task, and a timestep computes the benefit of the satellite.
 
     Benefit here is zero if the task is not visible from the satellite,
     and is a gaussian centered at the minimum distance away from the task,
@@ -232,7 +232,7 @@ def calc_distance_based_benefits(sat, task):
         body_rad = np.linalg.norm(sat.orbit._state.attractor.R.to_value(u.km))
         max_distance = np.sqrt(np.linalg.norm(sat.orbit.r.to_value(u.km))**2 - body_rad**2)
 
-        gaussian_height = task.benefit
+        gaussian_height = task.benefit[k]
         height_at_max_dist = 0.05*gaussian_height
         gaussian_sigma = np.sqrt(-max_distance**2/(2*np.log(height_at_max_dist/gaussian_height)))
 
@@ -244,9 +244,9 @@ def calc_distance_based_benefits(sat, task):
 
     return task_benefit
 
-def calc_fov_benefits(sat, task):
+def calc_fov_benefits(sat, task, k):
     """
-    Given a satellite and a task, computes the benefit of the satellite.
+    Given a satellite, a task, and a timestep, computes the benefit of the satellite.
 
     We calculate the angle between the satellite and the task, and then
     use a gaussian to determine the benefit, starting at 5% of the benefit
@@ -260,7 +260,7 @@ def calc_fov_benefits(sat, task):
     angle_btwn *= 180/np.pi #convert to degrees
 
     if angle_btwn < sat.fov and task.loc.is_visible(*sat.orbit.r):
-        gaussian_height = task.benefit
+        gaussian_height = task.benefit[k]
         height_at_max_fov = 0.05*gaussian_height
         gaussian_sigma = np.sqrt(-sat.fov**2/(2*np.log(height_at_max_fov/gaussian_height)))
 

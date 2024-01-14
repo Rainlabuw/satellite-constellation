@@ -1,4 +1,7 @@
 import numpy as np
+from collections import defaultdict
+from shapely.geometry import Polygon
+import pickle
 
 from constellation_sim.ConstellationSim import ConstellationSim, generate_smooth_coverage
 from constellation_sim.Task import Task
@@ -8,6 +11,15 @@ from poliastro.bodies import Earth
 from poliastro.twobody import Orbit
 from poliastro.spheroid_location import SpheroidLocation
 from astropy import units as u
+import h3
+
+from methods import *
+
+class ConstellationAndObjectSim(ConstellationSim):
+    def __init__(self, dt=30 * u.second, isl_dist=None) -> None:
+        super().__init__(dt, isl_dist)
+
+        self.tgt_objects = []
 
 def calc_object_track_benefits(sat, task):
     """
@@ -35,21 +47,83 @@ def calc_object_track_benefits(sat, task):
     
     return task_benefit
 
-def get_constellation_bens_and_graphs_area_coverage(lat_range, lon_range, fov=60):
+def add_tasks_with_objects(num_objects, lat_range, lon_range, const, T):
     """
-    Generate constellation benefits 
+    Generate tasks and associated benefits, with randomly initialized
+    objects moving through the regions.
+
+    #TODO: more robust movement model
     """
-    const = ConstellationSim(dt = 30*u.second)
+    #Initialize random objects
+    velocity = 6437*u.km/u.hr #approx hypersonic speed, 4000 mi/hr
+    num_objects_in_hex_by_time = [defaultdict(int) for k in range(T)]
+    for _ in range(num_objects):
+        #choose random direction of travel (east, west, north, or south)
+        dir = np.random.choice(["E","W","N","S"])
+        dir = {"E":(1,0), "W":(-1,0), "N":(0,1), "S":(0,-1)}[dir]
+
+        object_appear_time = np.random.randint(T)
+        start_lat = np.random.uniform(lat_range[0], lat_range[1])
+        start_lon = np.random.uniform(lon_range[0], lon_range[1])
+
+        #If going east or west
+        if dir == (1,0) or dir == (-1,0):
+            rad_at_lat = Earth.R.to(u.km)*np.cos(start_lat*np.pi/180)
+            ang_vel = velocity/rad_at_lat #rad/hr
+        else: 
+            ang_vel = velocity/Earth.R.to(u.km)
+        deg_change_per_ts = (ang_vel*const.dt*180/np.pi).to(u.one)
+
+        #Propagate object movement over time
+        curr_lat = start_lat
+        curr_lon = start_lon
+        for k in range(object_appear_time,T):
+            # Find the hexagon containing this lat/lon, increment target count
+            hexagon = h3.geo_to_h3(curr_lat, curr_lon, 1)
+            num_objects_in_hex_by_time[k][hexagon] += 1
+
+            curr_lat += deg_change_per_ts * dir[1]
+            curr_lon += deg_change_per_ts * dir[0]
+
+    # Initialize an empty set to store unique H3 indexes
+    hexagons = set()
+
+    # Step through the defined ranges and discretize the globe
+    lat_steps, lon_steps = 0.5, 0.5
+    lat = lat_range[0]
+    while lat <= lat_range[1]:
+        lon = lon_range[0]
+        while lon <= lon_range[1]:
+            # Find the hexagon containing this lat/lon
+            hexagon = h3.geo_to_h3(lat, lon, 1)
+            hexagons.add(hexagon)
+            lon += lon_steps
+        lat += lat_steps
+
+    #Add tasks at centroid of all hexagons
+    for hexagon in hexagons:
+        boundary = h3.h3_to_geo_boundary(hexagon, geo_json=True)
+        polygon = Polygon(boundary)
+
+        task_loc = SpheroidLocation(polygon.centroid.y*u.deg, polygon.centroid.x*u.deg, 0*u.m, Earth)
+        
+        task_benefit = np.zeros(T)
+        for k in range(T):
+            task_benefit[k] += 1 + 10*num_objects_in_hex_by_time[k][hexagon]
+
+        const.add_task(Task(task_loc, task_benefit))
+
+def get_constellation_bens_and_graphs_object_tracking_area(lat_range, lon_range, fov=60):
+    """
+    Generate constellation benefits based on tracking ojects
+    """
+    T = 60 #30 minutes
+    const = ConstellationSim(dt = 30*u.second, isl_dist=2500)
     earth = Earth
 
-    #Generate evenly space tasks over a region of the earth
-    lats, lons = generate_smooth_coverage(lat_range, lon_range)
-    for lat, lon in zip(lats, lons):
-        task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
-        
-        task_benefit = np.random.uniform(1, 2)
-        task = Task(task_loc, task_benefit)
-        const.add_task(task)
+    #Generate tasks, with appropriate benefit matrices as objects pass through
+    num_tasks = 50
+    add_tasks_with_objects(num_tasks, lat_range, lon_range, const, T)
 
     #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
     #10 evenly spaced planes of satellites, each with n/10 satellites per plane
@@ -70,9 +144,7 @@ def get_constellation_bens_and_graphs_area_coverage(lat_range, lon_range, fov=60
             sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num, fov=fov)
             const.add_sat(sat)
 
-    print(len(const.tasks))
-    T = 60 #30 minutes
-    benefits, _ = const.propagate_orbits(T, calc_object_track_benefits)
+    benefits, graphs = const.propagate_orbits(T, calc_fov_benefits)
 
     limited_benefits = np.zeros_like(benefits)
     active_sats = []
@@ -86,18 +158,30 @@ def get_constellation_bens_and_graphs_area_coverage(lat_range, lon_range, fov=60
             active_sats.append(curr_sat)
     
     const.sats = active_sats
-    print("\nnum sats",len(const.sats))
+    limited_benefits = limited_benefits[:len(const.sats),:,:] #truncate unused satellites
+
+    #Create second opportunity for tasks to be completed, with 25% of the benefits
+    benefits_w_backup_tasks = np.zeros((limited_benefits.shape[0], limited_benefits.shape[1]*2, limited_benefits.shape[2]))
+    benefits_w_backup_tasks[:,:limited_benefits.shape[1],:] = limited_benefits
+    benefits_w_backup_tasks[:,limited_benefits.shape[1]:,:] = limited_benefits*0.25
 
     for k in range(T):
         num_active_sats = 0
         for i in range(limited_benefits.shape[0]):
             if np.sum(limited_benefits[i,:,k]) > 0:
                 num_active_sats += 1
-            
-        print(f"time {k}, {num_active_sats} active sats")
+
+    with open('object_track_experiment/benefits_large_const_50_tasks.pkl','wb') as f:
+        pickle.dump(benefits_w_backup_tasks, f)
+    with open('object_track_experiment/graphs_large_const_50_tasks.pkl','wb') as f:
+        pickle.dump(graphs, f)
 
 if __name__ == "__main__":
     lat_range = (20, 50)
     lon_range = (73, 135)
 
-    get_constellation_bens_and_graphs_area_coverage(lat_range, lon_range)
+    get_constellation_bens_and_graphs_object_tracking_area(lat_range, lon_range)
+
+    with open('object_track_experiment/benefits_large_const_50_tasks.pkl', 'rb') as f:
+        ben = pickle.load(f)
+        print(ben.shape)

@@ -61,13 +61,6 @@ class ConstellationSim(object):
         self.tasks.extend(tasks)
         self.m = len(self.tasks)
 
-    def update(self):
-        """
-        Updates the constellation state by propagating things forward in time
-        """
-        for sat in const.sats:
-            sat.propagate_orbit(self.dt)
-
     def update_plot(self, frame):
         """
         Updates the constellation state and updates the plot accordingly
@@ -151,7 +144,7 @@ class ConstellationSim(object):
                 self.orbits_over_time[sat.id].append(sat.orbit)
                 for task in self.tasks:
                     #Compute the distance 
-                    self.benefits_over_time[sat.id, task.id, k] = benefit_func(sat, task)
+                    self.benefits_over_time[sat.id, task.id, k] = benefit_func(sat, task, k)
 
         return self.benefits_over_time, self.graphs_over_time
 
@@ -200,7 +193,7 @@ def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plan
         lat = np.random.uniform(-55, 55)
         task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
-        task_benefit = np.random.uniform(1, 2)
+        task_benefit = np.random.uniform(1, 2, size=T)
         task = Task(task_loc, task_benefit)
         const.add_task(task)
 
@@ -265,7 +258,7 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
     for lat, lon in zip(lats, lons):
         task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
-        task_benefit = np.random.uniform(1, 2)
+        task_benefit = np.random.uniform(1, 2, size=T)
         task = Task(task_loc, task_benefit)
         const.add_task(task)
 
