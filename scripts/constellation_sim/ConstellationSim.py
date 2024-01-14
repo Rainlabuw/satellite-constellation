@@ -207,13 +207,9 @@ def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plan
     benefits, graphs = const.propagate_orbits(T, benefit_func)
     return benefits, graphs
 
-def generate_smooth_coverage(lat_max):
+def generate_smooth_coverage(lat_range, lon_range):
     # Initialize an empty set to store unique H3 indexes
     hexagons = set()
-
-    # Latitude and Longitude ranges
-    lat_range = (-lat_max, lat_max)
-    lon_range = (-180, 180)
 
     # Step through the defined ranges and discretize the globe
     lat_steps, lon_steps = 0.5, 0.5
@@ -265,7 +261,7 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
             const.add_sat(sat)
 
     #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    lats, lons = generate_smooth_coverage(inc.to_value(u.deg))
+    lats, lons = generate_smooth_coverage((-inc.to_value(u.deg), -inc.to_value(u.deg)), (-180, 180))
     for lat, lon in zip(lats, lons):
         task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
@@ -277,27 +273,5 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
     return benefits, graphs
 
 if __name__ == "__main__":
-    const = ConstellationSim(dt=1*u.min)
-    earth = Earth
-
-    r = [earth.R.to_value(u.km) + 500, 0, 0] << u.km
-    v = [-3.457, 6.618, 2.533] << u.km / u.s
-
-    sat = Satellite(Orbit.from_vectors(earth, r, v), [], [], plane_id=0)
-
-    delta = generate_optimal_L(1*u.min, sat)
-
-    task_loc = SpheroidLocation(delta*u.deg, 0*u.deg, 0*u.m, earth)
-    task = Task(task_loc, 1)
-
-    fig, axes = plt.subplots()
-
-    axes.plot(task.loc.cartesian_cords[0].to_value(u.km), task.loc.cartesian_cords[2].to_value(u.km), 'go')
-    axes.plot(sat.orbit.r[0].to_value(u.km), sat.orbit.r[2].to_value(u.km), 'ro')
-
-    axes.plot([task.loc.cartesian_cords[0].to_value(u.km), sat.orbit.r[0].to_value(u.km)],
-              [task.loc.cartesian_cords[2].to_value(u.km), sat.orbit.r[2].to_value(u.km)], 'b--')
-
-    axes.add_patch(plt.Circle((0, 0), earth.R.to_value(u.km), color='g',fill=False))
-
-    plt.show()
+    lat_range = (20, 50)
+    lon_range = (73, 135)
