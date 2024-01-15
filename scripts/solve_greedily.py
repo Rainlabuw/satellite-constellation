@@ -1,7 +1,7 @@
 from methods import *
 import numpy as np
 
-def solve_greedily(benefits, init_assignment, lambda_, state_dependence_fn=adjust_benefit_mat_w_generic_handover_penalty):
+def solve_greedily(benefits, init_assignment, lambda_, state_dep_fn=generic_handover_state_dep_fn):
     """
     Solve with greedy handover strategy - start with optimal assignments,
     and when a handover is needed (a satellite moved too far away from task)
@@ -92,6 +92,6 @@ def solve_greedily(benefits, init_assignment, lambda_, state_dependence_fn=adjus
 
         assignment_mats.append(curr_assignment_mat)
 
-    total_value = calc_assign_seq_state_dependent_value(init_assignment, assignment_mats, benefits, lambda_, state_dependence_fn=state_dependence_fn)
+    total_value = calc_assign_seq_state_dependent_value(init_assignment, assignment_mats, benefits, lambda_, state_dep_fn=state_dep_fn)
     
     return assignment_mats, total_value

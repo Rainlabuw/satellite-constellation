@@ -1,7 +1,7 @@
 import numpy as np
 from methods import *
 
-def solve_wout_handover(benefit_mats_over_time, init_assignment, lambda_, state_dependence_fn=adjust_benefit_mat_w_generic_handover_penalty):
+def solve_wout_handover(benefit_mats_over_time, init_assignment, lambda_, state_dep_fn=generic_handover_state_dep_fn):
     """
     Solves problem without regard to handover minimization.
     (NHA in the paper.)
@@ -19,6 +19,6 @@ def solve_wout_handover(benefit_mats_over_time, init_assignment, lambda_, state_
         
         assignment_mats.append(assignment_mat)
 
-    total_value = calc_assign_seq_state_dependent_value(init_assignment, assignment_mats, benefit_mats_over_time, lambda_, state_dependence_fn=state_dependence_fn)
+    total_value = calc_assign_seq_state_dependent_value(init_assignment, assignment_mats, benefit_mats_over_time, lambda_, state_dep_fn=state_dep_fn)
 
     return assignment_mats, total_value

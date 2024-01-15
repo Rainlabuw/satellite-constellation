@@ -3,7 +3,7 @@ from methods import *
 import networkx as nx
 import time
 
-def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, verbose=False, eps=0.01, state_dependence_fn=adjust_benefit_mat_w_generic_handover_penalty):
+def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, verbose=False, eps=0.01, state_dep_fn=generic_handover_state_dep_fn):
     """
     Sequentially solves the problem using the HAAL algorithm.
 
@@ -32,16 +32,16 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, v
         all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
 
         chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, 
-                                                                      lambda_, parallel_approx=parallel_approx, state_dependence_fn=state_dependence_fn)
+                                                                      lambda_, parallel_approx=parallel_approx, state_dep_fn=state_dep_fn)
 
         chosen_assignments.append(chosen_assignment)
         curr_assignment = chosen_assignment
     
-    total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, benefits, lambda_, state_dependence_fn=state_dependence_fn)
+    total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, benefits, lambda_, state_dep_fn=state_dep_fn)
     
     return chosen_assignments, total_value
 
-def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, benefit_mat_window, lambda_, parallel_approx=False, state_dependence_fn=adjust_benefit_mat_w_generic_handover_penalty):
+def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, benefit_mat_window, lambda_, parallel_approx=False, state_dep_fn=generic_handover_state_dep_fn):
     """
     Chooses the best time interval sequence from a list of time interval sequences,
     and return the corresponding assignment.
@@ -59,14 +59,17 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
         tis_first_assignment = None
 
         for i, time_interval in enumerate(time_interval_sequence):
-            #Calculate combined benefit matrix from this time interval
+            #Grab benefit matrices from this time interval
             combined_benefit_mat = benefit_mat_window[:,:,time_interval[0]:time_interval[1]+1]
+            if combined_benefit_mat.ndim == 2: #make sure combined_benefit_mat is 3D
+                combined_benefit_mat = np.expand_dims(combined_benefit_mat, axis=2) 
 
             #Adjust the benefit matrix to incentivize agents being assigned the same task twice.
             #Note that if we're not approximating, we incentivize staying close to the previous assignment calculated during this
             #time interval sequence, not the actual assignment that the agents currently have (i.e. prev_assignment)
-            if not parallel_approx: benefit_hat = state_dependence_fn(combined_benefit_mat, tis_assignment_curr, lambda_)
-            else: benefit_hat = state_dependence_fn(combined_benefit_mat, prev_assignment, lambda_)
+            benefit_hat = np.copy(combined_benefit_mat)
+            if not parallel_approx: benefit_hat[:,:,0] = state_dep_fn(benefit_hat[:,:,0], tis_assignment_curr, lambda_)
+            else: benefit_hat[:,:,0] = state_dep_fn(benefit_hat[:,:,0], prev_assignment, lambda_)
             benefit_hat = benefit_hat.sum(axis=-1)
 
             #Generate an assignment using a centralized solution.

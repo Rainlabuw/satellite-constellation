@@ -118,23 +118,11 @@ def is_assignment_mat_sequence_valid(assignment_mat_seq):
     return True
 
 #~~~~~~~~~~~~~~~~~~~~GENERIC HANDOVER PENALTY STUFF~~~~~~~~~~~~~~
-def adjust_benefit_mat_w_generic_handover_penalty(benefits, prev_assign, lambda_):
+def generic_handover_state_dep_fn(benefits, prev_assign, lambda_):
     """
-    Adjusts the benefits matrix to account for generic handover penalty (i.e. constant penalty for switching tasks)
-
-    If given a 2D matrix, will adjust and return a 3D matrix, with the third dimension being size 1.
-
-    If given a 3D matrix, will adjust only the first timestep matrix, and return a 3D matrix.
+    Adjusts a 2D benefit matrix to account for generic handover penalty (i.e. constant penalty for switching tasks)
     """
-    if benefits.ndim == 2: 
-        benefits = np.expand_dims(benefits, axis=2)
-    
-    adjusted_first_benefits = np.where(prev_assign == 0, benefits[:,:,0]-lambda_, benefits[:,:,0])
-    
-    adjusted_benefits = np.copy(benefits)
-    adjusted_benefits[:,:,0] = adjusted_first_benefits
-
-    return adjusted_benefits
+    return np.where(prev_assign == 0, benefits-lambda_, benefits)
 
 def calc_distance_btwn_solutions(agents1, agents2):
     """
@@ -149,16 +137,16 @@ def calc_distance_btwn_solutions(agents1, agents2):
     return dist
 
 #~~~~~~~~~~~~~~~~~~~~STATE DEPENDENT VALUE STUFF~~~~~~~~~~~~~~
-def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits, lambda_, state_dependence_fn=adjust_benefit_mat_w_generic_handover_penalty):
+def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits, lambda_, state_dep_fn=generic_handover_state_dep_fn):
     state_dependent_value = 0
 
     benefit_hat = np.copy(benefits[:,:,0])
     if init_assignment is not None: #adjust based on init_assignment if it exists
-        benefit_hat = np.squeeze(state_dependence_fn(benefits[:,:,0], init_assignment, lambda_), axis=2) #want 2D matrix, not 3D
+        benefit_hat = state_dep_fn(benefits[:,:,0], init_assignment, lambda_)
     state_dependent_value += (benefit_hat * assignments[0]).sum()
 
     for k in range(len(assignments)-1):
-        benefit_hat = np.squeeze(state_dependence_fn(benefits[:,:,k+1], assignments[k], lambda_), axis=2)
+        benefit_hat = state_dep_fn(benefits[:,:,k+1], assignments[k], lambda_)
         state_dependent_value += (benefit_hat * assignments[k+1]).sum()
 
     return state_dependent_value
