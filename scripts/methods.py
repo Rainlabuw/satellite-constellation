@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 import scipy.optimize
 from astropy import units as u
 
+# Set the printing options to display more entries
+np.set_printoptions(threshold=np.inf)
+
 #~~~~~~~~~~~~~~~~~~~GRAPH STUFF~~~~~~~~~~~
 def rand_connected_graph(num_nodes):
     G = nx.Graph()
@@ -114,7 +117,52 @@ def is_assignment_mat_sequence_valid(assignment_mat_seq):
                 return False
     return True
 
-#~~~~~~~~~~~~~~~~~~~~HANDOVER PENALTY STUFF~~~~~~~~~~~~~~
+#~~~~~~~~~~~~~~~~~~~~GENERIC HANDOVER PENALTY STUFF~~~~~~~~~~~~~~
+def adjust_benefit_mat_w_generic_handover_penalty(benefits, prev_assign, lambda_):
+    """
+    Adjusts the benefits matrix to account for generic handover penalty (i.e. constant penalty for switching tasks)
+
+    If given a 2D matrix, will adjust and return a 3D matrix, with the third dimension being size 1.
+
+    If given a 3D matrix, will adjust only the first timestep matrix, and return a 3D matrix.
+    """
+    if benefits.ndim == 2: 
+        benefits = np.expand_dims(benefits, axis=2)
+    
+    adjusted_first_benefits = np.where(prev_assign == 0, benefits[:,:,0]-lambda_, benefits[:,:,0])
+    
+    adjusted_benefits = np.copy(benefits)
+    adjusted_benefits[:,:,0] = adjusted_first_benefits
+
+    return adjusted_benefits
+
+def calc_distance_btwn_solutions(agents1, agents2):
+    """
+    Calc how many switches were made between two assignments,
+    given lists of agents as would be returned by an auction.
+    """
+    dist = 0
+    for agent1, agent2 in zip(agents1, agents2):
+        if agent1.choice != agent2.choice:
+            dist += 1
+
+    return dist
+
+#~~~~~~~~~~~~~~~~~~~~STATE DEPENDENT VALUE STUFF~~~~~~~~~~~~~~
+def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits, lambda_, state_dependence_fn=adjust_benefit_mat_w_generic_handover_penalty):
+    state_dependent_value = 0
+
+    benefit_hat = np.copy(benefits[:,:,0])
+    if init_assignment is not None: #adjust based on init_assignment if it exists
+        benefit_hat = np.squeeze(state_dependence_fn(benefits[:,:,0], init_assignment, lambda_), axis=2) #want 2D matrix, not 3D
+    state_dependent_value += (benefit_hat * assignments[0]).sum()
+
+    for k in range(len(assignments)-1):
+        benefit_hat = np.squeeze(state_dependence_fn(benefits[:,:,k+1], assignments[k], lambda_), axis=2)
+        state_dependent_value += (benefit_hat * assignments[k+1]).sum()
+
+    return state_dependent_value
+
 def calc_assign_seq_handover_penalty(init_assignment, assignments, lambda_, benefits=None):
     """
     Given an initial assignment and a list of assignment matrices,
@@ -151,18 +199,6 @@ def calc_assign_seq_handover_penalty(init_assignment, assignments, lambda_, bene
                 handover_pen += lambda_
 
     return handover_pen
-
-def calc_distance_btwn_solutions(agents1, agents2):
-    """
-    Calc how many switches were made between two assignments,
-    given lists of agents as would be returned by an auction.
-    """
-    dist = 0
-    for agent1, agent2 in zip(agents1, agents2):
-        if agent1.choice != agent2.choice:
-            dist += 1
-
-    return dist
 
 def calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_, non_assign_pen=True):
     """
@@ -209,15 +245,63 @@ def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_, non_assig
     """
     Adjusts the benefits matrix to account for handover penalties.
 
-    Defined as function "h" in the paper.
+    Expects to take in a 3D array, with potentially multiple timesteps in the last axis, but only
+    applies the penalty to the first benefit matrix (in index 0 of the time axis). 
     """
     #If there is no penalty for switching to a non assignment, the don't add a penalty
     #if the new benefits are zero (the task is not valid)
     if not non_assign_pen:
-        adjusted_benefits = np.where((prev_assign == 0) & (benefits != 0), benefits-lambda_, benefits)
+        adjusted_first_benefits = np.where((prev_assign == 0) & (benefits[:,:,0] != 0), benefits[:,:,0]-lambda_, benefits[:,:,0])
     else:
-        adjusted_benefits = np.where(prev_assign == 0, benefits-lambda_, benefits)
+        adjusted_first_benefits = np.where(prev_assign == 0, benefits[:,:,0]-lambda_, benefits[:,:,0])
+    
+    adjusted_benefits = np.copy(benefits)
+    adjusted_benefits[:,:,0] = adjusted_first_benefits
+    
     return adjusted_benefits
+
+#~~~~~~~~~~~~~~~~~~~~HAAL UTILITIES~~~~~~~~~~~~~~
+def build_time_interval_sequences(all_time_intervals, len_window):
+    """
+    Recursively constructs all possible time interval sequences from the set of all time intervals.
+
+    Implements the logic behind BUILD_TIME_INTERVAL_SEQUENCES from the paper.
+    """
+    all_time_interval_sequences = []
+
+    def build_time_interval_sequences_rec(all_time_intervals, time_interval_sequence, len_window):
+        #Grab the most recent timestep from the end of the current sol
+        if time_interval_sequence == []:
+            most_recent_timestep = -1 #set it to -1 so that time intervals starting w 0 will be selected
+        else:
+            most_recent_timestep = time_interval_sequence[-1][-1]
+
+        #When we have an time interval seq which ends at the last timestep, we're done
+        #and can add it to the list
+        if most_recent_timestep == (len_window-1):
+            all_time_interval_sequences.append(tuple(time_interval_sequence))
+        else:
+            #Iterate through all of the time intervals, looking for ones that start where this one ended
+            for time_interval in all_time_intervals:
+                if most_recent_timestep == time_interval[0]-1:
+                    build_time_interval_sequences_rec(all_time_intervals, time_interval_sequence + [time_interval], len_window)
+
+    build_time_interval_sequences_rec(all_time_intervals, [], len_window)
+
+    return all_time_interval_sequences
+
+def generate_all_time_intervals(L):
+    """
+    Generates all possible time intervals from the next few timesteps.
+
+    Implements GENERATE_ALL_TIME_INTERVALS from the paper.
+    """
+    all_time_intervals = []
+    for i in range(L):
+        for j in range(i,L):
+            all_time_intervals.append((i,j))
+        
+    return all_time_intervals
 
 #~~~~~~~~~~~~~~~~~~~~ ORBITAL MECHANICS STUFF ~~~~~~~~~~~~~~
 def calc_distance_based_benefits(sat, task, k):

@@ -14,38 +14,7 @@ from astropy import units as u
 import h3
 
 from methods import *
-
-class ConstellationAndObjectSim(ConstellationSim):
-    def __init__(self, dt=30 * u.second, isl_dist=None) -> None:
-        super().__init__(dt, isl_dist)
-
-        self.tgt_objects = []
-
-def calc_object_track_benefits(sat, task):
-    """
-    Given a satellite and a task, computes the benefit of the satellite.
-
-    We calculate the angle between the satellite and the task, and then
-    use a gaussian to determine the benefit, starting at 5% of the benefit
-    when the angle between the satellite and the task is the maximum FOV,
-    and rising to the maximum when the satellite is directly overhead.
-    """
-    sat_r = sat.orbit.r.to_value(u.km)
-    sat_to_task = task.loc.cartesian_cords.to_value(u.km) - sat_r
-
-    angle_btwn = np.arccos(np.dot(-sat_r, sat_to_task)/(np.linalg.norm(sat_r)*np.linalg.norm(sat_to_task)))
-    angle_btwn *= 180/np.pi #convert to degrees
-
-    if angle_btwn < sat.fov and task.loc.is_visible(*sat.orbit.r):
-        gaussian_height = task.benefit
-        height_at_max_fov = 0.05*gaussian_height
-        gaussian_sigma = np.sqrt(-sat.fov**2/(2*np.log(height_at_max_fov/gaussian_height)))
-
-        task_benefit = gaussian_height*np.exp(-angle_btwn**2/(2*gaussian_sigma**2))
-    else:
-        task_benefit = 0
-    
-    return task_benefit
+from solve_w_haal import solve_w_haal
 
 def add_tasks_with_objects(num_objects, lat_range, lon_range, const, T):
     """
@@ -176,12 +145,23 @@ def get_constellation_bens_and_graphs_object_tracking_area(lat_range, lon_range,
     with open('object_track_experiment/graphs_large_const_50_tasks.pkl','wb') as f:
         pickle.dump(graphs, f)
 
+def add_timestep_loss_to_benefit_matrix(benefits, prev_assign, lambda_):
+    """
+    Adds a loss to the benefit matrix which encodes the cost of switching
+    being losing the entire benefit of the task in the first timestep.
+    """
+    if benefits.ndim == 2: benefits = np.expand_dims(benefits, axis=2)
+
+    adjusted_first_benefits = np.where(prev_assign == 0, 0, benefits[:,:,0])
+    
+    adjusted_benefits = np.copy(benefits)
+    adjusted_benefits[:,:,0] = adjusted_first_benefits
+    
+    return adjusted_benefits
+
 if __name__ == "__main__":
-    lat_range = (20, 50)
-    lon_range = (73, 135)
+    # lat_range = (20, 50)
+    # lon_range = (73, 135)
 
-    get_constellation_bens_and_graphs_object_tracking_area(lat_range, lon_range)
-
-    with open('object_track_experiment/benefits_large_const_50_tasks.pkl', 'rb') as f:
-        ben = pickle.load(f)
-        print(ben.shape)
+    # get_constellation_bens_and_graphs_object_tracking_area(lat_range, lon_range)
+    pass

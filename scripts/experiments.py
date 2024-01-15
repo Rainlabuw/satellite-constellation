@@ -10,12 +10,14 @@ from methods import *
 
 from solve_optimally import solve_optimally
 from solve_wout_handover import solve_wout_handover
-from solve_w_haal import solve_w_haal, solve_w_haald_track_iters
-from solve_w_accelerated_haal import solve_w_accel_haal, solve_w_accel_haald_track_iters
+from solve_w_haal import solve_w_haal
+from solve_w_haald import solve_w_haald, solve_w_haald_track_iters
+from solve_w_accelerated_haal import solve_w_accel_haal
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from solve_w_CBBA import solve_w_CBBA, solve_w_CBBA_track_iters
 from solve_greedily import solve_greedily
 from classic_auction import Auction
+from object_track_scenario import add_timestep_loss_to_benefit_matrix
 
 from constellation_sim.ConstellationSim import get_constellation_bens_and_graphs_random_tasks, get_constellation_bens_and_graphs_coverage, ConstellationSim
 from constellation_sim.Satellite import Satellite
@@ -1416,6 +1418,43 @@ def l_compare_counterexample():
 
     print(opt_val, val1, val2)
 
+def object_tracking_test():
+    with open('/Users/joshholder/code/satellite-constellation/scripts/object_track_experiment/benefits_large_const_50_tasks.pkl', 'rb') as f:
+        benefits = pickle.load(f)
+    with open('/Users/joshholder/code/satellite-constellation/scripts/object_track_experiment/graphs_large_const_50_tasks.pkl', 'rb') as f:
+        graphs = pickle.load(f)
+
+    #if necessary, pad the benefit matrix with zeros so that n<=m
+    padding_size = max(0,benefits.shape[0]-benefits.shape[1])
+    benefits = np.pad(benefits, ((0,0), (0, padding_size), (0,0)))
+        
+    ass, total_val, nh = solve_w_haal(benefits, None, 0.5, 3, benefit_mat_adj_fn=add_timestep_loss_to_benefit_matrix)
+    _, nv, _ = solve_greedily(benefits, None, 0.5)
+    print(benefits.shape)
+    print(total_val, nv)
+    print(is_assignment_mat_sequence_valid(ass))
+
+def generalized_handover_fn_testing():
+    with open('/Users/joshholder/code/satellite-constellation/scripts/object_track_experiment/benefits_large_const_50_tasks.pkl', 'rb') as f:
+        benefits = pickle.load(f)
+    with open('/Users/joshholder/code/satellite-constellation/scripts/object_track_experiment/graphs_large_const_50_tasks.pkl', 'rb') as f:
+        graphs = pickle.load(f)
+
+    #if necessary, pad the benefit matrix with zeros so that n<=m
+    padding_size = max(0,benefits.shape[0]-benefits.shape[1])
+    benefits = np.pad(benefits, ((0,0), (0, padding_size), (0,0)))
+
+    ass, total_val = solve_w_haal(benefits, None, 0.5, 3)
+    print(total_val)
+    new = calc_assign_seq_state_dependent_value(None, ass, benefits, 0.5)
+    old, nh = calc_value_and_num_handovers(ass, benefits, None, 0.5)
+    print(new, old)
+
+    np.random.seed(43)
+    benefits = np.random.random((3,3,3))
+    best_assignments, best_value = solve_optimally(benefits, None, 0.5)
+    print(best_value)
+    print(best_assignments)
 
 if __name__ == "__main__":
-    l_compare_counterexample()
+    generalized_handover_fn_testing()
