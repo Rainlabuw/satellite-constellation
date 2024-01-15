@@ -3,7 +3,8 @@ from methods import *
 import networkx as nx
 import time
 
-def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, verbose=False, eps=0.01, state_dep_fn=generic_handover_state_dep_fn):
+def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, verbose=False, eps=0.01, 
+                 state_dep_fn=generic_handover_state_dep_fn, task_trans_state_dep_scaling_mat=None):
     """
     Sequentially solves the problem using the HAAL algorithm.
 
@@ -32,16 +33,19 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, v
         all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
 
         chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, 
-                                                                      lambda_, parallel_approx=parallel_approx, state_dep_fn=state_dep_fn)
+                                                                      lambda_, parallel_approx=parallel_approx, state_dep_fn=state_dep_fn,
+                                                                      task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
 
         chosen_assignments.append(chosen_assignment)
         curr_assignment = chosen_assignment
     
-    total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, benefits, lambda_, state_dep_fn=state_dep_fn)
+    total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, benefits, lambda_, 
+                                                        state_dep_fn=state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
     
     return chosen_assignments, total_value
 
-def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, benefit_mat_window, lambda_, parallel_approx=False, state_dep_fn=generic_handover_state_dep_fn):
+def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, benefit_mat_window, lambda_, parallel_approx=False, 
+                                              state_dep_fn=generic_handover_state_dep_fn, task_trans_state_dep_scaling_mat=None):
     """
     Chooses the best time interval sequence from a list of time interval sequences,
     and return the corresponding assignment.
@@ -68,8 +72,8 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
             #Note that if we're not approximating, we incentivize staying close to the previous assignment calculated during this
             #time interval sequence, not the actual assignment that the agents currently have (i.e. prev_assignment)
             benefit_hat = np.copy(combined_benefit_mat)
-            if not parallel_approx: benefit_hat[:,:,0] = state_dep_fn(benefit_hat[:,:,0], tis_assignment_curr, lambda_)
-            else: benefit_hat[:,:,0] = state_dep_fn(benefit_hat[:,:,0], prev_assignment, lambda_)
+            if not parallel_approx: benefit_hat[:,:,0] = state_dep_fn(benefit_hat[:,:,0], tis_assignment_curr, lambda_, task_trans_state_dep_scaling_mat)
+            else: benefit_hat[:,:,0] = state_dep_fn(benefit_hat[:,:,0], prev_assignment, lambda_, task_trans_state_dep_scaling_mat)
             benefit_hat = benefit_hat.sum(axis=-1)
 
             #Generate an assignment using a centralized solution.

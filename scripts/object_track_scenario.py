@@ -90,9 +90,9 @@ def get_constellation_bens_and_graphs_object_tracking_area(lat_range, lon_range,
     const = ConstellationSim(dt = 30*u.second, isl_dist=2500)
     earth = Earth
 
-    #Generate tasks, with appropriate benefit matrices as objects pass through
-    num_tasks = 50
-    add_tasks_with_objects(num_tasks, lat_range, lon_range, const, T)
+    #Generate tasks and add to const, with appropriate benefit matrices as objects pass through
+    num_objects = 50 #number of objects to track
+    add_tasks_with_objects(num_objects, lat_range, lon_range, const, T)
 
     #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
     #10 evenly spaced planes of satellites, each with n/10 satellites per plane
@@ -132,36 +132,56 @@ def get_constellation_bens_and_graphs_object_tracking_area(lat_range, lon_range,
     #Create second opportunity for tasks to be completed, with 25% of the benefits
     benefits_w_backup_tasks = np.zeros((limited_benefits.shape[0], limited_benefits.shape[1]*2, limited_benefits.shape[2]))
     benefits_w_backup_tasks[:,:limited_benefits.shape[1],:] = limited_benefits
-    benefits_w_backup_tasks[:,limited_benefits.shape[1]:,:] = limited_benefits*0.25
+    benefits_w_backup_tasks[:,limited_benefits.shape[1]:,:] = limited_benefits * 0.1
+    non_padded_m = benefits_w_backup_tasks.shape[1]
 
-    for k in range(T):
-        num_active_sats = 0
-        for i in range(limited_benefits.shape[0]):
-            if np.sum(limited_benefits[i,:,k]) > 0:
-                num_active_sats += 1
+    #if necessary, pad the benefit matrix with zeros so that n<=m
+    padding_size = max(0,benefits_w_backup_tasks.shape[0]-benefits_w_backup_tasks.shape[1])
+    benefits = np.pad(benefits_w_backup_tasks, ((0,0), (0, padding_size), (0,0)))
+    m = benefits.shape[1]
+
+    #Create scaling matrix for task transitions
+    task_transition_state_dep_scaling_mat = np.ones((m,m))
+    
+    #no penalty when transitioning between backup and primary versions of the same task
+    for j in range(non_padded_m//2):
+        task_transition_state_dep_scaling_mat[j,j+non_padded_m//2] = 0
+        task_transition_state_dep_scaling_mat[j+non_padded_m//2,j] = 0
+
+    #no penalty when transitioning to a dummy task
+    for j in range(non_padded_m, m):
+        task_transition_state_dep_scaling_mat[:,j] = 0
 
     with open('object_track_experiment/benefits_large_const_50_tasks.pkl','wb') as f:
-        pickle.dump(benefits_w_backup_tasks, f)
+        pickle.dump(benefits, f)
     with open('object_track_experiment/graphs_large_const_50_tasks.pkl','wb') as f:
         pickle.dump(graphs, f)
+    with open('object_track_experiment/task_transition_scaling_large_const_50_tasks.pkl','wb') as f:
+        pickle.dump(task_transition_state_dep_scaling_mat, f)
 
-def add_timestep_loss_to_benefit_matrix(benefits, prev_assign, lambda_):
+def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, task_trans_state_dep_scaling_mat=None):
     """
     Adds a loss to the benefit matrix which encodes the cost of switching
-    being losing the entire benefit of the task in the first timestep.
-    """
-    if benefits.ndim == 2: benefits = np.expand_dims(benefits, axis=2)
+    being losing the entire benefit of the task in the first timestep, plus a small
+    extra penalty (lambda_).
 
-    adjusted_first_benefits = np.where(prev_assign == 0, 0, benefits[:,:,0])
-    
-    adjusted_benefits = np.copy(benefits)
-    adjusted_benefits[:,:,0] = adjusted_first_benefits
-    
-    return adjusted_benefits
+    Designed to 
+    """
+    if prev_assign is None: return benefits
+
+    m = benefits.shape[1]
+    if task_trans_state_dep_scaling_mat is None:
+        task_trans_state_dep_scaling_mat = np.ones((m,m))
+    state_dep_scaling = prev_assign @ task_trans_state_dep_scaling_mat
+
+    b = np.where((prev_assign == 0) & (state_dep_scaling > 0), -lambda_*state_dep_scaling, benefits)
+    # #print all of numpy array
+    # np.set_printoptions(threshold=np.inf)
+    # print(b)
+    return b
 
 if __name__ == "__main__":
-    # lat_range = (20, 50)
-    # lon_range = (73, 135)
+    lat_range = (20, 50)
+    lon_range = (73, 135)
 
-    # get_constellation_bens_and_graphs_object_tracking_area(lat_range, lon_range)
-    pass
+    get_constellation_bens_and_graphs_object_tracking_area(lat_range, lon_range)
