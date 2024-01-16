@@ -17,7 +17,7 @@ from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from solve_w_CBBA import solve_w_CBBA, solve_w_CBBA_track_iters
 from solve_greedily import solve_greedily
 from classic_auction import Auction
-from object_track_scenario import timestep_loss_state_dep_fn, get_constellation_bens_and_graphs_object_tracking_area
+from object_track_scenario import timestep_loss_state_dep_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal
 
 from constellation_sim.ConstellationSim import get_constellation_bens_and_graphs_random_tasks, get_constellation_bens_and_graphs_coverage, ConstellationSim
 from constellation_sim.Satellite import Satellite
@@ -1435,42 +1435,45 @@ def object_tracking_test():
     print(is_assignment_mat_sequence_valid(ass))
 
 def generalized_handover_fn_testing():
+    with open('object_track_experiment/sat_cover_matrix_large_const.pkl','rb') as f:
+        sat_cover_matrix = pickle.load(f)
+    with open('object_track_experiment/graphs_large_const.pkl','rb') as f:
+        graphs = pickle.load(f)
+    with open('object_track_experiment/task_transition_scaling_large_const.pkl','rb') as f:
+        task_trans_state_dep_scaling_mat = pickle.load(f)
+    with open('object_track_experiment/hex_task_map_large_const.pkl','rb') as f:
+        hex_to_task_mapping = pickle.load(f)
+    with open('object_track_experiment/const_object_large_const.pkl','rb') as f:
+        const = pickle.load(f)
+
     # lat_range = (20, 50)
     # lon_range = (73, 135)
-    # get_constellation_bens_and_graphs_object_tracking_area(lat_range, lon_range)
-    with open('/Users/joshholder/code/satellite-constellation/scripts/object_track_experiment/benefits_large_const_50_tasks.pkl', 'rb') as f:
-        benefits = pickle.load(f)
-    with open('/Users/joshholder/code/satellite-constellation/scripts/object_track_experiment/graphs_large_const_50_tasks.pkl', 'rb') as f:
-        graphs = pickle.load(f)
-    with open('/Users/joshholder/code/satellite-constellation/scripts/object_track_experiment/task_transition_scaling_large_const_50_tasks.pkl', 'rb') as f:
-        task_trans = pickle.load(f)
 
-    # ass, total_val = solve_w_haal(benefits, None, 0.5, 6, state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans)
-    # print(total_val)
+    # get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range)
+    np.random.seed(0)
+    task_objects = init_task_objects(50, const, hex_to_task_mapping, 60)
+    benefits = get_benefits_from_task_objects(1, 10, sat_cover_matrix, task_objects)
 
-    ass, total_val = solve_w_haal(benefits, None, 0.5, 3, state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans)
-    print(total_val)
+    L = 3
+    lambda_ = 0.05
+    ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, None, lambda_, L, parallel_approx=False,
+                                                state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
+    print(tv)
+    print(is_assignment_mat_sequence_valid(ass))
 
-    ass, total_val = solve_w_haal(benefits, None, 0.5, 3, state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans,
-                                  parallel_approx=True)
-    print(total_val)
+    ass, tv = solve_w_haal(benefits, None, lambda_, L, state_dep_fn=timestep_loss_state_dep_fn, 
+                           task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
+    print(tv)
+    print(is_assignment_mat_sequence_valid(ass))
 
-    ass, total_val = solve_greedily(benefits, None, 0.5, timestep_loss_state_dep_fn, task_trans)
-    print(total_val)
+    ass, tv = solve_wout_handover(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
+    print(tv)
+    print(is_assignment_mat_sequence_valid(ass))
 
-    ass, total_val = solve_wout_handover(benefits, None, 0.5, timestep_loss_state_dep_fn, task_trans)
-    print(total_val)
-    # ass, total_val = solve_w_haal(benefits, None, 0.5, 3)
-    # print(total_val)
-    # new = calc_assign_seq_state_dependent_value(None, ass, benefits, 0.5)
-    # old, nh = calc_value_and_num_handovers(ass, benefits, None, 0.5)
-    # print(new, old)
+    ass, tv = solve_greedily(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
+    print(tv)
+    print(is_assignment_mat_sequence_valid(ass))
 
-    # np.random.seed(43)
-    # benefits = np.random.random((3,3,3))
-    # best_assignments, best_value = solve_optimally(benefits, None, 0.5)
-    # print(best_value)
-    # print(best_assignments)
 
 if __name__ == "__main__":
     generalized_handover_fn_testing()

@@ -26,25 +26,28 @@ class TaskObject(object):
 
         self.appear_time = appear_time
 
-        self.task_idx = None
+        self.task_idxs = None
 
-        self.in_area = False
-
-    def propagate(self, hex_to_task_mapping, t):
+    def propagate(self, hex_to_task_mapping, T):
         """
-        Propagate object movement over time
+        Propagate object movement over time, populating the task_idxs list 
+        with the task index that the object is associated with at each timestep.
         """
-        if t < self.appear_time:
-            pass
-        else:
-            self.lat += self.deg_change_per_ts * self.dir[1]
-            self.lon += self.deg_change_per_ts * self.dir[0]
+        self.task_idxs = []
+        k = 0
+        in_region = True
+        while k < T:
+            if k < self.appear_time or not in_region:
+                self.task_idxs.append(None)
+            else:
+                # Find the hexagon containing this lat/lon, increment target count
+                hexagon = h3.geo_to_h3(self.lat, self.lon, 1)
 
-            self.in_area = self.lat > self.lat_range[0] and self.lat < self.lat_range[1] and self.lon > self.lon_range[0] and self.lon < self.lon_range[1]
-            if self.in_area:
-                self.in_area = True
+                self.task_idxs.append(hex_to_task_mapping[hexagon])
 
-            # Find the hexagon containing this lat/lon, increment target count
-            hexagon = h3.geo_to_h3(self.lat, self.lon, 1)
+                self.lat += self.deg_change_per_ts * self.dir[1]
+                self.lon += self.deg_change_per_ts * self.dir[0]
 
-            self.task_idx = hex_to_task_mapping[hexagon]
+                if self.lat < self.lat_range[0] or self.lat > self.lat_range[1] or self.lon < self.lon_range[0] or self.lon > self.lon_range[1]:
+                    in_region = False
+            k += 1

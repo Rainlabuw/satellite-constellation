@@ -17,57 +17,12 @@ import h3
 from methods import *
 from solve_w_haal import solve_w_haal, choose_time_interval_sequence_centralized
 
-def solve_object_track_w_dynamic_haal(const, hex_to_task_mapping, sat_coverage_matrix, init_assignment, lambda_, L, parallel_approx=False, verbose=False, 
-                 state_dep_fn=generic_handover_state_dep_fn, task_trans_state_dep_scaling_mat=None):
+def init_task_objects(num_objects, const, hex_to_task_mapping, T):
     """
-    Aim to solve the problem using the HAAL algorithm, but with the benefit matrix
-    changing over time as objects move through the area. We can't precalculate this
-    because we don't want the algorithm to have prior knowledge of the object movement
-    until it actually appears.
+    Generate randomly initialized objects moving through the regions,
+    and propagate them until T.
 
-    INPUTS:
-        sat_coverage_matrix: n x m x T array, which contains information about what satellites cover which tasks at what time.
-            sat_coverage_matrix[i,j,k] = the ratio of the benefits from task j that satellite i can collect at time k (i.e. 0 if sat can't see task)
-        When parallel_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
-            as is done to parallelize auctions in the distributed version of the algorithm.
-    """
-    n = sat_coverage_matrix.shape[0]
-    m = sat_coverage_matrix.shape[1]
-    T = sat_coverage_matrix.shape[2]
-
-    task_objects = init_task_objects(100, const, T)
-
-    curr_assignment = init_assignment
-    
-    chosen_assignments = []
-
-    while len(chosen_assignments) < T:
-        if verbose: print(f"Solving w HAAL, {len(chosen_assignments)}/{T}", end='\r')
-        curr_tstep = len(chosen_assignments)
-        tstep_end = min(curr_tstep+L, T)
-        benefit_mat_window = sat_coverage_matrix[:,:,curr_tstep:tstep_end]
-
-        len_window = benefit_mat_window.shape[-1]
-
-        all_time_intervals = generate_all_time_intervals(len_window)
-        all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
-
-        chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, 
-                                                                      lambda_, parallel_approx=parallel_approx, state_dep_fn=state_dep_fn,
-                                                                      task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
-
-        chosen_assignments.append(chosen_assignment)
-        curr_assignment = chosen_assignment
-    
-    total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, sat_coverage_matrix, lambda_, 
-                                                        state_dep_fn=state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
-    
-    return chosen_assignments, total_value
-
-def init_task_objects(num_objects, const, T):
-    """
-    Generate tasks and associated benefits, with randomly initialized
-    objects moving through the regions.
+    Track history of their associated tasks over this timeframe.
     """
     #Initialize random objects
     velocity = 6437*u.km/u.hr #approx hypersonic speed, 4000 mi/hr
@@ -83,7 +38,31 @@ def init_task_objects(num_objects, const, T):
 
         task_objects.append(TaskObject(start_lat, start_lon, const.task_lat_range, const.task_lon_range, dir, object_appear_time, const.dt, speed=velocity))
 
+    for task_object in task_objects:
+        task_object.propagate(hex_to_task_mapping, T)
+
     return task_objects
+
+def get_benefits_from_task_objects(coverage_benefit, object_benefit, sat_cover_matrix, task_objects):
+    """
+    Given list of task_objects, return a benefit matrix which encodes
+    the benefit of each task at each timestep.
+    """
+    n = sat_cover_matrix.shape[0]
+    m = sat_cover_matrix.shape[1]
+    T = sat_cover_matrix.shape[2]
+
+    benefits = np.ones_like(sat_cover_matrix) * coverage_benefit
+    for k in range(T):
+        for task_object in task_objects:
+            #If the object is active at this timestep, add its benefits for the next L timesteps
+            if k >= task_object.appear_time:
+                if task_object.task_idxs[k] is not None:
+                    benefits[:,task_object.task_idxs[k],k] += object_benefit
+
+    benefits = benefits * sat_cover_matrix #scale benefits by sat coverage scaling
+
+    return benefits
 
 def add_tasks_with_objects(num_objects, lat_range, lon_range, dt, T):
     """
@@ -151,12 +130,12 @@ def add_tasks_with_objects(num_objects, lat_range, lon_range, dt, T):
 
         const.add_task(Task(task_loc, task_benefit))
 
-def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range, fov=60):
+def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range, T, fov=60, isl_dist=2500, dt=30*u.second):
     """
-    Generate constellation benefits based on tracking ojects
+    Generate sat coverage area and graphs for all satellites which can
+    see a given area over the course of some 
     """
-    T = 60 #30 minutes
-    const = ConstellationSim(dt = 30*u.second, isl_dist=2500)
+    const = ConstellationSim(dt=dt, isl_dist=isl_dist)
     earth = Earth
 
     hex_to_task_mapping = {}
@@ -247,6 +226,8 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
         pickle.dump(hex_to_task_mapping, f)
     with open('object_track_experiment/const_object_large_const.pkl','wb') as f:
         pickle.dump(const, f)
+    
+    return sat_cover_matrix, graphs, task_transition_state_dep_scaling_mat, hex_to_task_mapping, const
 
 def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, task_trans_state_dep_scaling_mat=None):
     """
@@ -263,8 +244,86 @@ def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, task_trans_state_
 
     return np.where((prev_assign == 0) & (state_dep_scaling > 0), -lambda_*state_dep_scaling, benefits)
 
-if __name__ == "__main__":
-    lat_range = (20, 50)
-    lon_range = (73, 135)
+def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, init_assignment, lambda_, L, parallel_approx=False, verbose=False, 
+                 state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=None):
+    """
+    Aim to solve the problem using the HAAL algorithm, but with the benefit matrix
+    changing over time as objects move through the area. We can't precalculate this
+    because we don't want the algorithm to have prior knowledge of the object movement
+    until it actually appears.
 
-    get_constellation_bens_and_graphs_object_tracking_area(lat_range, lon_range)
+    INPUTS:
+        sat_coverage_matrix: n x m x T array, which contains information about what satellites cover which tasks at what time.
+            sat_coverage_matrix[i,j,k] = the ratio of the benefits from task j that satellite i can collect at time k (i.e. 0 if sat can't see task)
+        When parallel_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
+            as is done to parallelize auctions in the distributed version of the algorithm.
+    """
+    n = sat_coverage_matrix.shape[0]
+    m = sat_coverage_matrix.shape[1]
+    T = sat_coverage_matrix.shape[2]
+
+    coverage_benefit = 1
+    object_benefit = 10
+
+    curr_assignment = init_assignment
+    
+    chosen_assignments = []
+
+    for k in range(T):
+        if verbose: print(f"Solving w HAAL, {k}/{T}", end='\r')
+
+        #build benefit matrix from task_objects and sat_cover_matrix
+        tstep_end = min(k+L, T)
+        sat_coverage_window = sat_coverage_matrix[:,:,k:tstep_end]
+        benefit_window = np.ones_like(sat_coverage_window) * coverage_benefit
+        for task_object in task_objects:
+            #If the object is active at this timestep, add it's benefits for the next L timesteps
+            if k >= task_object.appear_time:
+                for t in range(k, tstep_end):
+                    if task_object.task_idxs[t] is not None:
+                        benefit_window[:,task_object.task_idxs[t],t-k] += object_benefit
+
+        benefit_window = benefit_window * sat_coverage_window #scale benefits by sat coverage scaling
+
+        len_window = benefit_window.shape[-1]
+
+        all_time_intervals = generate_all_time_intervals(len_window)
+        all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
+
+        chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_window, 
+                                                                      lambda_, parallel_approx=parallel_approx, state_dep_fn=state_dep_fn,
+                                                                      task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
+
+        chosen_assignments.append(chosen_assignment)
+        curr_assignment = chosen_assignment
+    
+    total_benefits = get_benefits_from_task_objects(coverage_benefit, object_benefit, sat_coverage_matrix, task_objects)
+    total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, total_benefits, lambda_, 
+                                                        state_dep_fn=state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
+    
+    return chosen_assignments, total_value
+
+if __name__ == "__main__":
+    with open('object_track_experiment/sat_cover_matrix_large_const.pkl','rb') as f:
+        sat_cover_matrix = pickle.load(f)
+    with open('object_track_experiment/graphs_large_const.pkl','rb') as f:
+        graphs = pickle.load(f)
+    with open('object_track_experiment/task_transition_scaling_large_const.pkl','rb') as f:
+        task_transition_state_dep_scaling_mat = pickle.load(f)
+    with open('object_track_experiment/hex_task_map_large_const.pkl','rb') as f:
+        hex_to_task_mapping = pickle.load(f)
+    with open('object_track_experiment/const_object_large_const.pkl','rb') as f:
+        const = pickle.load(f)
+
+    # lat_range = (20, 50)
+    # lon_range = (73, 135)
+
+    # get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range)
+    np.random.seed(0)
+    task_objects = init_task_objects(60, const, hex_to_task_mapping, 60)
+    benefits = get_benefits_from_task_objects(1, 10, sat_cover_matrix, task_objects)
+
+    ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, None, 0.05, 3, parallel_approx=False,
+                                                state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_transition_state_dep_scaling_mat)
+    print(tv)
+    print(is_assignment_mat_sequence_valid(ass))
