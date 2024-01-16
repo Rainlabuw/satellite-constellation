@@ -39,6 +39,9 @@ class ConstellationSim(object):
 
         self.assign_over_time = None
 
+        self.task_lat_range = None
+        self.task_lon_range = None
+
     def add_sat(self, sat):
         sat.id = len(self.sats)
         self.sats.append(sat)
@@ -200,7 +203,7 @@ def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plan
     benefits, graphs = const.propagate_orbits(T, benefit_func)
     return benefits, graphs
 
-def generate_smooth_coverage(lat_range, lon_range):
+def generate_smooth_coverage_hexagons(lat_range, lon_range):
     # Initialize an empty set to store unique H3 indexes
     hexagons = set()
 
@@ -215,18 +218,8 @@ def generate_smooth_coverage(lat_range, lon_range):
             hexagons.add(hexagon)
             lon += lon_steps
         lat += lat_steps
-
-    #Add tasks at centroid of all hexagons
-    task_lats = []
-    task_lons = []
-    for hexagon in hexagons:
-        boundary = h3.h3_to_geo_boundary(hexagon, geo_json=True)
-        polygon = Polygon(boundary)
-
-        task_lats.append(polygon.centroid.y)
-        task_lons.append(polygon.centroid.x)
         
-    return task_lats, task_lons
+    return hexagons
 
 def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
@@ -254,8 +247,16 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
             const.add_sat(sat)
 
     #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    lats, lons = generate_smooth_coverage((-inc.to_value(u.deg), -inc.to_value(u.deg)), (-180, 180))
-    for lat, lon in zip(lats, lons):
+    hexagons = generate_smooth_coverage_hexagons((-inc.to_value(u.deg), -inc.to_value(u.deg)), (-180, 180))
+    
+    #Add tasks at centroid of all hexagons
+    for hexagon in hexagons:
+        boundary = h3.h3_to_geo_boundary(hexagon, geo_json=True)
+        polygon = Polygon(boundary)
+
+        lat = polygon.centroid.y
+        lon = polygon.centroid.x
+
         task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
         task_benefit = np.random.uniform(1, 2, size=T)

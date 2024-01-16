@@ -3,7 +3,7 @@ from methods import *
 import networkx as nx
 import time
 
-def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, verbose=False, eps=0.01, 
+def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, verbose=False, 
                  state_dep_fn=generic_handover_state_dep_fn, task_trans_state_dep_scaling_mat=None):
     """
     Sequentially solves the problem using the HAAL algorithm.
@@ -28,8 +28,6 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, v
         len_window = benefit_mat_window.shape[-1]
 
         all_time_intervals = generate_all_time_intervals(len_window)
-        # global all_time_interval_sequences
-        # all_time_interval_sequences = []
         all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
 
         chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, 
