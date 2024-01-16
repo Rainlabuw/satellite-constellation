@@ -203,18 +203,18 @@ def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plan
     benefits, graphs = const.propagate_orbits(T, benefit_func)
     return benefits, graphs
 
-def generate_smooth_coverage_hexagons(lat_range, lon_range):
+def generate_smooth_coverage_hexagons(lat_range, lon_range, res=1):
     # Initialize an empty set to store unique H3 indexes
     hexagons = set()
 
     # Step through the defined ranges and discretize the globe
-    lat_steps, lon_steps = 0.5, 0.5
+    lat_steps, lon_steps = 0.2/res, 0.2/res
     lat = lat_range[0]
     while lat <= lat_range[1]:
         lon = lon_range[0]
         while lon <= lon_range[1]:
             # Find the hexagon containing this lat/lon
-            hexagon = h3.geo_to_h3(lat, lon, 1)
+            hexagon = h3.geo_to_h3(lat, lon, res)
             hexagons.add(hexagon)
             lon += lon_steps
         lat += lat_steps

@@ -41,7 +41,7 @@ class TaskObject(object):
                 self.task_idxs.append(None)
             else:
                 # Find the hexagon containing this lat/lon, increment target count
-                hexagon = h3.geo_to_h3(self.lat, self.lon, 1)
+                hexagon = h3.geo_to_h3(self.lat, self.lon, 2)
 
                 self.task_idxs.append(hex_to_task_mapping[hexagon])
 

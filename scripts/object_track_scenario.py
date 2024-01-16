@@ -17,15 +17,16 @@ import h3
 from methods import *
 from solve_w_haal import solve_w_haal, choose_time_interval_sequence_centralized
 
-def init_task_objects(num_objects, const, hex_to_task_mapping, T):
+def init_task_objects(num_objects, const, hex_to_task_mapping, T, velocity=6437*u.km/u.hr):
     """
     Generate randomly initialized objects moving through the regions,
     and propagate them until T.
 
     Track history of their associated tasks over this timeframe.
+
+    Default velocity is approx hypersonic speed, 4000 mi/hr
     """
     #Initialize random objects
-    velocity = 6437*u.km/u.hr #approx hypersonic speed, 4000 mi/hr
     task_objects = []
     for _ in range(num_objects):
         #choose random direction of travel (east, west, north, or south)
@@ -140,7 +141,7 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
 
     hex_to_task_mapping = {}
     #Generate tasks at the centroid of each hexagon in the area
-    hexagons = generate_smooth_coverage_hexagons(lat_range, lon_range)
+    hexagons = generate_smooth_coverage_hexagons(lat_range, lon_range, 2)
     for j, hexagon in enumerate(hexagons):
         boundary = h3.h3_to_geo_boundary(hexagon, geo_json=True)
         polygon = Polygon(boundary)
@@ -152,7 +153,8 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
         const.add_task(Task(task_loc, np.ones(T))) #use benefits which are uniformly 1 to get scaling matrix
 
         hex_to_task_mapping[hexagon] = j
-    
+    print("Num tasks", len(hexagons))
+
     #add lat and lon range to constellation so we can recover it later
     const.task_lat_range = lat_range
     const.task_lon_range = lon_range
@@ -176,7 +178,7 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
             sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num, fov=fov)
             const.add_sat(sat)
 
-    #generate satellit coverage matrix with all satellites, even those far away from the area
+    #generate satellite coverage matrix with all satellites, even those far away from the area
     full_sat_cover_matrix, graphs = const.propagate_orbits(T, calc_fov_benefits)
 
     truncated_sat_cover_matrix = np.zeros_like(full_sat_cover_matrix)
@@ -193,6 +195,8 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
     const.sats = active_sats
     truncated_sat_cover_matrix = truncated_sat_cover_matrix[:len(const.sats),:,:] #truncate unused satellites
 
+    print("Num active sats", len(const.sats))
+
     #Create second opportunity for tasks to be completed, with 20% of the scaling
     sat_cover_matrix_w_backup_tasks = np.zeros((truncated_sat_cover_matrix.shape[0], truncated_sat_cover_matrix.shape[1]*2, truncated_sat_cover_matrix.shape[2]))
     sat_cover_matrix_w_backup_tasks[:,:truncated_sat_cover_matrix.shape[1],:] = truncated_sat_cover_matrix
@@ -203,6 +207,8 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
     padding_size = max(0,sat_cover_matrix_w_backup_tasks.shape[0]-sat_cover_matrix_w_backup_tasks.shape[1])
     sat_cover_matrix = np.pad(sat_cover_matrix_w_backup_tasks, ((0,0), (0, padding_size), (0,0)))
     m = sat_cover_matrix.shape[1]
+
+    print("Padding tasks", padding_size)
 
     #Create scaling matrix for task transitions
     task_transition_state_dep_scaling_mat = np.ones((m,m))
@@ -216,15 +222,19 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
     for j in range(non_padded_m, m):
         task_transition_state_dep_scaling_mat[:,j] = 0
 
-    with open('object_track_experiment/sat_cover_matrix_large_const.pkl','wb') as f:
+    #no penalty when transitioning between the same task
+    for j in range(non_padded_m):
+        task_transition_state_dep_scaling_mat[j,j] = 0
+
+    with open('object_track_experiment/sat_cover_matrix_large_const_highres.pkl','wb') as f:
         pickle.dump(sat_cover_matrix, f)
-    with open('object_track_experiment/graphs_large_const.pkl','wb') as f:
+    with open('object_track_experiment/graphs_large_const_highres.pkl','wb') as f:
         pickle.dump(graphs, f)
-    with open('object_track_experiment/task_transition_scaling_large_const.pkl','wb') as f:
+    with open('object_track_experiment/task_transition_scaling_large_const_highres.pkl','wb') as f:
         pickle.dump(task_transition_state_dep_scaling_mat, f)
-    with open('object_track_experiment/hex_task_map_large_const.pkl','wb') as f:
+    with open('object_track_experiment/hex_task_map_large_const_highres.pkl','wb') as f:
         pickle.dump(hex_to_task_mapping, f)
-    with open('object_track_experiment/const_object_large_const.pkl','wb') as f:
+    with open('object_track_experiment/const_object_large_const_highres.pkl','wb') as f:
         pickle.dump(const, f)
     
     return sat_cover_matrix, graphs, task_transition_state_dep_scaling_mat, hex_to_task_mapping, const
@@ -244,7 +254,7 @@ def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, task_trans_state_
 
     return np.where((prev_assign == 0) & (state_dep_scaling > 0), -lambda_*state_dep_scaling, benefits)
 
-def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, init_assignment, lambda_, L, parallel_approx=False, verbose=False, 
+def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverage_benefit, object_benefit, init_assignment, lambda_, L, parallel_approx=False, verbose=False, 
                  state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=None):
     """
     Aim to solve the problem using the HAAL algorithm, but with the benefit matrix
@@ -261,9 +271,6 @@ def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, init_as
     n = sat_coverage_matrix.shape[0]
     m = sat_coverage_matrix.shape[1]
     T = sat_coverage_matrix.shape[2]
-
-    coverage_benefit = 1
-    object_benefit = 10
 
     curr_assignment = init_assignment
     
