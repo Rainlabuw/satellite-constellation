@@ -198,10 +198,11 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
     print("Num active sats", len(const.sats))
 
     #Create second opportunity for tasks to be completed, with 20% of the scaling
+    num_primary_tasks = truncated_sat_cover_matrix.shape[1]
     sat_cover_matrix_w_backup_tasks = np.zeros((truncated_sat_cover_matrix.shape[0], truncated_sat_cover_matrix.shape[1]*2, truncated_sat_cover_matrix.shape[2]))
     sat_cover_matrix_w_backup_tasks[:,:truncated_sat_cover_matrix.shape[1],:] = truncated_sat_cover_matrix
     sat_cover_matrix_w_backup_tasks[:,truncated_sat_cover_matrix.shape[1]:,:] = truncated_sat_cover_matrix * 0.2
-    non_padded_m = sat_cover_matrix_w_backup_tasks.shape[1]
+    num_tasks_before_padding = sat_cover_matrix_w_backup_tasks.shape[1]
 
     #if necessary, pad the sat cover matrix with zeros so that n<=m
     padding_size = max(0,sat_cover_matrix_w_backup_tasks.shape[0]-sat_cover_matrix_w_backup_tasks.shape[1])
@@ -214,27 +215,36 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
     task_transition_state_dep_scaling_mat = np.ones((m,m))
     
     #no penalty when transitioning between backup and primary versions of the same task
-    for j in range(non_padded_m//2):
-        task_transition_state_dep_scaling_mat[j,j+non_padded_m//2] = 0
-        task_transition_state_dep_scaling_mat[j+non_padded_m//2,j] = 0
+    for j in range(num_primary_tasks):
+        task_transition_state_dep_scaling_mat[j,j+num_primary_tasks] = 0
+        task_transition_state_dep_scaling_mat[j+num_primary_tasks,j] = 0
 
     #no penalty when transitioning to a dummy task
-    for j in range(non_padded_m, m):
+    for j in range(num_tasks_before_padding, m):
         task_transition_state_dep_scaling_mat[:,j] = 0
 
     #no penalty when transitioning between the same task
-    for j in range(non_padded_m):
+    for j in range(num_tasks_before_padding):
         task_transition_state_dep_scaling_mat[j,j] = 0
 
-    with open('object_track_experiment/sat_cover_matrix_large_const_highres.pkl','wb') as f:
+    #no penalty when transitioning between tasks which are in adjacent hexagons
+    for j in range(num_primary_tasks):
+        task_hex = hexagons[j]
+        neighbor_hexes = h3.k_ring(task_hex, 1)
+        for neighbor_hex in neighbor_hexes:
+            if neighbor_hex in hex_to_task_mapping.keys():
+                task_transition_state_dep_scaling_mat[j,hex_to_task_mapping[neighbor_hex]] = 0
+                task_transition_state_dep_scaling_mat[hex_to_task_mapping[neighbor_hex],j] = 0
+
+    with open('object_track_experiment/sat_cover_matrix_highres_neigh.pkl','wb') as f:
         pickle.dump(sat_cover_matrix, f)
-    with open('object_track_experiment/graphs_large_const_highres.pkl','wb') as f:
+    with open('object_track_experiment/graphs_highres_neigh.pkl','wb') as f:
         pickle.dump(graphs, f)
-    with open('object_track_experiment/task_transition_scaling_large_const_highres.pkl','wb') as f:
+    with open('object_track_experiment/task_transition_scaling_highres_neigh.pkl','wb') as f:
         pickle.dump(task_transition_state_dep_scaling_mat, f)
-    with open('object_track_experiment/hex_task_map_large_const_highres.pkl','wb') as f:
+    with open('object_track_experiment/hex_task_map_highres_neigh.pkl','wb') as f:
         pickle.dump(hex_to_task_mapping, f)
-    with open('object_track_experiment/const_object_large_const_highres.pkl','wb') as f:
+    with open('object_track_experiment/const_object_highres_neigh.pkl','wb') as f:
         pickle.dump(const, f)
     
     return sat_cover_matrix, graphs, task_transition_state_dep_scaling_mat, hex_to_task_mapping, const

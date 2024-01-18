@@ -219,7 +219,7 @@ def generate_smooth_coverage_hexagons(lat_range, lon_range, res=1):
             lon += lon_steps
         lat += lat_steps
         
-    return hexagons
+    return list(hexagons) #turn into a list so that you can easily index it later
 
 def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """

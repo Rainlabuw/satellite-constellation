@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation
+from matplotlib import colormaps
+import matplotlib.patches as patches
 import numpy as np
 
 from poliastro.bodies import Earth
@@ -16,6 +18,10 @@ import geopandas as gpd
 from shapely.geometry import Polygon
 import matplotlib.image as mpimg
 from math import radians, cos, sin, asin, sqrt, atan2, degrees
+
+from PIL import Image
+import PIL
+PIL.Image.MAX_IMAGE_PIXELS = 933120000
 
 def generate_global_hexagons(resolution, lat_max):
     # Initialize an empty set to store unique H3 indexes
@@ -125,7 +131,7 @@ def get_sat_lat_lon(sat):
     lat = np.arctan2(sat.orbit.r[2].to_value(u.km),np.linalg.norm(sat.orbit.r.to_value(u.km)[:2]))*180/np.pi
     return lat, lon
 
-if __name__ == "__main__":
+def haal_experiment_plots():
     earth_image = mpimg.imread('earth.jpg')
 
     # Plotting
@@ -237,3 +243,121 @@ if __name__ == "__main__":
     plt.xlim(-180, 180)
     plt.ylim(-90, 90)
     plt.show()
+
+def update_object_track(k, ax, earth_image, task_to_hex_map, sat_cover_matrix, task_objects, assignments, task_trans_state_dep_scaling_mat):
+    ax.clear()
+
+    m = sat_cover_matrix.shape[1]
+    T = sat_cover_matrix.shape[2]
+
+    # Display the Earth image background
+    ax.imshow(earth_image, extent=[-180, 180, -90, 90], aspect='auto', alpha=0.6)
+    lat_range = (20, 50)
+    lon_range = (73, 135)
+    plt.xlim(lon_range)
+    plt.ylim(lat_range)
+
+    #Store the coverage level and existence of handover for each task at this time
+    #for use later in plotting task objects
+    coverage_by_task = {}
+    uncaptured_by_task = {} #by strict unassignment
+    handover_by_task = {} #by handover
+    #Display the region hexagons
+    for task, hex in task_to_hex_map.items():
+        coverage = 0
+        #If the object is tracked by any satellite in the task
+        if np.max(assignments[k][:,task]) == 1:
+            assigned_sat = np.argmax(assignments[k][:,task])
+        else: assigned_sat = None
+        #Determine coverage contribution from primary satellite:
+        if assigned_sat is not None:
+            coverage += sat_cover_matrix[assigned_sat, task, k]
+        
+        #if secondary task is assigned, find the satellite that is assigned to it
+        if np.max(assignments[k][:,task+m//2] == 1):
+            sec_assigned_sat = np.argmax(assignments[k][:,task+m//2])
+        else: sec_assigned_sat = None
+        #Determine coverage contribution from secondary satellite:
+        if sec_assigned_sat is not None:
+            coverage += sat_cover_matrix[sec_assigned_sat, task+m//2, k]
+
+        #determine if the task is uncaptured this step bc of handover or unassignment
+        uncaptured = False
+        handover = False
+        if coverage > 0:
+            if k == 0: uncaptured = False
+            else:
+                prim_sat_prev_task = assignments[k-1][assigned_sat,:].nonzero()[0]
+                uncaptured = bool(task_trans_state_dep_scaling_mat[prim_sat_prev_task,task])
+                handover = bool(task_trans_state_dep_scaling_mat[prim_sat_prev_task,task])
+        else: 
+            uncaptured = True
+            handover = False
+        coverage_by_task[task] = coverage
+        uncaptured_by_task[task] = uncaptured
+        handover_by_task[task] = handover
+
+        hexagon_polygons, _ = hexagons_to_geometries([hex])
+        gdf = gpd.GeoDataFrame(geometry=hexagon_polygons)
+        gdf.boundary.plot(ax=ax, color='black', alpha=0.2)
+
+        if handover:
+            gdf.plot(ax=ax, color='yellow', alpha=0.2)
+        elif uncaptured:
+            gdf.plot(ax=ax, color='red', alpha=0.2)
+        else:
+            gdf.plot(ax=ax, color=plt.cm.Greens(min(1,coverage)), alpha=0.2)
+
+    for task_object in task_objects:
+        if task_object.lats[k] is not None and task_object.lons[k] is not None:
+            task_object_idx = task_object.task_idxs[k]
+
+            coverage = coverage_by_task[task_object_idx]
+            uncaptured = uncaptured_by_task[task_object_idx]
+            handover = handover_by_task[task_object_idx]
+            
+            if uncaptured or handover:
+                plt.scatter(task_object.lons[k], task_object.lats[k], color='red', s=7)
+            else:
+                plt.scatter(task_object.lons[k], task_object.lats[k], color='green', s=7)
+
+    #Create legend with phantom dots
+    plt.scatter(0, 0, color='green', label='Tracked Objects')
+    plt.scatter(0, 0, color='red', label='Untracked Objects')
+    fake_verts = [(0, 0), (0, 1), (1, 1)]
+    ylw_ptch = patches.Polygon(fake_verts, color='green', label='Tracked Regions (intensity is quality of coverage)')
+    ax.add_patch(ylw_ptch)
+    ylw_ptch = patches.Polygon(fake_verts, color='yellow', label='Regions undergoing handover transition')
+    ax.add_patch(ylw_ptch)
+    ylw_ptch = patches.Polygon(fake_verts, color='red', label='Untracked Regions')
+    ax.add_patch(ylw_ptch)
+    plt.legend(loc='lower right')
+    plt.title(f"Time: +{k*30}/{T*30} sec.")
+            
+
+def plot_object_track_scenario(hexagon_to_task_mapping, sat_cover_matrix, task_objects, assignments, task_trans_state_dep_scaling_mat,
+                               save_loc, show=True):
+    n = sat_cover_matrix.shape[0]
+    m = sat_cover_matrix.shape[1]
+    T = sat_cover_matrix.shape[2]
+
+    earth_image = mpimg.imread('scaled_down_highres_earth.jpg')
+
+    # Plotting
+    fig, ax = plt.subplots(1, 1, figsize=(15, 10))
+
+    # Reverse hex to task mapping:
+    task_to_hex_mapping = {}
+    for hex, task in hexagon_to_task_mapping.items():
+        task_to_hex_mapping[task] = hex
+
+    ani  = FuncAnimation(fig, update_object_track, fargs=(ax, earth_image, task_to_hex_mapping, sat_cover_matrix, task_objects, assignments, task_trans_state_dep_scaling_mat), 
+                         frames=T, interval=1000, blit=False)
+
+    if show:
+        plt.show()
+
+    ani.save(save_loc, writer='pillow', fps=2, dpi=100)
+
+if __name__ == "__main__":
+    plot_object_track_scenario(None, None, None, None)

@@ -22,11 +22,13 @@ class TaskObject(object):
             ang_vel = self.speed/rad_at_lat #rad/hr
         else: 
             ang_vel = self.speed/Earth.R.to(u.km)
-        self.deg_change_per_ts = (ang_vel*self.dt*180/np.pi).to(u.one)
+        self.deg_change_per_ts = (ang_vel*self.dt*180/np.pi).to_value(u.one)
 
         self.appear_time = appear_time
 
         self.task_idxs = None
+        self.lats = []
+        self.lons = []
 
     def propagate(self, hex_to_task_mapping, T):
         """
@@ -39,11 +41,15 @@ class TaskObject(object):
         while k < T:
             if k < self.appear_time or not in_region:
                 self.task_idxs.append(None)
+                self.lats.append(None)
+                self.lons.append(None)
             else:
                 # Find the hexagon containing this lat/lon, increment target count
                 hexagon = h3.geo_to_h3(self.lat, self.lon, 2)
 
                 self.task_idxs.append(hex_to_task_mapping[hexagon])
+                self.lats.append(self.lat)
+                self.lons.append(self.lon)
 
                 self.lat += self.deg_change_per_ts * self.dir[1]
                 self.lon += self.deg_change_per_ts * self.dir[0]

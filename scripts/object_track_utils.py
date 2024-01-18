@@ -1,4 +1,5 @@
 import numpy as np
+
 def calc_pct_objects_tracked(assignments, task_objects, task_trans_state_dep_scaling_mat):
     """
     Calculates the percentage of objects tracked over time, given a sequence of assignments.
@@ -68,8 +69,6 @@ def object_tracking_history(assignments, task_objects, task_trans_state_dep_scal
                     print(f"\tSec task not completed")
                 if sec_sat is not None:
                     print(f"\tSec sat: prev task {assignments[k-1][sec_sat,:].nonzero()[0]} for {sat_cover_matrix[sec_sat, obj_sec_task, k-1]} scaling")
-                
-                
-                
 
-
+if __name__ == "__main__":
+    pass

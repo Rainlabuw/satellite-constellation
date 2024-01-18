@@ -19,6 +19,7 @@ from solve_greedily import solve_greedily
 from classic_auction import Auction
 from object_track_scenario import timestep_loss_state_dep_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_coverage_matrix_and_graphs_object_tracking_area
 from object_track_utils import calc_pct_objects_tracked, object_tracking_history
+from plotting_utils import plot_object_track_scenario
 
 from constellation_sim.ConstellationSim import get_constellation_bens_and_graphs_random_tasks, get_constellation_bens_and_graphs_coverage, ConstellationSim
 from constellation_sim.Satellite import Satellite
@@ -1561,9 +1562,20 @@ def smaller_area_size_object_tracking():
     with open('object_track_experiment/const_object_large_const_highres.pkl','rb') as f:
         const = pickle.load(f)
 
+    # with open('object_track_experiment/sat_cover_matrix_highres_neigh.pkl','rb') as f:
+    #     sat_cover_matrix = pickle.load(f)
+    # with open('object_track_experiment/graphs_highres_neigh.pkl','rb') as f:
+    #     graphs = pickle.load(f)
+    # with open('object_track_experiment/task_transition_scaling_highres_neigh.pkl','rb') as f:
+    #     task_trans_state_dep_scaling_mat = pickle.load(f)
+    # with open('object_track_experiment/hex_task_map_highres_neigh.pkl','rb') as f:
+    #     hex_to_task_mapping = pickle.load(f)
+    # with open('object_track_experiment/const_object_highres_neigh.pkl','rb') as f:
+    #     const = pickle.load(f)
+
     lat_range = (20, 50)
     lon_range = (73, 135)
-    L = 4
+    L = 3
     lambda_ = 0.05
     T = 60
     num_objects = 50
@@ -1576,33 +1588,40 @@ def smaller_area_size_object_tracking():
     task_objects = init_task_objects(num_objects, const, hex_to_task_mapping, T, velocity=10000*u.km/u.hr)
     benefits = get_benefits_from_task_objects(coverage_benefit, object_benefit, sat_cover_matrix, task_objects)
 
+    print("Dynamic HAAL")
     ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, parallel_approx=False,
                                                 state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
-    print(tv)
-    print(is_assignment_mat_sequence_valid(ass))
+    print("Value", tv)
     pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
-    print(pct)
+    print("pct", pct)
+    plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
+                               "haal_no_neighbors.gif", show=False)
 
-    ass, tv = solve_w_haal(benefits, None, lambda_, L, state_dep_fn=timestep_loss_state_dep_fn, 
-                           task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
-    print(tv)
-    print(is_assignment_mat_sequence_valid(ass))
-    pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
-    print(pct)
+    # print("Normal HAAL")
+    # ass, tv = solve_w_haal(benefits, None, lambda_, L, state_dep_fn=timestep_loss_state_dep_fn, 
+    #                        task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
+    # print("Value", tv)
+    # print(is_assignment_mat_sequence_valid(ass))
+    # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
+    # print("Pct",pct)
 
+    print("No handover")
     ass, tv = solve_wout_handover(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
-    print(tv)
+    print("Value", tv)
     print(is_assignment_mat_sequence_valid(ass))
+    plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
+                               "nha_no_neighbors.gif", show=False)
 
-    # object_tracking_history(ass, task_objects, task_trans_state_dep_scaling_mat, sat_cover_matrix)
-    pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
-    print(pct)
+    # # object_tracking_history(ass, task_objects, task_trans_state_dep_scaling_mat, sat_cover_matrix)
+    # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
+    # print("pct",pct)
 
-    ass, tv = solve_greedily(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
-    print(tv)
-    print(is_assignment_mat_sequence_valid(ass))
-    pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
-    print(pct)
+    # print("Greedy")
+    # ass, tv = solve_greedily(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
+    # print("Value", tv)
+    # print(is_assignment_mat_sequence_valid(ass))
+    # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
+    # print("pct",pct)
 
 if __name__ == "__main__":
     smaller_area_size_object_tracking()
