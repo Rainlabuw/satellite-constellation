@@ -11,7 +11,6 @@ from methods import *
 from solve_optimally import solve_optimally
 from solve_wout_handover import solve_wout_handover
 from solve_w_haal import solve_w_haal
-from solve_w_haald import solve_w_haald, solve_w_haald_track_iters
 from solve_w_accelerated_haal import solve_w_accel_haal
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from solve_w_CBBA import solve_w_CBBA, solve_w_CBBA_track_iters
@@ -1613,8 +1612,8 @@ def smaller_area_size_object_tracking():
                                "nha_no_neighbors.gif", show=False)
 
     # # object_tracking_history(ass, task_objects, task_trans_state_dep_scaling_mat, sat_cover_matrix)
-    # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
-    # print("pct",pct)
+    pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
+    print("pct",pct)
 
     # print("Greedy")
     # ass, tv = solve_greedily(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
@@ -1623,5 +1622,26 @@ def smaller_area_size_object_tracking():
     # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     # print("pct",pct)
 
+def confirm_no_haald_changes():
+    np.random.seed(42)
+    benefits = np.random.rand(50,50,10)
+    
+    bc = np.copy(benefits)
+    ass, tv = solve_w_haal(benefits, None, 0.5, 3, distributed=True, state_dep_fn=timestep_loss_state_dep_fn)
+    print(tv)
+    print(is_assignment_mat_sequence_valid(ass))
+
+    print(np.array_equal(bc, benefits))
+
+    # print(bc[:,:,0])
+
+    # print("GGGG")
+    # print(benefits[:,:,0])
+
+    ass, tv = solve_w_haal(benefits, None, 0.5, 3, distributed=False, state_dep_fn=timestep_loss_state_dep_fn, parallel=True)
+    print(tv)
+    print(is_assignment_mat_sequence_valid(ass))
+
+
 if __name__ == "__main__":
-    smaller_area_size_object_tracking()
+    confirm_no_haald_changes()

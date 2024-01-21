@@ -3,7 +3,8 @@ from methods import *
 import networkx as nx
 import time
 
-def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, verbose=False, 
+def solve_w_haal(benefits, init_assignment, lambda_, L, distributed=False, parallel=None, verbose=False,
+                 eps=0.01, graphs=None, track_iters=False, 
                  state_dep_fn=generic_handover_state_dep_fn, task_trans_state_dep_scaling_mat=None):
     """
     Sequentially solves the problem using the HAAL algorithm.
@@ -11,14 +12,20 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, v
     When parallel_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
         as is done to parallelize auctions in the distributed version of the algorithm.
     """
+    if parallel is None: parallel = distributed #If no option is selected, parallel is off for centralized, but on for distributed
+    if distributed and not parallel: print("Note: No serialized version of HAAL-D implemented yet. Solving parallelized.")
+    
     n = benefits.shape[0]
     m = benefits.shape[1]
     T = benefits.shape[2]
 
+    if graphs is None and distributed:
+        graphs = [nx.complete_graph(n) for i in range(T)]
+
     curr_assignment = init_assignment
     
+    total_iterations = 0 if distributed else None
     chosen_assignments = []
-
     while len(chosen_assignments) < T:
         if verbose: print(f"Solving w HAAL, {len(chosen_assignments)}/{T}", end='\r')
         curr_tstep = len(chosen_assignments)
@@ -30,8 +37,16 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, v
         all_time_intervals = generate_all_time_intervals(len_window)
         all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
 
-        chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, 
-                                                                      lambda_, parallel_approx=parallel_approx, state_dep_fn=state_dep_fn,
+        if distributed:
+            if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
+            haal_d_auction = HAAL_D_Parallel_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
+            haal_d_auction.run_auction()
+            chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
+
+            total_iterations += haal_d_auction.n_iterations
+        else:
+            chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, 
+                                                                      lambda_, parallel_approx=parallel, state_dep_fn=state_dep_fn,
                                                                       task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
 
         chosen_assignments.append(chosen_assignment)
@@ -40,7 +55,12 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, parallel_approx=False, v
     total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, benefits, lambda_, 
                                                         state_dep_fn=state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
     
-    return chosen_assignments, total_value
+    if not track_iters:
+        return chosen_assignments, total_value
+    else:
+        return chosen_assignments, total_value, total_iterations/T
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ CENTRALIZED FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, benefit_mat_window, lambda_, parallel_approx=False, 
                                               state_dep_fn=generic_handover_state_dep_fn, task_trans_state_dep_scaling_mat=None):
@@ -93,6 +113,335 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
             best_time_interval = time_interval_sequence[0]
 
     return best_assignment
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ DISTRIBUTED FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+class HAAL_D_Parallel_Auction(object):
+    """
+    This class runs an assignment auction for all possible time interval sequences
+    in a single timestep, all in parallel.
+    
+    The algorithm stores the assigned task for each agent in their .choice attribute.
+    """
+    def __init__(self, benefits, curr_assignment, all_time_intervals, all_time_interval_sequences, state_dep_fn=generic_handover_state_dep_fn,
+                 eps=0.01, graph=None, lambda_=1, verbose=False):
+        # benefit matrix for the next L timesteps
+        self.benefits = benefits
+        self.n = benefits.shape[0]
+        self.m = benefits.shape[1]
+        self.T = benefits.shape[2]
+
+        #If no graph is provided, assume the communication graph is complete.
+        if graph is None:
+            self.graph = nx.complete_graph(self.n)
+        else:
+            self.graph = graph
+
+        self.curr_assignment = curr_assignment
+        
+        self.chosen_assignments = []
+
+        self.lambda_ = lambda_
+        self.state_dep_fn = state_dep_fn
+
+        self.eps = eps
+        self.verbose = verbose
+
+        #The number of steps without an update before the algorithm converges
+        self.max_steps_since_last_update = nx.diameter(self.graph)
+
+        #Build the list of agents participating in the auction, providing them only
+        #the benefits they recieve for completing each task and a list of their neighbors.
+        self.agents = [HAAL_D_Parallel_Agent(self, i, all_time_intervals, all_time_interval_sequences, \
+                                    np.copy(self.benefits[i,:,:]), list(self.graph.neighbors(i))) for i in range(self.n)]
+
+    def run_auction(self):
+        """
+        Run the auction to completion, which has two phases:
+
+        1. Agents communicate with their neighbors to determine the prices and high bidders
+            Alternate between calculating updated prices and bids
+            for each agent, and formulating and sending packets of information that each agent recieves
+            from it's neighbors containing this updated information.
+        2. Agents communicate with their neighbors to determine the value of each time interval sequence
+        for each agent
+            Continually update the value of each time interval sequence for each agent, and send that
+            info to agent neighbors.
+        """
+        self.n_iterations = 0
+        #Run communications until agents have converged on prices and bids
+        while sum([agent.prices_bids_converged for agent in self.agents]) < self.n:
+            #Send the appropriate communication packets to each agent
+            self.update_price_bid_comm_packets()
+
+            #Have each agent calculate it's prices, bids, and values
+            #based on the communication packet it currently has
+            for agent in self.agents:
+                agent.perform_auction_iteration_for_agent()
+
+            self.n_iterations += 1
+
+        #Run value communication until each agent has a value for each time interval sequence
+        while sum([agent.tis_values_converged for agent in self.agents]) < self.n:
+            self.update_tis_value_comm_packets()
+
+            for agent in self.agents:
+                agent.update_tis_values()
+
+            self.n_iterations += 1
+
+        if self.verbose:
+            print(f"Auction results ({self.n_iterations} iterations):")
+            print(f"\tAssignments: {[a.choice for a in self.agents]}")
+
+    def update_price_bid_comm_packets(self):
+        """
+        Compiles price and high bidder information for all of each agent's 
+        neighbors and stores it in an array.
+
+        Then, update the agents variables accordingly so it can access that information
+        during the auction.
+
+        By precomputing these packets, we can parallelize the auction.
+        """
+        for agent in self.agents:
+            price_packets = {}
+            high_bidder_packets = {}
+            for ti in agent.all_time_intervals:
+                price_packet = np.zeros((len(agent.neighbors)+1,self.m), dtype=np.float16)
+                high_bidder_packet = np.zeros((len(agent.neighbors)+1,self.m), dtype=np.int16)
+
+                #Index zero in each packet corresponds to the information from the agent itself
+                price_packet[0,:] = agent.prices[ti]
+                high_bidder_packet[0,:] = agent.high_bidders[ti]
+                
+                for neighbor_num, neighbor_idx in enumerate(agent.neighbors):
+                    price_packet[neighbor_num+1,:] = self.agents[neighbor_idx].prices[ti]
+                    high_bidder_packet[neighbor_num+1,:] = self.agents[neighbor_idx].high_bidders[ti]
+
+                price_packets[ti] = price_packet
+                high_bidder_packets[ti] = high_bidder_packet
+
+            agent.price_comm_packets = price_packets
+            agent.high_bidder_comm_packets = high_bidder_packets
+
+    def update_tis_value_comm_packets(self):
+        """
+        Compiles value information for all of each agent's
+        neighbors and stores it in an array.
+
+        Then, update the agents variables accordingly so it can access that information
+        during the auction.
+
+        This allows each agent to independently determine which time interval sequence
+        is optimal across the entire constellation.
+        """
+        for agent in self.agents:
+            value_packets = {}
+            for tis in agent.all_time_interval_sequences:
+                value_packet = np.zeros((len(agent.neighbors)+1,self.n), dtype=np.float16)
+
+                #Index zero in each packet corresponds to the information from the agent itself
+                value_packet[0,:] = agent.tis_values_by_agent[tis]
+                
+                for neighbor_num, neighbor_idx in enumerate(agent.neighbors):
+                    value_packet[neighbor_num+1,:] = self.agents[neighbor_idx].tis_values_by_agent[tis]
+
+                value_packets[tis] = value_packet
+
+            agent.value_comm_packets = value_packets
+
+
+class HAAL_D_Parallel_Agent(object):
+    def __init__(self, auction, id, all_time_intervals, all_time_interval_sequences, benefits, neighbors):
+        self.id = id
+
+        #Grab info from auction
+        self.init_assignment = auction.curr_assignment[self.id,:] if auction.curr_assignment is not None else None
+        self.lambda_ = auction.lambda_
+        self.n = auction.n
+        self.eps = auction.eps
+        self.max_steps_since_last_update = auction.max_steps_since_last_update
+        self.state_dep_fn = auction.state_dep_fn
+
+        self.all_time_intervals = all_time_intervals
+        self.all_time_interval_sequences = all_time_interval_sequences
+
+        #Benefits and prices are mxL matrices.
+        self.benefits = benefits
+        self.init_time_interval_benefits()
+
+        self.m = benefits.shape[0]
+        self.T = benefits.shape[1]
+
+        #~~~~~~~Attributes which the agent uses to run the auction, and which it publishes to other agents~~~~~~~~
+        self.high_bidders = {}
+        self.prices = {}
+        self.choice_by_ti = {} #the preferred choice of the agent in each time interval
+
+        #Generate bids and prices for every time interval you're running an auction for
+        for time_interval in all_time_intervals:
+            #Initialize yourself as the highest bidder on the first task
+            self.high_bidders[time_interval] = -1*np.ones(self.m, dtype=np.int16)
+            self.high_bidders[time_interval][0] = self.id
+
+            self.prices[time_interval] = np.zeros(self.m, dtype=np.float16)
+
+            self.choice_by_ti[time_interval] = 0
+
+        #The value of each time interval sequence for each agent,
+        #used for value communication phase.
+        self.tis_values_by_agent = {}
+        for time_interval_sequence in all_time_interval_sequences:
+            self.tis_values_by_agent[time_interval_sequence] = -np.inf*np.ones(self.n, dtype=np.float16)
+
+        #~~~~~~~~Communication packet related attributes~~~~~~~~~~
+        self.neighbors = neighbors
+
+        #price and high bidder packets are (num neighbor x m) matrices,
+        #one for each different time interval
+        self.price_comm_packets = None
+        self.high_bidder_comm_packets = None
+
+        #Value packet is a (num neighbors x n) matrix,
+        #one for each different time interval sequence
+        self.value_comm_packets = None
+
+        #~~~~~~~~~~~~~~Convergence related attributes~~~~~~~~~~~~~~~~
+        self.steps_since_last_update = 0
+        self.prices_bids_converged = False
+        self.tis_values_converged = False
+
+        self.n_iters = 0
+
+        #Final task choice selected by the algorithm
+        self.choice = None
+
+    def init_time_interval_benefits(self):
+        """
+        Generate dictionary which contains combined benefits for each time interval.
+
+        i.e. adds up the benefits over the entire time interval.
+        """
+        self.time_interval_benefits = {}
+        for ti in self.all_time_intervals:
+            combined_benefits = self.benefits[:,ti[0]:ti[1]+1].sum(axis=-1)
+
+            self.time_interval_benefits[ti] = combined_benefits
+
+    def perform_auction_iteration_for_agent(self):
+        """
+        After recieving an updated communication packet, runs a single iteration
+        of the auctions for the agents.
+        """
+        self.update_prices_bids()
+
+        #Determine if anything has been updated. If so, increment the counter
+        updated = False
+        for ti in self.all_time_intervals:
+            #The information in the 0th index of the comm packets is the information on this agent
+            #as of last cycle. Thus we compare the current prices to this data to measure change
+            if not np.array_equal(self.prices[ti], self.price_comm_packets[ti][0,:]) or \
+                not np.array_equal(self.high_bidders[ti], self.high_bidder_comm_packets[ti][0,:]):
+                updated = True
+
+        if not updated:
+            self.steps_since_last_update += 1
+        else:
+            self.steps_since_last_update = 0
+
+        self.n_iters += 1
+
+        self.prices_bids_converged = self.steps_since_last_update >= self.max_steps_since_last_update
+
+        #If the agent has converged, then it should calculate the value of each time interval sequence
+        #for communication to its neighbors
+        if self.prices_bids_converged:
+            for time_interval_sequence in self.all_time_interval_sequences:
+                tis_value = 0
+                if self.init_assignment is None:
+                    curr_assignment = None
+                else: curr_assignment = np.argmax(self.init_assignment)
+                
+                for time_interval in time_interval_sequence:
+                    tis_value += self.time_interval_benefits[time_interval][self.choice_by_ti[time_interval]]
+                    
+                    if curr_assignment != self.choice_by_ti[time_interval] and curr_assignment is not None:
+                        tis_value -= self.lambda_
+
+                    curr_assignment = self.choice_by_ti[time_interval]
+                
+                self.tis_values_by_agent[time_interval_sequence][self.id] = tis_value
+
+    def update_prices_bids(self):
+        """
+        Updates the agent's prices and bids based on the price and high bidder communication packet.
+        """
+        for ti in self.all_time_intervals:
+            max_prices = np.max(self.price_comm_packets[ti], axis=0)
+            
+            # Filter the high bidders by the ones that have the max price, and set the rest to -1.
+            # Grab the highest index max bidder to break ties.
+            max_price_bidders = np.where(self.price_comm_packets[ti] == max_prices, self.high_bidder_comm_packets[ti], -1)
+            self.high_bidders[ti] = np.max(max_price_bidders, axis=0)
+
+            if max_prices[self.choice_by_ti[ti]] >= self.prices[ti][self.choice_by_ti[ti]] and self.high_bidders[ti][self.choice_by_ti[ti]] != self.id:
+                #Grab benefits for this time interval
+                time_interval_benefits = self.benefits[:,ti[0]:ti[1]+1]
+                #Add dimension for number of agents so we can use our standard state dependent functions
+                time_interval_benefits = np.expand_dims(time_interval_benefits, axis=0)
+                if time_interval_benefits.ndim == 2: #make sure time_interval_benefits is 3D
+                    time_interval_benefits = np.expand_dims(time_interval_benefits, axis=2)
+
+                time_interval_benefits[:,:,0] = self.state_dep_fn(time_interval_benefits[:,:,0], self.init_assignment, self.lambda_)
+                benefit_hat = np.squeeze(time_interval_benefits.sum(axis=-1))
+
+                best_net_value = np.max(benefit_hat - max_prices)
+                second_best_net_value = np.partition(benefit_hat - max_prices, -2)[-2] #https://stackoverflow.com/questions/33181350/quickest-way-to-find-the-nth-largest-value-in-a-numpy-matrix
+
+                self.choice_by_ti[ti] = np.argmax(benefit_hat-max_prices) #choose the task with the highest benefit to the agent
+
+                self.high_bidders[ti][self.choice_by_ti[ti]] = self.id
+                
+                inc = best_net_value - second_best_net_value + self.eps
+
+                self.prices[ti] = max_prices
+                self.prices[ti][self.choice_by_ti[ti]] = max_prices[self.choice_by_ti[ti]] + inc
+            else:
+                #Otherwise, don't change anything and just update prices
+                #based on the new info from other agents.
+                self.prices[ti] = max_prices
+
+    def update_tis_values(self):
+        """
+        Updates the agent's values based on the value communication packet.
+        """
+        value_sum = 0
+        for tis in self.all_time_interval_sequences:
+            max_values = np.max(self.value_comm_packets[tis], axis=0)
+
+            self.tis_values_by_agent[tis] = max_values
+
+            value_sum += sum(max_values)
+
+        self.n_iters += 1
+
+        #If value is not -np.inf, that means information
+        #has been recieved from all neighbors, and the agent has converged
+        if value_sum > -np.inf:
+            self.tis_values_converged = True
+
+            best_tis_value = -np.inf
+            best_tis = None
+            for tis in self.all_time_interval_sequences:
+                if sum(self.tis_values_by_agent[tis]) > best_tis_value:
+                    best_tis_value = sum(self.tis_values_by_agent[tis])
+                    best_tis = tis
+            
+            #Select the choice associated with the best time interval sequence
+            self.choice = self.choice_by_ti[best_tis[0]]
+        else: self.tis_values_converged = False
+
 
 if __name__ == "__main__":
     np.random.seed(48)

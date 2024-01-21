@@ -130,8 +130,9 @@ def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, task_trans_sta
     if prev_assign is None: return benefits
 
     m = benefits.shape[1]
+
     if task_trans_state_dep_scaling_mat is None:
-        task_trans_state_dep_scaling_mat = np.ones((m,m))
+        task_trans_state_dep_scaling_mat = np.ones((m,m)) - np.eye(m)
     state_dep_scaling = prev_assign @ task_trans_state_dep_scaling_mat
 
     return np.where(prev_assign == 0, benefits-lambda_*state_dep_scaling, benefits)

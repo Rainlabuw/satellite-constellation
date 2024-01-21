@@ -317,9 +317,9 @@ def update_object_track(k, ax, earth_image, task_to_hex_map, sat_cover_matrix, t
             handover = handover_by_task[task_object_idx]
             
             if uncaptured or handover:
-                plt.scatter(task_object.lons[k], task_object.lats[k], color='red', s=7)
+                plt.scatter(task_object.lons[k], task_object.lats[k], color='red', s=20)
             else:
-                plt.scatter(task_object.lons[k], task_object.lats[k], color='green', s=7)
+                plt.scatter(task_object.lons[k], task_object.lats[k], color='green', s=20)
 
     #Create legend with phantom dots
     plt.scatter(0, 0, color='green', label='Tracked Objects')

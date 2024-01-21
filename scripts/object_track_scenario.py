@@ -254,15 +254,17 @@ def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, task_trans_state_
     Adds a loss to the benefit matrix which encodes a switching cost of
     losing the entire benefit of the task in the first timestep, plus a small
     extra penalty (lambda_).
+
+    Expects a 2D (n x m) benefit matrix.
     """
     if prev_assign is None: return benefits
 
     m = benefits.shape[1]
     if task_trans_state_dep_scaling_mat is None:
-        task_trans_state_dep_scaling_mat = np.ones((m,m))
+        task_trans_state_dep_scaling_mat = np.ones((m,m)) - np.eye(m)
     state_dep_scaling = prev_assign @ task_trans_state_dep_scaling_mat
 
-    return np.where((prev_assign == 0) & (state_dep_scaling > 0), -lambda_*state_dep_scaling, benefits)
+    return np.where(state_dep_scaling > 0, benefits*(1-state_dep_scaling)-lambda_, benefits)
 
 def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverage_benefit, object_benefit, init_assignment, lambda_, L, parallel_approx=False, verbose=False, 
                  state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=None):
