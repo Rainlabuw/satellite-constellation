@@ -1550,15 +1550,15 @@ def object_tracking_velocity_test():
     plt.show()
 
 def smaller_area_size_object_tracking():
-    with open('object_track_experiment/sat_cover_matrix_large_const_highres.pkl','rb') as f:
+    with open('object_track_experiment/sat_cover_matrix_highres.pkl','rb') as f:
         sat_cover_matrix = pickle.load(f)
-    with open('object_track_experiment/graphs_large_const_highres.pkl','rb') as f:
+    with open('object_track_experiment/graphs_highres.pkl','rb') as f:
         graphs = pickle.load(f)
-    with open('object_track_experiment/task_transition_scaling_large_const_highres.pkl','rb') as f:
+    with open('object_track_experiment/task_transition_scaling_highres.pkl','rb') as f:
         task_trans_state_dep_scaling_mat = pickle.load(f)
-    with open('object_track_experiment/hex_task_map_large_const_highres.pkl','rb') as f:
+    with open('object_track_experiment/hex_task_map_highres.pkl','rb') as f:
         hex_to_task_mapping = pickle.load(f)
-    with open('object_track_experiment/const_object_large_const_highres.pkl','rb') as f:
+    with open('object_track_experiment/const_object_highres.pkl','rb') as f:
         const = pickle.load(f)
 
     # with open('object_track_experiment/sat_cover_matrix_highres_neigh.pkl','rb') as f:
@@ -1587,14 +1587,21 @@ def smaller_area_size_object_tracking():
     task_objects = init_task_objects(num_objects, const, hex_to_task_mapping, T, velocity=10000*u.km/u.hr)
     benefits = get_benefits_from_task_objects(coverage_benefit, object_benefit, sat_cover_matrix, task_objects)
 
-    print("Dynamic HAAL")
-    ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, parallel_approx=False,
+    print("Dynamic HAAL, Centralized")
+    ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, parallel=False,
                                                 state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
     print("Value", tv)
     pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     print("pct", pct)
-    plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
-                               "haal_no_neighbors.gif", show=False)
+    # plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
+    #                            "haal_no_neighbors.gif", show=False)
+
+    print("Dynamic HAAL, Distributed")
+    ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, distributed=True, graphs=graphs,
+                                                state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat, verbose=True)
+    print("Value", tv)
+    pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
+    print("pct", pct)
 
     # print("Normal HAAL")
     # ass, tv = solve_w_haal(benefits, None, lambda_, L, state_dep_fn=timestep_loss_state_dep_fn, 
@@ -1608,8 +1615,8 @@ def smaller_area_size_object_tracking():
     ass, tv = solve_wout_handover(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
     print("Value", tv)
     print(is_assignment_mat_sequence_valid(ass))
-    plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
-                               "nha_no_neighbors.gif", show=False)
+    # plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
+    #                            "nha_no_neighbors.gif", show=False)
 
     # # object_tracking_history(ass, task_objects, task_trans_state_dep_scaling_mat, sat_cover_matrix)
     pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
@@ -1622,26 +1629,5 @@ def smaller_area_size_object_tracking():
     # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     # print("pct",pct)
 
-def confirm_no_haald_changes():
-    np.random.seed(42)
-    benefits = np.random.rand(50,50,10)
-    
-    bc = np.copy(benefits)
-    ass, tv = solve_w_haal(benefits, None, 0.5, 3, distributed=True, state_dep_fn=timestep_loss_state_dep_fn)
-    print(tv)
-    print(is_assignment_mat_sequence_valid(ass))
-
-    print(np.array_equal(bc, benefits))
-
-    # print(bc[:,:,0])
-
-    # print("GGGG")
-    # print(benefits[:,:,0])
-
-    ass, tv = solve_w_haal(benefits, None, 0.5, 3, distributed=False, state_dep_fn=timestep_loss_state_dep_fn, parallel=True)
-    print(tv)
-    print(is_assignment_mat_sequence_valid(ass))
-
-
 if __name__ == "__main__":
-    confirm_no_haald_changes()
+    smaller_area_size_object_tracking()

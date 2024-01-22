@@ -15,7 +15,7 @@ from astropy import units as u
 import h3
 
 from methods import *
-from solve_w_haal import solve_w_haal, choose_time_interval_sequence_centralized
+from solve_w_haal import solve_w_haal, choose_time_interval_sequence_centralized, HAAL_D_Parallel_Auction
 
 def init_task_objects(num_objects, const, hex_to_task_mapping, T, velocity=6437*u.km/u.hr):
     """
@@ -182,6 +182,7 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
     full_sat_cover_matrix, graphs = const.propagate_orbits(T, calc_fov_benefits)
 
     truncated_sat_cover_matrix = np.zeros_like(full_sat_cover_matrix)
+    old_to_new_sat_mapping = {}
     active_sats = []
     for i in range(const.n):
         total_sat_scaling = np.sum(full_sat_cover_matrix[i,:,:])
@@ -190,10 +191,21 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
             curr_sat.id = len(active_sats)
 
             truncated_sat_cover_matrix[curr_sat.id,:,:] = full_sat_cover_matrix[i,:,:]
+
+            old_to_new_sat_mapping[i] = curr_sat.id
             active_sats.append(curr_sat)
     
     const.sats = active_sats
     truncated_sat_cover_matrix = truncated_sat_cover_matrix[:len(const.sats),:,:] #truncate unused satellites
+
+    print(graphs[0].number_of_nodes())
+    #update graphs to reflect new satellite numbering
+    for k in range(T):
+        nodes_to_remove = [n for n in graphs[k].nodes() if n not in old_to_new_sat_mapping.keys()]
+        graphs[k].remove_nodes_from(nodes_to_remove)
+        graphs[k] = nx.relabel_nodes(graphs[k], old_to_new_sat_mapping)
+
+    print(graphs[0].number_of_nodes())
 
     print("Num active sats", len(const.sats))
 
@@ -227,24 +239,24 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
     for j in range(num_tasks_before_padding):
         task_transition_state_dep_scaling_mat[j,j] = 0
 
-    #no penalty when transitioning between tasks which are in adjacent hexagons
-    for j in range(num_primary_tasks):
-        task_hex = hexagons[j]
-        neighbor_hexes = h3.k_ring(task_hex, 1)
-        for neighbor_hex in neighbor_hexes:
-            if neighbor_hex in hex_to_task_mapping.keys():
-                task_transition_state_dep_scaling_mat[j,hex_to_task_mapping[neighbor_hex]] = 0
-                task_transition_state_dep_scaling_mat[hex_to_task_mapping[neighbor_hex],j] = 0
+    # #no penalty when transitioning between tasks which are in adjacent hexagons
+    # for j in range(num_primary_tasks):
+    #     task_hex = hexagons[j]
+    #     neighbor_hexes = h3.k_ring(task_hex, 1)
+    #     for neighbor_hex in neighbor_hexes:
+    #         if neighbor_hex in hex_to_task_mapping.keys():
+    #             task_transition_state_dep_scaling_mat[j,hex_to_task_mapping[neighbor_hex]] = 0
+    #             task_transition_state_dep_scaling_mat[hex_to_task_mapping[neighbor_hex],j] = 0
 
-    with open('object_track_experiment/sat_cover_matrix_highres_neigh.pkl','wb') as f:
+    with open('object_track_experiment/sat_cover_matrix_highres.pkl','wb') as f:
         pickle.dump(sat_cover_matrix, f)
-    with open('object_track_experiment/graphs_highres_neigh.pkl','wb') as f:
+    with open('object_track_experiment/graphs_highres.pkl','wb') as f:
         pickle.dump(graphs, f)
-    with open('object_track_experiment/task_transition_scaling_highres_neigh.pkl','wb') as f:
+    with open('object_track_experiment/task_transition_scaling_highres.pkl','wb') as f:
         pickle.dump(task_transition_state_dep_scaling_mat, f)
-    with open('object_track_experiment/hex_task_map_highres_neigh.pkl','wb') as f:
+    with open('object_track_experiment/hex_task_map_highres.pkl','wb') as f:
         pickle.dump(hex_to_task_mapping, f)
-    with open('object_track_experiment/const_object_highres_neigh.pkl','wb') as f:
+    with open('object_track_experiment/const_object_highres.pkl','wb') as f:
         pickle.dump(const, f)
     
     return sat_cover_matrix, graphs, task_transition_state_dep_scaling_mat, hex_to_task_mapping, const
@@ -266,8 +278,10 @@ def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, task_trans_state_
 
     return np.where(state_dep_scaling > 0, benefits*(1-state_dep_scaling)-lambda_, benefits)
 
-def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverage_benefit, object_benefit, init_assignment, lambda_, L, parallel_approx=False, verbose=False, 
-                 state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=None):
+def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverage_benefit, object_benefit, init_assignment, lambda_, L, 
+                                      distributed=False, parallel=False, verbose=False,
+                                      eps=0.01, graphs=None, track_iters=False,
+                                      state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=None):
     """
     Aim to solve the problem using the HAAL algorithm, but with the benefit matrix
     changing over time as objects move through the area. We can't precalculate this
@@ -280,14 +294,20 @@ def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverag
         When parallel_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
             as is done to parallelize auctions in the distributed version of the algorithm.
     """
+    if parallel is None: parallel = distributed #If no option is selected, parallel is off for centralized, but on for distributed
+    if distributed and not parallel: print("Note: No serialized version of HAAL-D implemented yet. Solving parallelized.")
+
     n = sat_coverage_matrix.shape[0]
     m = sat_coverage_matrix.shape[1]
     T = sat_coverage_matrix.shape[2]
 
+    if graphs is None and distributed:
+        graphs = [nx.complete_graph(n) for i in range(T)]
+
     curr_assignment = init_assignment
     
+    total_iterations = 0 if distributed else None
     chosen_assignments = []
-
     for k in range(T):
         if verbose: print(f"Solving w HAAL, {k}/{T}", end='\r')
 
@@ -309,8 +329,18 @@ def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverag
         all_time_intervals = generate_all_time_intervals(len_window)
         all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
 
-        chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_window, 
-                                                                      lambda_, parallel_approx=parallel_approx, state_dep_fn=state_dep_fn,
+        if distributed:
+            if not nx.is_connected(graphs[k]): print("WARNING: GRAPH NOT CONNECTED")
+            haal_d_auction = HAAL_D_Parallel_Auction(benefit_window, curr_assignment, all_time_intervals, all_time_interval_sequences, 
+                                                     eps=eps, graph=graphs[k], lambda_=lambda_, state_dep_fn=state_dep_fn,
+                                                     task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
+            haal_d_auction.run_auction()
+            chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
+
+            total_iterations += haal_d_auction.n_iterations
+        else:
+            chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_window, 
+                                                                      lambda_, parallel_approx=parallel, state_dep_fn=state_dep_fn,
                                                                       task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
 
         chosen_assignments.append(chosen_assignment)
