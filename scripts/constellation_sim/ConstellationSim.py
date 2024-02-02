@@ -39,6 +39,9 @@ class ConstellationSim(object):
 
         self.assign_over_time = None
 
+        self.task_lat_range = None
+        self.task_lon_range = None
+
     def add_sat(self, sat):
         sat.id = len(self.sats)
         self.sats.append(sat)
@@ -60,13 +63,6 @@ class ConstellationSim(object):
             task.id = len(self.tasks) + i
         self.tasks.extend(tasks)
         self.m = len(self.tasks)
-
-    def update(self):
-        """
-        Updates the constellation state by propagating things forward in time
-        """
-        for sat in const.sats:
-            sat.propagate_orbit(self.dt)
 
     def update_plot(self, frame):
         """
@@ -151,7 +147,7 @@ class ConstellationSim(object):
                 self.orbits_over_time[sat.id].append(sat.orbit)
                 for task in self.tasks:
                     #Compute the distance 
-                    self.benefits_over_time[sat.id, task.id, k] = benefit_func(sat, task)
+                    self.benefits_over_time[sat.id, task.id, k] = benefit_func(sat, task, k)
 
         return self.benefits_over_time, self.graphs_over_time
 
@@ -200,44 +196,30 @@ def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plan
         lat = np.random.uniform(-55, 55)
         task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
-        task_benefit = np.random.uniform(1, 2)
+        task_benefit = np.random.uniform(1, 2, size=T)
         task = Task(task_loc, task_benefit)
         const.add_task(task)
 
     benefits, graphs = const.propagate_orbits(T, benefit_func)
     return benefits, graphs
 
-def generate_smooth_coverage(lat_max):
+def generate_smooth_coverage_hexagons(lat_range, lon_range, res=1):
     # Initialize an empty set to store unique H3 indexes
     hexagons = set()
 
-    # Latitude and Longitude ranges
-    lat_range = (-lat_max, lat_max)
-    lon_range = (-180, 180)
-
     # Step through the defined ranges and discretize the globe
-    lat_steps, lon_steps = 0.5, 0.5
+    lat_steps, lon_steps = 0.2/res, 0.2/res
     lat = lat_range[0]
     while lat <= lat_range[1]:
         lon = lon_range[0]
         while lon <= lon_range[1]:
             # Find the hexagon containing this lat/lon
-            hexagon = h3.geo_to_h3(lat, lon, 1)
+            hexagon = h3.geo_to_h3(lat, lon, res)
             hexagons.add(hexagon)
             lon += lon_steps
         lat += lat_steps
-
-    #Add tasks at centroid of all hexagons
-    task_lats = []
-    task_lons = []
-    for hexagon in hexagons:
-        boundary = h3.h3_to_geo_boundary(hexagon, geo_json=True)
-        polygon = Polygon(boundary)
-
-        task_lats.append(polygon.centroid.y)
-        task_lons.append(polygon.centroid.x)
         
-    return task_lats, task_lons
+    return list(hexagons) #turn into a list so that you can easily index it later
 
 def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
@@ -265,11 +247,19 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
             const.add_sat(sat)
 
     #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    lats, lons = generate_smooth_coverage(inc.to_value(u.deg))
-    for lat, lon in zip(lats, lons):
+    hexagons = generate_smooth_coverage_hexagons((-inc.to_value(u.deg), -inc.to_value(u.deg)), (-180, 180))
+    
+    #Add tasks at centroid of all hexagons
+    for hexagon in hexagons:
+        boundary = h3.h3_to_geo_boundary(hexagon, geo_json=True)
+        polygon = Polygon(boundary)
+
+        lat = polygon.centroid.y
+        lon = polygon.centroid.x
+
         task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
-        task_benefit = np.random.uniform(1, 2)
+        task_benefit = np.random.uniform(1, 2, size=T)
         task = Task(task_loc, task_benefit)
         const.add_task(task)
 
@@ -277,27 +267,5 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
     return benefits, graphs
 
 if __name__ == "__main__":
-    const = ConstellationSim(dt=1*u.min)
-    earth = Earth
-
-    r = [earth.R.to_value(u.km) + 500, 0, 0] << u.km
-    v = [-3.457, 6.618, 2.533] << u.km / u.s
-
-    sat = Satellite(Orbit.from_vectors(earth, r, v), [], [], plane_id=0)
-
-    delta = generate_optimal_L(1*u.min, sat)
-
-    task_loc = SpheroidLocation(delta*u.deg, 0*u.deg, 0*u.m, earth)
-    task = Task(task_loc, 1)
-
-    fig, axes = plt.subplots()
-
-    axes.plot(task.loc.cartesian_cords[0].to_value(u.km), task.loc.cartesian_cords[2].to_value(u.km), 'go')
-    axes.plot(sat.orbit.r[0].to_value(u.km), sat.orbit.r[2].to_value(u.km), 'ro')
-
-    axes.plot([task.loc.cartesian_cords[0].to_value(u.km), sat.orbit.r[0].to_value(u.km)],
-              [task.loc.cartesian_cords[2].to_value(u.km), sat.orbit.r[2].to_value(u.km)], 'b--')
-
-    axes.add_patch(plt.Circle((0, 0), earth.R.to_value(u.km), color='g',fill=False))
-
-    plt.show()
+    lat_range = (20, 50)
+    lon_range = (73, 135)

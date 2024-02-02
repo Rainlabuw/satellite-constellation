@@ -3,29 +3,31 @@ from methods import *
 import networkx as nx
 import time
 
-def solve_w_haal(benefits, init_assignment, lambda_, L, graphs=None, distributed=False, central_approx=False, verbose=False, eps=0.01):
+def solve_w_haal(benefits, init_assignment, lambda_, L, distributed=False, parallel=None, verbose=False,
+                 eps=0.01, graphs=None, track_iters=False, 
+                 state_dep_fn=generic_handover_state_dep_fn, task_trans_state_dep_scaling_mat=None):
     """
     Sequentially solves the problem using the HAAL algorithm.
 
-    When distributed = True, computes the solution using the fully distributed method.
-    When central_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
-        as would be done in the distributed version.
+    When parallel_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
+        as is done to parallelize auctions in the distributed version of the algorithm.
     """
+    if parallel is None: parallel = distributed #If no option is selected, parallel is off for centralized, but on for distributed
+    if distributed and not parallel: print("Note: No serialized version of HAAL-D implemented yet. Solving parallelized.")
+    
     n = benefits.shape[0]
     m = benefits.shape[1]
     T = benefits.shape[2]
 
-    if graphs is None:
+    if graphs is None and distributed:
         graphs = [nx.complete_graph(n) for i in range(T)]
 
     curr_assignment = init_assignment
     
+    total_iterations = 0 if distributed else None
     chosen_assignments = []
-
     while len(chosen_assignments) < T:
-        if verbose: 
-            if distributed: print(f"Solving w distributed HAAL, {len(chosen_assignments)}/{T}", end='\r')
-            else: print(f"Solving w HAAL, {len(chosen_assignments)}/{T}", end='\r')
+        if verbose: print(f"Solving w HAAL, {len(chosen_assignments)}/{T}", end='\r')
         curr_tstep = len(chosen_assignments)
         tstep_end = min(curr_tstep+L, T)
         benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
@@ -33,76 +35,37 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, graphs=None, distributed
         len_window = benefit_mat_window.shape[-1]
 
         all_time_intervals = generate_all_time_intervals(len_window)
-        global all_time_interval_sequences
-        all_time_interval_sequences = []
-        build_time_interval_sequences(all_time_intervals, [], len_window)
+        all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
 
-        if not distributed:
-            chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, lambda_, approx=central_approx)
-        else:
+        if distributed:
             if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
-            haal_d_auction = HAAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
+            haal_d_auction = HAAL_D_Parallel_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, 
+                                                     eps=eps, graph=graphs[curr_tstep], lambda_=lambda_, 
+                                                     state_dep_fn=state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
             haal_d_auction.run_auction()
-
             chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
 
-        chosen_assignments.append(chosen_assignment)
-        curr_assignment = chosen_assignment
-    
-    total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_)
-    
-    return chosen_assignments, total_value, nh
-
-def solve_w_haald_track_iters(benefits, init_assignment, lambda_, L, graphs=None, verbose=False, eps=0.01):
-    """
-    Sequentially solves the problem using the HAAL algorithm, tracking number of iterations
-    required for convergence.
-
-    When distributed = True, computes the solution using the fully distributed method.
-    When central_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
-        as would be done in the distributed version.
-    """
-    n = benefits.shape[0]
-    m = benefits.shape[1]
-    T = benefits.shape[2]
-
-    if graphs is None:
-        graphs = [nx.complete_graph(n) for i in range(T)]
-
-    curr_assignment = init_assignment
-    
-    chosen_assignments = []
-
-    total_iterations = 0
-
-    while len(chosen_assignments) < T:
-        if verbose: print(f"Solving w distributed HAAL, {len(chosen_assignments)}/{T}", end='\r')
-        curr_tstep = len(chosen_assignments)
-        tstep_end = min(curr_tstep+L, T)
-        benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
-
-        len_window = benefit_mat_window.shape[-1]
-
-        all_time_intervals = generate_all_time_intervals(len_window)
-        global all_time_interval_sequences
-        all_time_interval_sequences = []
-        build_time_interval_sequences(all_time_intervals, [], len_window)
-
-        haal_d_auction = HAAL_D_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=eps, graph=graphs[curr_tstep], lambda_=lambda_)
-        haal_d_auction.run_auction()
-
-        chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
+            total_iterations += haal_d_auction.n_iterations
+        else:
+            chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, 
+                                                                      lambda_, parallel_approx=parallel, state_dep_fn=state_dep_fn,
+                                                                      task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
 
         chosen_assignments.append(chosen_assignment)
         curr_assignment = chosen_assignment
-
-        total_iterations += haal_d_auction.n_iterations
     
-    total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_)
+    total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, benefits, lambda_, 
+                                                        state_dep_fn=state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
     
-    return chosen_assignments, total_value, nh, total_iterations/T
+    if not track_iters:
+        return chosen_assignments, total_value
+    else:
+        return chosen_assignments, total_value, total_iterations/T
 
-def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, benefit_mat_window, lambda_, approx=False):
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ CENTRALIZED FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, benefit_mat_window, lambda_, parallel_approx=False, 
+                                              state_dep_fn=generic_handover_state_dep_fn, task_trans_state_dep_scaling_mat=None):
     """
     Chooses the best time interval sequence from a list of time interval sequences,
     and return the corresponding assignment.
@@ -120,22 +83,25 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
         tis_first_assignment = None
 
         for i, time_interval in enumerate(time_interval_sequence):
-            #Calculate combined benefit matrix from this time interval
-            combined_benefit_mat = benefit_mat_window[:,:,time_interval[0]:time_interval[1]+1].sum(axis=-1)
+            #Grab benefit matrices from this time interval
+            combined_benefit_mat = benefit_mat_window[:,:,time_interval[0]:time_interval[1]+1]
+            if combined_benefit_mat.ndim == 2: #make sure combined_benefit_mat is 3D
+                combined_benefit_mat = np.expand_dims(combined_benefit_mat, axis=2) 
 
             #Adjust the benefit matrix to incentivize agents being assigned the same task twice.
             #Note that if we're not approximating, we incentivize staying close to the previous assignment calculated during this
             #time interval sequence, not the actual assignment that the agents currently have (i.e. prev_assignment)
-            benefit_hat = add_handover_pen_to_benefit_matrix(combined_benefit_mat, tis_assignment_curr, lambda_)
-            if approx: benefit_hat = add_handover_pen_to_benefit_matrix(combined_benefit_mat, prev_assignment, lambda_)
+            benefit_hat = np.copy(combined_benefit_mat)
+            if not parallel_approx: benefit_hat[:,:,0] = state_dep_fn(benefit_hat[:,:,0], tis_assignment_curr, lambda_, task_trans_state_dep_scaling_mat)
+            else: benefit_hat[:,:,0] = state_dep_fn(benefit_hat[:,:,0], prev_assignment, lambda_, task_trans_state_dep_scaling_mat)
+            benefit_hat = benefit_hat.sum(axis=-1)
 
             #Generate an assignment using a centralized solution.
             central_assignments = solve_centralized(benefit_hat)
             tis_assignment = convert_central_sol_to_assignment_mat(n, m, central_assignments)
 
             #Calculate the value from this time interval sequence
-            total_tis_value += (tis_assignment * combined_benefit_mat).sum()
-            total_tis_value -= calc_assign_seq_handover_penalty(tis_assignment_curr, [tis_assignment], lambda_)
+            total_tis_value += (benefit_hat*tis_assignment).sum()
 
             tis_assignment_curr = tis_assignment
             #If this is the first assignment in the time interval sequence, save it
@@ -150,50 +116,17 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
 
     return best_assignment
 
-def build_time_interval_sequences(all_time_intervals, time_interval_sequence, len_window):
-    """
-    Recursively constructs all possible time interval sequences from the set of all time intervals.
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ DISTRIBUTED FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-    Implements the logic behind BUILD_TIME_INTERVAL_SEQUENCES from the paper.
-    """
-    global all_time_interval_sequences
-    #Grab the most recent timestep from the end of the current sol
-    if time_interval_sequence == []:
-        most_recent_timestep = -1 #set it to -1 so that time intervals starting w 0 will be selected
-    else:
-        most_recent_timestep = time_interval_sequence[-1][-1]
-
-    #When we have an time interval seq which ends at the last timestep, we're done
-    #and can add it to the list
-    if most_recent_timestep == (len_window-1):
-        all_time_interval_sequences.append(tuple(time_interval_sequence))
-    else:
-        #Iterate through all of the time intervals, looking for ones that start where this one ended
-        for time_interval in all_time_intervals:
-            if most_recent_timestep == time_interval[0]-1:
-                build_time_interval_sequences(all_time_intervals, time_interval_sequence + [time_interval], len_window)
-
-def generate_all_time_intervals(L):
-    """
-    Generates all possible time intervals from the next few timesteps.
-
-    Implements GENERATE_ALL_TIME_INTERVALS from the paper.
-    """
-    all_time_intervals = []
-    for i in range(L):
-        for j in range(i,L):
-            all_time_intervals.append((i,j))
-        
-    return all_time_intervals
-
-class HAAL_D_Auction(object):
+class HAAL_D_Parallel_Auction(object):
     """
     This class runs an assignment auction for all possible time interval sequences
     in a single timestep, all in parallel.
     
     The algorithm stores the assigned task for each agent in their .choice attribute.
     """
-    def __init__(self, benefits, curr_assignment, all_time_intervals, all_time_interval_sequences, eps=0.01, graph=None, lambda_=1, verbose=False):
+    def __init__(self, benefits, curr_assignment, all_time_intervals, all_time_interval_sequences, state_dep_fn=generic_handover_state_dep_fn,
+                 eps=0.01, graph=None, lambda_=1, verbose=False, task_trans_state_dep_scaling_mat=None):
         # benefit matrix for the next L timesteps
         self.benefits = benefits
         self.n = benefits.shape[0]
@@ -211,6 +144,8 @@ class HAAL_D_Auction(object):
         self.chosen_assignments = []
 
         self.lambda_ = lambda_
+        self.state_dep_fn = state_dep_fn
+        self.task_trans_state_dep_scaling_mat = task_trans_state_dep_scaling_mat
 
         self.eps = eps
         self.verbose = verbose
@@ -220,7 +155,7 @@ class HAAL_D_Auction(object):
 
         #Build the list of agents participating in the auction, providing them only
         #the benefits they recieve for completing each task and a list of their neighbors.
-        self.agents = [HAAL_D_Agent(self, i, all_time_intervals, all_time_interval_sequences, \
+        self.agents = [HAAL_D_Parallel_Agent(self, i, all_time_intervals, all_time_interval_sequences, \
                                     self.benefits[i,:,:], list(self.graph.neighbors(i))) for i in range(self.n)]
 
     def run_auction(self):
@@ -257,8 +192,6 @@ class HAAL_D_Auction(object):
                 agent.update_tis_values()
 
             self.n_iterations += 1
-
-        print(f"After sum auction {self.n_iterations}")
 
         if self.verbose:
             print(f"Auction results ({self.n_iterations} iterations):")
@@ -322,23 +255,24 @@ class HAAL_D_Auction(object):
             agent.value_comm_packets = value_packets
 
 
-class HAAL_D_Agent(object):
+class HAAL_D_Parallel_Agent(object):
     def __init__(self, auction, id, all_time_intervals, all_time_interval_sequences, benefits, neighbors):
         self.id = id
 
         #Grab info from auction
-        self.init_assignment = auction.curr_assignment
+        self.init_assignment = auction.curr_assignment[self.id,:] if auction.curr_assignment is not None else None
         self.lambda_ = auction.lambda_
         self.n = auction.n
         self.eps = auction.eps
         self.max_steps_since_last_update = auction.max_steps_since_last_update
+        self.state_dep_fn = auction.state_dep_fn
+        self.task_trans_state_dep_scaling_mat = auction.task_trans_state_dep_scaling_mat
 
         self.all_time_intervals = all_time_intervals
         self.all_time_interval_sequences = all_time_interval_sequences
 
         #Benefits and prices are mxL matrices.
         self.benefits = benefits
-        self.init_time_interval_benefits()
 
         self.m = benefits.shape[0]
         self.T = benefits.shape[1]
@@ -386,17 +320,26 @@ class HAAL_D_Agent(object):
         #Final task choice selected by the algorithm
         self.choice = None
 
-    def init_time_interval_benefits(self):
+    def get_total_benefits_for_ti(self, ti, prev_assignment):
         """
-        Generate dictionary which contains combined benefits for each time interval.
+        Given a time interval, gets a single 2D benefit matrix which determines the benefit
+        of a given assignment for the entire time interval.
+        
+        This includes state dependent penalties and benefits from all time steps in the interval.
 
-        i.e. adds up the benefits over the entire time interval.
+        For a single agent, this manifests as returning a m-length vector of benefits for each task.
         """
-        self.time_interval_benefits = {}
-        for ti in self.all_time_intervals:
-            combined_benefits = self.benefits[:,ti[0]:ti[1]+1].sum(axis=-1)
+        #Grab benefits for this time interval
+        time_interval_benefits = np.copy(self.benefits[:,ti[0]:ti[1]+1])
+        #Add dimension for number of agents so we can use our standard state dependent functions
+        time_interval_benefits = np.expand_dims(time_interval_benefits, axis=0)
+        if time_interval_benefits.ndim == 2: #make sure time_interval_benefits is 3D
+            time_interval_benefits = np.expand_dims(time_interval_benefits, axis=2)
 
-            self.time_interval_benefits[ti] = combined_benefits
+        time_interval_benefits[:,:,0] = self.state_dep_fn(time_interval_benefits[:,:,0], prev_assignment, self.lambda_, self.task_trans_state_dep_scaling_mat)
+        benefit_hat = np.squeeze(time_interval_benefits.sum(axis=-1))
+
+        return benefit_hat
 
     def perform_auction_iteration_for_agent(self):
         """
@@ -428,17 +371,15 @@ class HAAL_D_Agent(object):
         if self.prices_bids_converged:
             for time_interval_sequence in self.all_time_interval_sequences:
                 tis_value = 0
-                if self.init_assignment is None:
-                    curr_assignment = None
-                else: curr_assignment = np.argmax(self.init_assignment[self.id,:])
-                
-                for time_interval in time_interval_sequence:
-                    tis_value += self.time_interval_benefits[time_interval][self.choice_by_ti[time_interval]]
-                    
-                    if curr_assignment != self.choice_by_ti[time_interval] and curr_assignment is not None:
-                        tis_value -= self.lambda_
+                curr_assignment = self.init_assignment
 
-                    curr_assignment = self.choice_by_ti[time_interval]
+                for time_interval in time_interval_sequence:
+                    benefit_hat = self.get_total_benefits_for_ti(time_interval, curr_assignment)
+
+                    tis_value += benefit_hat[self.choice_by_ti[time_interval]]
+
+                    curr_assignment = np.zeros(self.m)
+                    curr_assignment[self.choice_by_ti[time_interval]] = 1
                 
                 self.tis_values_by_agent[time_interval_sequence][self.id] = tis_value
 
@@ -455,13 +396,7 @@ class HAAL_D_Agent(object):
             self.high_bidders[ti] = np.max(max_price_bidders, axis=0)
 
             if max_prices[self.choice_by_ti[ti]] >= self.prices[ti][self.choice_by_ti[ti]] and self.high_bidders[ti][self.choice_by_ti[ti]] != self.id:
-                #Adjust the combined benefits to enforce handover penalty 
-                if self.init_assignment is None:
-                    #If initial assignment is None, then you shouldn't add a penalty at any index
-                    indices_where_agent_not_prev_assigned = np.zeros(self.m)
-                else:
-                    indices_where_agent_not_prev_assigned = np.where(self.init_assignment[self.id,:]==1, 0, 1)
-                benefit_hat = self.time_interval_benefits[ti] - self.lambda_ * indices_where_agent_not_prev_assigned
+                benefit_hat = self.get_total_benefits_for_ti(ti, self.init_assignment)
 
                 best_net_value = np.max(benefit_hat - max_prices)
                 second_best_net_value = np.partition(benefit_hat - max_prices, -2)[-2] #https://stackoverflow.com/questions/33181350/quickest-way-to-find-the-nth-largest-value-in-a-numpy-matrix
@@ -509,10 +444,11 @@ class HAAL_D_Agent(object):
             self.choice = self.choice_by_ti[best_tis[0]]
         else: self.tis_values_converged = False
 
+
 if __name__ == "__main__":
     np.random.seed(48)
     benefits = 2*np.random.random((50, 50, 10))
     s = time.time()
-    chosen_assignments, val, _ = solve_w_haal(benefits, None, 0.5, 4, distributed=True, verbose=False, graphs=[rand_connected_graph(50) for _ in range(10)])
+    chosen_assignments, val, _ = solve_w_haal(benefits, None, 0.5, 4, distributed=True, verbose=False)
     print(val,time.time()-s)
     # print(calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 1))
