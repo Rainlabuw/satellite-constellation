@@ -1,3 +1,4 @@
+from typing import Any
 import numpy as np
 from methods import *
 import networkx as nx
@@ -195,6 +196,19 @@ class HAAL_D_Auction(object):
             agent.price_comm_packets = price_packets
             agent.high_bidder_comm_packets = high_bidder_packets
 
+    def update_task_comm_packets(self):
+        for agent in self.agents:
+            task_packets = {}
+            for ti in agent.all_time_intervals:
+                task_packet = []
+
+                for neighbor_idx in agent.neighbors:
+                    task_packet.append(self.agents[neighbor_idx].tasks)
+
+                task_packets[ti] = task_packet
+
+            agent.task_comm_packets = task_packets
+
     def update_tis_value_comm_packets(self):
         """
         Compiles value information for all of each agent's
@@ -268,12 +282,15 @@ class HAAL_D_Agent(object):
         #~~~~~~~~Communication packet related attributes~~~~~~~~~~
         self.neighbors = neighbors
 
-        #price and high bidder packets are (num neighbor x m) matrices,
+        #task comm packet is a dictionary of lists of DynamicTask objects,
+        self.task_comm_packets = None
+
+        #price and high bidder packets are dictionaries of (num neighbor x m) matrices,
         #one for each different time interval
         self.price_comm_packets = None
         self.high_bidder_comm_packets = None
 
-        #Value packet is a (num neighbors x n) matrix,
+        #Value packet is a dictionary of (num neighbors x n) matrices,
         #one for each different time interval sequence
         self.value_comm_packets = None
 
@@ -283,6 +300,8 @@ class HAAL_D_Agent(object):
         self.tis_values_converged = False
 
         self.n_iters = 0
+
+        self.auction_params_updated = False
 
         #Final task choice selected by the algorithm
         self.choice = None
@@ -298,6 +317,56 @@ class HAAL_D_Agent(object):
     #     task.personal_benefit = task.base_benefit + np.random.uniform(-0.1, 0.1)
 
     #     return task
+        
+    def price_highbidder_packets_from_task_packet(self, tasks_comm_packet):
+        """
+        Given the information on each of the tasks that each neighbor is aware of,
+        constructs a list of all the active tasks across the knowledge of all neighbors,
+        and generates price and high bidder matrices for each task, on each time interval.
+
+        INPUT:
+            tasks_comm_packet: list of lists of DynamicTask objects, one for each neighbor.
+                Each list contains the tasks that the neighbor is aware of.
+        OUTPUT:
+            price_comm_packets: dictionary with keys of time intervals, and values of
+                (num neighbor x m) matrices, where m is the number of tasks that are active
+                across all neighbors.
+            high_bidder_comm_packets: analagous dictionary, just with high bidder information
+        """
+        #Determine the list of all tasks that are active across all neighbors
+        existing_task_locs = [task.id for task in self.tasks]
+
+        for neigh_task_list in tasks_comm_packet:
+            for neigh_task in neigh_task_list:
+                if neigh_task.id not in existing_task_locs:
+                    existing_task_locs.append(neigh_task.id)
+                    self.auction_params_updated = True
+
+                    #Add a version of this task to the agent's list of tasks
+                    self.tasks.append(DynamicTask(id, neigh_task.price_by_ti, neigh_task.high_bidders_by_ti, 
+                                                  neigh_task.benefits.shape[0]))
+                    
+                    #Update the benefit matrices to include this new task
+                    self.build_benefit_matrices_from_tasks()
+                    
+
+        self.price_comm_packets = {}
+        self.high_bidder_comm_packets = {}
+
+        for ti in self.all_time_intervals:
+            price_comm_packet_for_this_ti = np.zeros((len(self.neighbors)+1, len(existing_task_locs)), dtype=np.float16)
+            high_bidder_comm_packet_for_this_ti = -1*np.ones((len(self.neighbors)+1, len(existing_task_locs)), dtype=np.int16)
+
+            for neigh_idx, neigh_task_list in enumerate(tasks_comm_packet):
+                for task in neigh_task_list:
+                    task_idx = existing_task_locs.index(task.id)
+
+                    price_comm_packet_for_this_ti[neigh_idx, task_idx] = task.price_by_ti[ti]
+                    high_bidder_comm_packet_for_this_ti[neigh_idx, task_idx] = task.high_bidders[ti]
+
+            self.price_comm_packets[ti] = price_comm_packet_for_this_ti
+            self.high_bidder_comm_packets[ti] = high_bidder_comm_packet_for_this_ti
+
 
     def init_time_interval_benefits(self):
         """
@@ -316,6 +385,11 @@ class HAAL_D_Agent(object):
         After recieving an updated communication packet, runs a single iteration
         of the auctions for the agents.
         """
+        self.auction_params_updated = False
+        #Convert a packet information about tasks to price and high bidder comm packet format
+        self.price_highbidder_packets_from_task_packet()
+
+        #Based on neighbor
         self.update_prices_bids()
 
         #Determine if anything has been updated. If so, increment the counter
@@ -369,7 +443,7 @@ class HAAL_D_Agent(object):
 
             outbid = max_prices[self.choice_by_ti[ti]] >= self.prices[ti][self.choice_by_ti[ti]] and self.high_bidders[ti][self.choice_by_ti[ti]] != self.id
 
-            if outbid or auction_changed:
+            if outbid or self.auction_params_updated:
                 #Adjust the combined benefits to enforce handover penalty 
                 if self.init_assignment is None:
                     #If initial assignment is None, then you shouldn't add a penalty at any index
@@ -393,6 +467,11 @@ class HAAL_D_Agent(object):
                 #Otherwise, don't change anything and just update prices
                 #based on the new info from other agents.
                 self.prices[ti] = max_prices
+
+            #Update tasks with new price and high bidder information
+            for task_idx, task in enumerate(self.tasks):
+                task.price_by_ti[ti] = self.prices[ti][task_idx]
+                task.high_bidders_by_ti[ti] = self.high_bidders[ti][task_idx]
 
     def update_tis_values(self):
         """
@@ -425,17 +504,17 @@ class HAAL_D_Agent(object):
         else: self.tis_values_converged = False
 
 class DynamicTask(object):
-    def __init__(self, lat, lon, price, time_left):
-        self.id = (lat, lon)
+    def __init__(self, id, price_by_ti, high_bidders_by_ti, time_left):
+        self.id = id
         self.benefits = np.random.rand(time_left)
-        self.price = price
+        
+        #Dictionaries of high bidders and prices, by time interval
+        self.price_by_ti = price_by_ti
+        self.high_bidders_by_ti = high_bidders_by_ti
 
         #for removing tasks
         self.time = None
         self.deleted = False
-
-    def copy_task(self):
-        return DynamicTask(self.id[0], self.id[1], self.base_benefit, self.price)
 
 if __name__ == "__main__":
     np.random.seed(48)
