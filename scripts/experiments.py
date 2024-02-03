@@ -950,7 +950,7 @@ def test_optimal_L(timestep=1*u.min, altitude=550, fov=60):
     a = Earth.R.to(u.km) + altitude*u.km
     sat = Satellite(Orbit.from_classical(Earth, a, 0*u.one, 0*u.deg, 0*u.deg, 0*u.deg, 0*u.deg), [], [], fov=fov)
     
-    L = generate_safe_L(timestep, sat)
+    L = generate_max_L(timestep, sat)
     return L
 
 def cbba_testing():
@@ -1679,59 +1679,6 @@ def paper_experiment1():
     plt.savefig("haal_experiment1/paper_exp1.pdf")
     plt.show()
 
-def calc_pass_statistics(benefits, assigns):
-    n = benefits.shape[0]
-    m = benefits.shape[1]
-    T = benefits.shape[2]
-
-    pass_lens = []
-    pass_bens = []
-    task_assign_len = []
-    for j in range(m):
-        for i in range(n):
-            pass_started = False
-            task_assigned = False
-            assign_len = 0
-            pass_len = 0
-            pass_ben = 0
-            for k in range(T):
-                this_pass_assign_lens = []
-                if benefits[i,j,k] > 0:
-                    if not pass_started:
-                        pass_started = True
-                    pass_len += 1
-                    pass_ben += benefits[i,j,k]
-
-                    if assigns[k][i,j] == 1:
-                        if not task_assigned: task_assigned = True
-                        assign_len += 1
-                    #If there are benefits and the task was previously assigned,
-                    #but is no longer, end the streak
-                    elif task_assigned:
-                        task_assigned = False
-                        this_pass_assign_lens.append(assign_len)
-                        assign_len = 0
-
-                elif pass_started and benefits[i,j,k] == 0:
-                    if task_assigned:
-                        this_pass_assign_lens.append(assign_len)
-                    pass_started = False
-                    task_assigned = False
-                    for ass_len in this_pass_assign_lens:
-                        task_assign_len.append(ass_len)
-                    this_pass_assign_lens = []
-                    pass_lens.append(pass_len)
-                    pass_bens.append(pass_ben)
-                    pass_len = 0
-                    pass_ben = 0
-                    assign_len = 0
-    
-    avg_pass_len = sum(pass_lens) / len(pass_lens)
-    avg_pass_ben = sum(pass_bens) / len(pass_bens)
-    avg_ass_len = sum(task_assign_len) / len(task_assign_len)
-    
-    return avg_pass_len, avg_pass_ben, avg_ass_len
-
 def scaling_experiment():
     with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
         benefits = pickle.load(f)
@@ -1754,7 +1701,7 @@ def scaling_experiment():
 
     #         assigns, _ = solve_w_haal(benefits, None, lambda_over_ben/avg_pass_ben, L, verbose=True)
 
-    #         avg_pass_len, avg_pass_ben, avg_ass_len = calc_pass_statistics(benefits, assigns)
+    #         _, _, avg_ass_len = calc_pass_statistics(benefits, assigns)
     #         print(avg_pass_len)
     #         ass_lengths.append(avg_ass_len)
 
