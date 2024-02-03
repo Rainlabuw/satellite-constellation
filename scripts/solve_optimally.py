@@ -22,7 +22,7 @@ def solve_optimally(benefits, init_ass, lambda_,
     Only works for extremely small problems due to the exhaustive search.
     (i.e. 5x5x3)
 
-    Returns best assignments, best value, and 
+    Returns best assignments and best value
     """
     n = benefits.shape[0]
     m = benefits.shape[1]

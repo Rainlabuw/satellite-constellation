@@ -26,6 +26,7 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, distributed=False, paral
     
     total_iterations = 0 if distributed else None
     chosen_assignments = []
+    ass_lens = []
     while len(chosen_assignments) < T:
         if verbose: print(f"Solving w HAAL, {len(chosen_assignments)}/{T}", end='\r')
         curr_tstep = len(chosen_assignments)
@@ -57,7 +58,7 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, distributed=False, paral
     total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, benefits, lambda_, 
                                                         state_dep_fn=state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
     
-    if not track_iters:
+    if not track_iters or not distributed:
         return chosen_assignments, total_value
     else:
         return chosen_assignments, total_value, total_iterations/T

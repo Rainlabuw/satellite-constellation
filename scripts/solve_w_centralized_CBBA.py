@@ -60,7 +60,7 @@ def solve_w_centralized_CBBA(unscaled_benefits, init_assignment, lambda_, L, ver
         benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
 
         for iter in range(n*L_curr):
-            if verbose: print(f"Solving w centralized CBBA, {iter}/{n*T}", end='\r')
+            if verbose: print(f"Solving w centralized CBBA, {iter}/{n*L_curr}", end='\r')
             best_marginal_benefit = -np.inf
             best_i = None
             best_j = None
@@ -85,11 +85,11 @@ def solve_w_centralized_CBBA(unscaled_benefits, init_assignment, lambda_, L, ver
             assignment_mat[i,j] = 1
         chosen_assignments.append(assignment_mat)
 
-    total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, None, lambda_)
+    total_value, _ = calc_value_and_num_handovers(chosen_assignments, benefits, None, lambda_)
 
     real_value = total_value - n*T*benefit_to_add
 
-    return chosen_assignments, real_value, nh
+    return chosen_assignments, real_value
 
 if __name__ == "__main__":
     benefits = np.random.rand(10, 10, 10)

@@ -953,104 +953,6 @@ def test_optimal_L(timestep=1*u.min, altitude=550, fov=60):
     L = generate_safe_L(timestep, sat)
     return L
 
-def paper_experiment1():
-    num_planes = 18
-    num_sats_per_plane = 18
-    m = 450
-    T = 93
-
-    altitude = 550
-    fov = 60
-    timestep = 1*u.min
-
-    max_L = test_optimal_L(timestep, altitude, fov)
-    print(max_L)
-    
-    lambda_ = 0.5
-
-    # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=2500)
-
-    # with open("haal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
-    #     pickle.dump(benefits,f)
-    # with open("haal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
-    #     pickle.dump(graphs,f)
-
-    # # with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
-    # #     benefits = pickle.load(f)
-    # # with open("haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
-    # #     graphs = pickle.load(f)
-
-    # _, no_handover_val, _ = solve_wout_handover(benefits, None, lambda_)
-
-    # # _, cbba_val, _ = solve_w_centralized_CBBA(benefits, None, lambda_)
-
-    # _, greedy_val, _ = solve_greedily(benefits, None, lambda_)
-    # print(greedy_val)
-    # itersd_by_lookahead = []
-    # valued_by_lookahead = []
-
-    # iterscbba_by_lookahead = []
-    # valuecbba_by_lookahead = []
-
-    # valuec_by_lookahead = []
-    # for L in range(1,max_L+1):
-    #     print(f"lookahead {L}")
-    #     _, cbba_val, _, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
-    #     iterscbba_by_lookahead.append(avg_iters)
-    #     valuecbba_by_lookahead.append(cbba_val)
-        
-    #     _, d_val, _, avg_iters = solve_w_haald_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
-    #     itersd_by_lookahead.append(avg_iters)
-    #     valued_by_lookahead.append(d_val)
-
-    #     _, c_val, _ = solve_w_haal(benefits, None, lambda_, L, distributed=False, verbose=True)
-    #     valuec_by_lookahead.append(c_val)
-
-    valuecbba_by_lookahead = [4208.38020192484, 4412.873727755446, 4657.90330919782, 4717.85859678172, 4710.212483240204, 4726.329218229788]
-    valuec_by_lookahead = [6002.840671517548, 7636.731195199751, 7581.29374466441, 7435.882168254755, 7511.4534257400755, 7591.261917337481]
-    itersd_by_lookahead = [54.89247311827957, 61.17204301075269, 68.46236559139786, 72.64516129032258, 79.10752688172043, 80.02150537634408]
-    iterscbba_by_lookahead = [18.50537634408602, 26.0, 29.193548387096776, 33.11827956989247, 34.806451612903224, 37.29032258064516]
-    valued_by_lookahead = [6021.705454081699, 7622.246684035546, 7585.4110847804, 7294.093230272816, 7437.211996201664, 7559.402984912062]
-    greedy_val = 3650.418056196203
-    no_handover_val = 4078.018608711949
-
-
-    fig, axes = plt.subplots(2,1)
-    axes[0].plot(range(1,max_L+1), valued_by_lookahead, 'g--', label="HAAL-D")
-    axes[0].plot(range(1,max_L+1), valuec_by_lookahead, 'g', label="HAAL")
-    axes[0].plot(range(1,max_L+1), valuecbba_by_lookahead, 'b', label="CBBA")
-    axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r', label="NHA")
-    axes[0].plot(range(1,max_L+1), [greedy_val]*max_L, 'k', label="GA")
-    axes[0].set_ylabel("Total value")
-    axes[0].set_xticks(range(1,max_L+1))
-    axes[0].set_ylim((0, 1.1*max(valuec_by_lookahead)))
-    axes[1].set_xlabel("Lookahead window L")
-    axes[0].legend(loc='lower right')
-
-    axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g--', label="HAAL-D")
-    axes[1].plot(range(1,max_L+1), iterscbba_by_lookahead, 'b', label="CBBA")
-    axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
-    axes[0].set_xticks(range(1,max_L+1))
-    axes[1].set_ylabel("Average iterations")
-    axes[1].set_xlabel("Lookahead window")
-
-    with open("haal_experiment1/results.txt", 'w') as f:
-        f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {m}, T: {T}, altitude: {altitude}, fov: {fov}, timestep: {timestep}, max_L: {max_L}, lambda: {lambda_}\n")
-        f.write(f"~~~~~~~~~~~~~~~~~~~~~\n")
-        f.write(f"No Handover Value: {no_handover_val}\n")
-        f.write(f"Greedy Value: {greedy_val}\n")
-        f.write(f"CBBA Values by lookahead:\n{valuecbba_by_lookahead}\n")
-        f.write(f"HAAL Values by lookahead:\n{valuec_by_lookahead}\n")
-        f.write(f"HAAL-D Values by lookahead:\n{valued_by_lookahead}\n")
-
-        f.write(f"CBBA Iters by lookahead:\n{iterscbba_by_lookahead}\n")
-        f.write(f"HAAL Iters by lookahead:\n{itersd_by_lookahead}\n")
-
-    fig.set_figwidth(8)
-    fig.set_figheight(5)
-    plt.savefig("haal_experiment1/paper_exp1.pdf")
-    plt.show()
-
 def cbba_testing():
     np.random.seed(42)
     val = 0
@@ -1204,7 +1106,6 @@ def paper_experiment2_tasking_history():
     no_handover_ax = axes[0]
     greedy_ax = axes[1]
     haal_ax = axes[2]
-    
 
     prev_no_handover = 0
     prev_haal = 0
@@ -1259,6 +1160,17 @@ def paper_experiment2_tasking_history():
         prev_haal = haal_choice
         prev_greedy = greedy_choice
 
+    SMALL_SIZE = 8
+    MEDIUM_SIZE = 12
+    BIGGER_SIZE = 14
+    plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+    plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
+    plt.rc('axes', labelsize=BIGGER_SIZE)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=MEDIUM_SIZE)    # legend fontsize
+    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
     #plot last interval
     no_handover_ax.plot(range(k+1-len(no_handover_ben_line), k+1), no_handover_ben_line, 'r')
     haal_ax.plot(range(k+1-len(haal_ben_line), k+1), haal_ben_line,'g')
@@ -1275,6 +1187,13 @@ def paper_experiment2_tasking_history():
     haal_ax.set_ylabel("HAAL-D\nBenefit Captured")
     greedy_ax.set_ylabel("GA\nBenefit Captured")
     no_handover_ax.set_ylabel("NHA\nBenefit Captured")
+    
+    haal_ax.xaxis.label.set_fontsize(MEDIUM_SIZE)
+    greedy_ax.xaxis.label.set_fontsize(MEDIUM_SIZE)
+    no_handover_ax.xaxis.label.set_fontsize(MEDIUM_SIZE)
+    haal_ax.yaxis.label.set_fontsize(MEDIUM_SIZE)
+    greedy_ax.yaxis.label.set_fontsize(MEDIUM_SIZE)
+    no_handover_ax.yaxis.label.set_fontsize(MEDIUM_SIZE)
 
     #phantom lines for legend
     # greedy_ax.plot([T+1], [0], 'r', label="No Handover")
@@ -1285,6 +1204,9 @@ def paper_experiment2_tasking_history():
     # greedy_ax.set_title("Greedy")
     # no_handover_ax.set_title("No Handover")
     haal_ax.set_xlabel("Timestep")
+    fig.set_figwidth(6)
+    fig.set_figheight(6)
+    plt.tight_layout()
     plt.savefig("haal_experiment2/paper_exp2_task_hist.pdf")
     
 
@@ -1306,6 +1228,9 @@ def paper_experiment2_tasking_history():
     nh_bars[1].set_color('b')
     val_bars[2].set_color('g')
     nh_bars[2].set_color('g')
+    fig.set_figwidth(6)
+    fig.set_figheight(6)
+    plt.tight_layout()
     plt.savefig("haal_experiment2/paper_exp2_bars.pdf")
     plt.show()
 
@@ -1629,5 +1554,275 @@ def smaller_area_size_object_tracking():
     # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     # print("pct",pct)
 
+def paper_experiment1():
+    num_planes = 18
+    num_sats_per_plane = 18
+    m = 450
+    T = 93
+
+    altitude = 550
+    fov = 60
+    timestep = 1*u.min
+
+    max_L = test_optimal_L(timestep, altitude, fov)
+    print(max_L)
+    
+    lambda_ = 1.5
+
+    # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=2500)
+
+    # with open("haal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
+    #     pickle.dump(benefits,f)
+    # with open("haal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
+    #     pickle.dump(graphs,f)
+
+    # with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+    #     benefits = pickle.load(f)
+    # with open("haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+    #     graphs = pickle.load(f)
+
+    # _, no_handover_val = solve_wout_handover(benefits, None, lambda_)
+
+    # # _, cbba_val = solve_w_centralized_CBBA(benefits, None, lambda_, max_L, verbose=True)
+    # cbba_val = 0
+
+    # _, greedy_val = solve_greedily(benefits, None, lambda_)
+    # print(greedy_val)
+    # itersd_by_lookahead = []
+    # valued_by_lookahead = []
+
+    # iterscbba_by_lookahead = []
+    # valuecbba_by_lookahead = []
+
+    # valuec_by_lookahead = []
+    # for L in range(1,max_L+1):
+    #     print(f"lookahead {L}")
+    #     # _, cbba_val, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
+    #     # iterscbba_by_lookahead.append(avg_iters)
+    #     # valuecbba_by_lookahead.append(cbba_val)
+        
+    #     # _, d_val, avg_iters = solve_w_haal(benefits, None, lambda_, L, graphs=graphs, verbose=True, track_iters=True, distributed=True)
+    #     # itersd_by_lookahead.append(avg_iters)
+    #     # valued_by_lookahead.append(d_val)
+
+    #     _, c_val = solve_w_haal(benefits, None, lambda_, L, distributed=False, verbose=True)
+    #     valuec_by_lookahead.append(c_val)
+
+    # #Values from 1/31, before scaling experiments
+    valuecbba_by_lookahead = [4208.38020192484, 4412.873727755446, 4657.90330919782, 4717.85859678172, 4710.212483240204, 4726.329218229788]
+    valuec_by_lookahead = [6002.840671517548, 7636.731195199751, 7581.29374466441, 7435.882168254755, 7511.4534257400755, 7591.261917337481]
+    itersd_by_lookahead = [54.89247311827957, 61.17204301075269, 68.46236559139786, 72.64516129032258, 79.10752688172043, 80.02150537634408]
+    iterscbba_by_lookahead = [18.50537634408602, 26.0, 29.193548387096776, 33.11827956989247, 34.806451612903224, 37.29032258064516]
+    valued_by_lookahead = [6021.705454081699, 7622.246684035546, 7585.4110847804, 7294.093230272816, 7437.211996201664, 7559.402984912062]
+    greedy_val = 3650.418056196203
+    no_handover_val = 4078.018608711949
+
+    SMALL_SIZE = 8
+    MEDIUM_SIZE = 12
+    BIGGER_SIZE = 14
+
+    plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+    plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
+    plt.rc('axes', labelsize=BIGGER_SIZE)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=MEDIUM_SIZE)    # legend fontsize
+    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+    
+    fig, axes = plt.subplots(2,1,sharex=True)
+    for ax in axes:
+        ax.grid(True)
+    axes[0].plot(range(1,max_L+1), valued_by_lookahead, 'g--', label="HAAL-D")
+    axes[0].plot(range(1,max_L+1), valuec_by_lookahead, 'g', label="HAAL")
+    axes[0].plot(range(1,max_L+1), valuecbba_by_lookahead, 'b', label="CBBA")
+    axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r', label="NHA")
+    axes[0].plot(range(1,max_L+1), [greedy_val]*max_L, 'k', label="GA")
+    axes[0].set_ylabel("Total Value")
+    axes[0].set_xticks(range(1,max_L+1))
+    axes[0].set_ylim((0, 1.1*max(valuec_by_lookahead)))
+    # axes[0].legend(loc='upper left', bbox_to_anchor=(1, 0.25))
+    plt.subplots_adjust(right=0.75)
+    # axes[0].set_aspect('equal', adjustable='box')
+    # axes[0].yaxis.label.set_fontsize(12)
+    handles, labels = [], []
+    for handle, label in zip(*axes[0].get_legend_handles_labels()):
+        handles.append(handle)
+        labels.append(label)
+    fig.legend(handles, labels, loc='upper left', bbox_to_anchor=(0.15, 0.7))
+    # fig.legend(handles, labels, loc='upper left', bbox_to_anchor=(0.7, 0.3))
+
+    axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g--', label="HAAL-D")
+    axes[1].plot(range(1,max_L+1), iterscbba_by_lookahead, 'b', label="CBBA")
+    axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
+    axes[0].set_xticks(range(1,max_L+1))
+    axes[1].set_ylabel("Average Iterations")
+    axes[1].set_xlabel("Lookahead Window (L)")
+    axes[0].set_xlim(1,6)
+    axes[1].set_xlim(1,6)
+
+    with open("haal_experiment1/results.txt", 'w') as f:
+        f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {m}, T: {T}, altitude: {altitude}, fov: {fov}, timestep: {timestep}, max_L: {max_L}, lambda: {lambda_}\n")
+        f.write(f"~~~~~~~~~~~~~~~~~~~~~\n")
+        f.write(f"No Handover Value: {no_handover_val}\n")
+        f.write(f"Greedy Value: {greedy_val}\n")
+        f.write(f"CBBA Values by lookahead:\n{valuecbba_by_lookahead}\n")
+        f.write(f"HAAL Values by lookahead:\n{valuec_by_lookahead}\n")
+        f.write(f"HAAL-D Values by lookahead:\n{valued_by_lookahead}\n")
+
+        f.write(f"CBBA Iters by lookahead:\n{iterscbba_by_lookahead}\n")
+        f.write(f"HAAL Iters by lookahead:\n{itersd_by_lookahead}\n")
+
+    fig.set_figwidth(6)
+    fig.set_figheight(6)
+    fig.tight_layout()
+    plt.savefig("haal_experiment1/paper_exp1.pdf")
+    plt.show()
+
+def calc_pass_statistics(benefits, assigns):
+    n = benefits.shape[0]
+    m = benefits.shape[1]
+    T = benefits.shape[2]
+
+    pass_lens = []
+    pass_bens = []
+    task_assign_len = []
+    for j in range(m):
+        for i in range(n):
+            pass_started = False
+            task_assigned = False
+            assign_len = 0
+            pass_len = 0
+            pass_ben = 0
+            for k in range(T):
+                this_pass_assign_lens = []
+                if benefits[i,j,k] > 0:
+                    if not pass_started:
+                        pass_started = True
+                    pass_len += 1
+                    pass_ben += benefits[i,j,k]
+
+                    if assigns[k][i,j] == 1:
+                        if not task_assigned: task_assigned = True
+                        assign_len += 1
+                    #If there are benefits and the task was previously assigned,
+                    #but is no longer, end the streak
+                    elif task_assigned:
+                        task_assigned = False
+                        this_pass_assign_lens.append(assign_len)
+                        assign_len = 0
+
+                elif pass_started and benefits[i,j,k] == 0:
+                    if task_assigned:
+                        this_pass_assign_lens.append(assign_len)
+                    pass_started = False
+                    task_assigned = False
+                    for ass_len in this_pass_assign_lens:
+                        task_assign_len.append(ass_len)
+                    this_pass_assign_lens = []
+                    pass_lens.append(pass_len)
+                    pass_bens.append(pass_ben)
+                    pass_len = 0
+                    pass_ben = 0
+                    assign_len = 0
+    
+    avg_pass_len = sum(pass_lens) / len(pass_lens)
+    avg_pass_ben = sum(pass_bens) / len(pass_bens)
+    avg_ass_len = sum(task_assign_len) / len(task_assign_len)
+    
+    return avg_pass_len, avg_pass_ben, avg_ass_len
+
+def scaling_experiment():
+    with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+        benefits = pickle.load(f)
+    with open("haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+        graphs = pickle.load(f)
+
+    # lambdas = [0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5]
+    lambdas_over_bens = [0, 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5]
+    max_L = 6
+    avg_pass_ben = 1.1062110048940414
+    avg_pass_len = 4.2706495009402582
+
+    # haal_ass_lengths = []
+    # haal_benefit_captured = []
+    # for L in range(1, max_L+1):
+    #     ass_lengths = []
+    #     ben_captured = []
+    #     for lambda_over_ben in lambdas_over_bens:
+    #         print(f"\nL: {L}, lambda_over_ben: {lambda_over_ben}")
+
+    #         assigns, _ = solve_w_haal(benefits, None, lambda_over_ben/avg_pass_ben, L, verbose=True)
+
+    #         avg_pass_len, avg_pass_ben, avg_ass_len = calc_pass_statistics(benefits, assigns)
+    #         print(avg_pass_len)
+    #         ass_lengths.append(avg_ass_len)
+
+    #         ben, _ = calc_value_and_num_handovers(assigns, benefits, None, 0)
+    #         ben_captured.append(ben)
+        
+    #     haal_ass_lengths.append(ass_lengths)
+    #     haal_benefit_captured.append(ben_captured)
+
+    haal_ass_lengths = [[1.975839717147908, 2.6321243523316062, 2.9826032929481205, 3.1127060074428496, 3.167612787570959, 3.166237776634071, 3.1564245810055866, 3.136138613861386], [1.975839717147908, 2.6321243523316062, 3.1437713310580206, 3.518816067653277, 3.6521591295477727, 3.74131998748827, 3.7848474909806495, 3.7702182284980745], [1.975839717147908, 2.6321243523316062, 3.0977611940298506, 3.674305033809166, 4.029679461812425, 4.1662279052275295, 4.268018833755885, 4.348904060366511], [1.975839717147908, 2.6321243523316062, 3.0945330296127564, 3.460616438356164, 4.037037037037037, 4.361411087113031, 4.42348623853211, 4.5418569254185694], [1.975839717147908, 2.6321243523316062, 3.0975700934579438, 3.583904727535186, 3.8355240984159082, 4.2120644436118395, 4.43562066306862, 4.647544204322201], [1.975839717147908, 2.6321243523316062, 3.0907046476761617, 3.6238130021913806, 3.9195156695156697, 4.017934241115908, 4.485096870342772, 4.621862348178138]]
+    haal_benefit_captured = [[13948.722593405377, 13736.335016158991, 12814.189934221762, 10482.412016961945, 7333.355671855289, 3685.7664616188877, 1248.5513620437603, 623.2249270689351], [13948.722593405377, 13736.335016158991, 13034.873746423451, 12666.10491127586, 11615.043938933559, 10115.646076312827, 8208.367489747627, 5567.898557073061], [13948.722593405377, 13736.335016158991, 13008.183567290924, 11993.167521089039, 11495.584504412045, 10923.505283370283, 10103.6032538031, 8672.164995560246], [13948.722593405377, 13736.335016158991, 13019.51058647498, 11976.573334230057, 10809.450638906772, 10206.05387952314, 9753.063501644381, 9101.618507857653], [13948.722593405377, 13736.335016158991, 13016.36301038427, 12046.386026305474, 11021.742093991927, 9642.197338315971, 9225.830354891794, 8730.66387472196], [13948.722593405377, 13736.335016158991, 13018.50355117942, 12008.943137690649, 11366.454920955044, 10226.098839775805, 8628.681268625438, 8073.396674187025]]
+    # avg_pass_ben = 1.1062110048940414
+
+    SMALL_SIZE = 8
+    MEDIUM_SIZE = 12
+    BIGGER_SIZE = 14
+    plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+    plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
+    plt.rc('axes', labelsize=BIGGER_SIZE)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=BIGGER_SIZE)    # legend fontsize
+    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+    fig, axes = plt.subplots(2,1, sharex=True)
+    for ax in axes:
+        ax.grid(True)
+    
+    viridis_cmap = plt.get_cmap('viridis')
+    for L_idx in range(max_L):
+        color = viridis_cmap(L_idx /(max_L-1))
+        axes[0].plot(lambdas_over_bens, haal_ass_lengths[L_idx], label=f"L={L_idx+1}", color=color)
+        axes[1].plot(lambdas_over_bens, haal_benefit_captured[L_idx], label=f"L={L_idx+1}", color=color)
+    axes[0].plot(lambdas_over_bens, [avg_pass_len]*len(lambdas_over_bens), 'k--', label="Avg. time\ntask in view")
+
+    axes[0].set_ylabel("Avg. Length Satellite\nAssigned to Same Task")
+    axes[1].set_ylabel("Total Benefit")
+    axes[1].set_xlabel(r'$\frac{\lambda}{\beta_{pass, avg}}$')
+    axes[1].xaxis.label.set_fontsize(16)
+    axes[0].set_xlim(min(lambdas_over_bens), max(lambdas_over_bens))
+    axes[1].set_xlim(min(lambdas_over_bens), max(lambdas_over_bens))
+
+    handles, labels = [], []
+    for handle, label in zip(*axes[0].get_legend_handles_labels()):
+        handles.append(handle)
+        labels.append(label)
+    
+    fig.legend(handles, labels, loc='lower left', bbox_to_anchor=(0.45,0.5), ncol=2)
+    # axes[0].legend(loc='upper left', bbox_to_anchor=(1, 0.3))
+
+    with open("haal_scaling_exp/results.txt", 'w') as f:
+        f.write(f"same constellation stats as exp 1")
+        f.write(f"~~~~~~~~~~~~~~~~~~~~~\n")
+        f.write(f"Lambdas_over_bens: {lambdas_over_bens}\n")
+        f.write(f"avg pass ben: {avg_pass_ben}\n")
+        f.write(f"avg pass len: {avg_pass_len}\n")
+        f.write(f"HAAL assignment lengths:\n{haal_ass_lengths}\n")
+        f.write(f"HAAL benefit captured:\n{haal_benefit_captured}\n")
+
+    fig.set_figwidth(6)
+    fig.set_figheight(6)
+    # plt.subplots_adjust(right=0.75)
+    plt.tight_layout()
+    plt.savefig("haal_scaling_exp/paper_scaling.pdf")
+    plt.show()
+
+
 if __name__ == "__main__":
-    smaller_area_size_object_tracking()
+    scaling_experiment()
+    # paper_experiment1()
+    # paper_experiment2_tasking_history()

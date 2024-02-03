@@ -218,7 +218,9 @@ def calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 
         handover_pen = calc_assign_seq_handover_penalty(init_assignment, chosen_assignments, lambda_, benefits=benefits)
     total_benefit -= handover_pen
 
-    return total_benefit, handover_pen/lambda_
+    num_handovers = handover_pen/lambda_ if lambda_ != 0 else None
+
+    return total_benefit, num_handovers
 
 #~~~~~~~~~~~~~~~~~~~~BENEFIT MATRIX UTILITIES~~~~~~~~~~~~~~
 def generate_benefits_over_time(n, m, T, t_final, scale_min=0.5, scale_max=2):

@@ -452,7 +452,7 @@ def solve_w_CBBA_track_iters(unscaled_benefits, init_assignment, lambda_, L, gra
     total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_)
     real_value = total_value - benefit_to_add*n*T
 
-    return chosen_assignments, real_value, nh, total_iterations/T
+    return chosen_assignments, real_value, total_iterations/T
 
 if __name__ == "__main__":
     benefits = np.random.rand(100,100,10)
