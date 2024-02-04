@@ -1821,6 +1821,9 @@ def scaling_experiment():
     plt.savefig("haal_scaling_exp/paper_scaling.pdf")
     plt.show()
 
+def auction_speedup_test():
+    pass
+
 
 if __name__ == "__main__":
     scaling_experiment()
