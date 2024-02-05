@@ -18,6 +18,7 @@ from solve_greedily import solve_greedily
 from classic_auction import Auction
 from object_track_scenario import timestep_loss_state_dep_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_coverage_matrix_and_graphs_object_tracking_area
 from object_track_utils import calc_pct_objects_tracked, object_tracking_history
+from multi_task_scenario import solve_multitask_w_haal, calc_multiassign_state_dep_fn, get_benefit_matrix_and_graphs_multitask_area
 from plotting_utils import plot_object_track_scenario
 
 from constellation_sim.ConstellationSim import get_constellation_bens_and_graphs_random_tasks, get_constellation_bens_and_graphs_coverage, ConstellationSim
@@ -1656,7 +1657,7 @@ def paper_experiment1():
     axes[1].plot(range(1,max_L+1), iterscbba_by_lookahead, 'b', label="CBBA")
     axes[1].set_ylim((0, 1.1*max(itersd_by_lookahead)))
     axes[0].set_xticks(range(1,max_L+1))
-    axes[1].set_ylabel("Average Iterations")
+    axes[1].set_ylabel("Average # Communications\nUntil All Auctions Converge")
     axes[1].set_xlabel("Lookahead Window (L)")
     axes[0].set_xlim(1,6)
     axes[1].set_xlim(1,6)
@@ -1811,6 +1812,49 @@ def auction_speedup_test():
         total_benefit = np.sum(benefits1[:,j])
         print(total_benefit - prev_benefit)
 
+def multi_task_test():
+    lat_range = (20, 50)
+    lon_range = (73, 135)
+    T = 60
+    # full_benefit_matrix_w_synthetic_sats, graphs, T_trans, A_eqiv, \
+    #     _, _ = get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T)
+
+    with open('multitask_experiment/benefit_matrix.pkl','rb') as f:
+        full_benefit_matrix_w_synthetic_sats = pickle.load(f)
+    with open('multitask_experiment/graphs.pkl','rb') as f:
+        graphs = pickle.load(f)
+    with open('multitask_experiment/hex_task_map.pkl','rb') as f:
+        hex_to_task_mapping = pickle.load(f)
+    with open('multitask_experiment/const_object.pkl','rb') as f:
+        const = pickle.load(f)
+    with open('multitask_experiment/T_trans.pkl','rb') as f:
+        T_trans = pickle.load(f)
+    with open('multitask_experiment/A_eqiv.pkl','rb') as f:
+        A_eqiv = pickle.load(f)
+    
+    extra_handover_info = ExtraHandoverPenInfo()
+    extra_handover_info.T_trans = T_trans
+    extra_handover_info.A_eqiv = A_eqiv
+
+    lambda_ = 0.5
+    print("lambda", lambda_)
+    
+    ass, tv = solve_multitask_w_haal(full_benefit_matrix_w_synthetic_sats, None, lambda_, 3, distributed=False, verbose=True, extra_handover_info=extra_handover_info)
+    print("haal",tv)
+
+    #Pad benefit matrices
+    n = full_benefit_matrix_w_synthetic_sats.shape[0]
+    m = full_benefit_matrix_w_synthetic_sats.shape[1]
+    T = full_benefit_matrix_w_synthetic_sats.shape[2]
+    padded_size = max(n,m)
+    padded_benefits = np.zeros((n,padded_size, T))
+    padded_benefits[:,:m,:] = full_benefit_matrix_w_synthetic_sats
+
+    ass, tv = solve_wout_handover(padded_benefits, None, lambda_, state_dep_fn=calc_multiassign_state_dep_fn, extra_handover_info=extra_handover_info)
+    print("nha",tv)
+
+    ass, tv = solve_greedily(padded_benefits, None, lambda_, state_dep_fn=calc_multiassign_state_dep_fn, extra_handover_info=extra_handover_info)
+    print("greedy",tv)
 
 if __name__ == "__main__":
-    auction_speedup_test()
+    multi_task_test()

@@ -15,7 +15,7 @@ from astropy import units as u
 import h3
 
 from methods import *
-from solve_w_haal import solve_w_haal, choose_time_interval_sequence_centralized, HAAL_D_Parallel_Auction
+from solve_w_haal import choose_time_interval_sequence_centralized, HAAL_D_Parallel_Auction
 
 def init_task_objects(num_objects, const, hex_to_task_mapping, T, velocity=6437*u.km/u.hr):
     """
@@ -263,11 +263,13 @@ def get_filtered_benefits_and_graphs(benefits, graph, curr_assignment, T_trans=N
     if T_trans is None:
         T_trans = np.ones((m,m)) - np.eye(m)
 
-    filtered_graph = graph.copy()
+    if graph is not None:
+        filtered_graph = graph.copy()
 
-    for i in range(n):
-        if np.sum(benefits[i,:,:]) == 0:
-            graph.remove_node(i)
+        for i in range(n):
+            if np.sum(benefits[i,:,:]) == 0:
+                graph.remove_node(i)
+    else: filtered_graph = None
 
     #Iterate through every satellite - if it has a nonzero benefit at any point,
     #add it to a list of active satellites and create a map between old and new indices,
@@ -299,9 +301,10 @@ def get_filtered_benefits_and_graphs(benefits, graph, curr_assignment, T_trans=N
         padded_T_trans[:,j] = 0
 
     #update graphs to reflect new satellite numbering
-    nodes_to_remove = [n for n in filtered_graph.nodes() if n not in old_to_new_sat_mapping.keys()]
-    filtered_graph.remove_nodes_from(nodes_to_remove)
-    filtered_graph = nx.relabel_nodes(filtered_graph, old_to_new_sat_mapping)
+    if graph is not None:
+        nodes_to_remove = [n for n in filtered_graph.nodes() if n not in old_to_new_sat_mapping.keys()]
+        filtered_graph.remove_nodes_from(nodes_to_remove)
+        filtered_graph = nx.relabel_nodes(filtered_graph, old_to_new_sat_mapping)
 
     #update current assignment to reflect new satellite numbering
     if curr_assignment is not None:
@@ -314,27 +317,36 @@ def get_filtered_benefits_and_graphs(benefits, graph, curr_assignment, T_trans=N
 
     return filtered_padded_benefits, filtered_graph, padded_T_trans, new_assignment, new_to_old_sat_mapping
 
-def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, task_trans_state_dep_scaling_mat=None):
+def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, extra_handover_info=None):
     """
     Adds a loss to the benefit matrix which encodes a switching cost of
     losing the entire benefit of the task in the first timestep, plus a small
     extra penalty (lambda_).
 
     Expects a 2D (n x m) benefit matrix.
+
+    Also expects extra_handover info to contain T transition matrix.
     """
     if prev_assign is None: return benefits
-
     m = benefits.shape[1]
-    if task_trans_state_dep_scaling_mat is None:
-        task_trans_state_dep_scaling_mat = np.ones((m,m)) - np.eye(m)
-    state_dep_scaling = prev_assign @ task_trans_state_dep_scaling_mat
+
+    try:
+        T_trans = extra_handover_info.T_trans
+    except AttributeError:
+        print("Info on T_trans not provided, using default")
+        T_trans = None
+
+    if T_trans is None:
+        T_trans = np.ones((m,m)) - np.eye(m)
+
+    state_dep_scaling = prev_assign @ T_trans
 
     return np.where(state_dep_scaling > 0, benefits*(1-state_dep_scaling)-lambda_, benefits)
 
 def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverage_benefit, object_benefit, init_assignment, lambda_, L, 
                                       distributed=False, parallel=False, verbose=False,
                                       eps=0.01, graphs=None, track_iters=False,
-                                      state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=None):
+                                      state_dep_fn=timestep_loss_state_dep_fn, extra_handover_info=None):
     """
     Aim to solve the problem using the HAAL algorithm, but with the benefit matrix
     changing over time as objects move through the area. We can't precalculate this
@@ -354,8 +366,11 @@ def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverag
     m = sat_coverage_matrix.shape[1]
     T = sat_coverage_matrix.shape[2]
 
-    if graphs is None and distributed:
-        graphs = [nx.complete_graph(n) for i in range(T)]
+    if graphs is None:
+        if distributed:
+            graphs = [nx.complete_graph(n) for i in range(T)]
+        else:
+            graphs = [None]*T
 
     curr_assignment = init_assignment
     
@@ -380,7 +395,9 @@ def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverag
         #We don't want to run auctions with all satellites in the constellation if they can't see any current tasks.
         #Thus, we filter the benefit matrices so that we only run auctions with the satellites which can see tasks.
         filtered_benefit_window, filtered_graph, filtered_T_trans, \
-            filtered_assignment, new_to_old_sat_mapping = get_filtered_benefits_and_graphs(benefit_window, graphs[k], curr_assignment, task_trans_state_dep_scaling_mat)
+            filtered_assignment, new_to_old_sat_mapping = get_filtered_benefits_and_graphs(benefit_window, graphs[k], curr_assignment, extra_handover_info.T_trans)
+        filtered_extra_handover_info = ExtraHandoverPenInfo()
+        filtered_extra_handover_info.T_trans = filtered_T_trans
 
         len_window = filtered_benefit_window.shape[-1]
 
@@ -391,7 +408,7 @@ def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverag
             if not nx.is_connected(filtered_graph): print("WARNING: GRAPH NOT CONNECTED")
             haal_d_auction = HAAL_D_Parallel_Auction(filtered_benefit_window, filtered_assignment, all_time_intervals, all_time_interval_sequences, 
                                                      eps=eps, graph=filtered_graph, lambda_=lambda_, state_dep_fn=state_dep_fn,
-                                                     task_trans_state_dep_scaling_mat=filtered_T_trans)
+                                                     extra_handover_info=filtered_extra_handover_info)
             haal_d_auction.run_auction()
             filtered_chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
 
@@ -399,7 +416,7 @@ def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverag
         else:
             filtered_chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, filtered_assignment, filtered_benefit_window, 
                                                                       lambda_, parallel_approx=parallel, state_dep_fn=state_dep_fn,
-                                                                      task_trans_state_dep_scaling_mat=filtered_T_trans)
+                                                                      extra_handover_info=filtered_extra_handover_info)
 
         #Map filtered assignments back into the satellite indices of the original benefit matrix.
         chosen_assignment = np.zeros((n,m))
@@ -412,7 +429,7 @@ def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverag
     
     total_benefits = get_benefits_from_task_objects(coverage_benefit, object_benefit, sat_coverage_matrix, task_objects)
     total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, total_benefits, lambda_, 
-                                                        state_dep_fn=state_dep_fn, T_trans=task_trans_state_dep_scaling_mat)
+                                                        state_dep_fn=state_dep_fn, extra_handover_info=extra_handover_info)
     
     if not track_iters or not distributed:
         return chosen_assignments, total_value
@@ -440,8 +457,11 @@ if __name__ == "__main__":
     task_objects = init_task_objects(60, const, hex_to_task_mapping, T)
     benefits = get_benefits_from_task_objects(1, 10, sat_cover_matrix, task_objects)
 
+    extra_handover_info = ExtraHandoverPenInfo()
+    extra_handover_info.T_trans = T_trans
+
     ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, 1, 10, None, 0.5, 3, parallel=True, distributed=False, graphs=graphs,
-                                                state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=T_trans,
+                                                state_dep_fn=timestep_loss_state_dep_fn, extra_handover_info=extra_handover_info,
                                                 track_iters=True)
     print(tv)
     print(is_assignment_mat_sequence_valid(ass))

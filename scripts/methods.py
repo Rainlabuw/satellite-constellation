@@ -118,10 +118,17 @@ def is_assignment_mat_sequence_valid(assignment_mat_seq):
     return True
 
 #~~~~~~~~~~~~~~~~~~~~GENERIC HANDOVER PENALTY STUFF~~~~~~~~~~~~~~
-def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, T_trans=None):
+class ExtraHandoverPenInfo(object):
+    """
+    Blank class to store extra information about handover penalties.
+    """
+    pass
+
+def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover_info=None):
     """
     Adjusts a 2D benefit matrix to account for generic handover penalty (i.e. constant penalty for switching tasks).
 
+    extra_info is an object which can contain extra information about the handover penalty - it should store T_trans.
     T_trans is a matrix which determines which transitions between TASKS are penalized.
         It is m x m, where entry ij is the state dependence multiplier that should be applied when switching from task i to task j.
         (If it is None, then all transitions between different tasks are scaled by 1.)
@@ -131,9 +138,15 @@ def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, T_trans=None):
 
     m = benefits.shape[1]
 
+    try:
+        T_trans = extra_handover_info.T_trans
+    except AttributeError:
+        print("Info on T_trans not provided, using default")
+        T_trans = None
+    
     if T_trans is None:
         T_trans = np.ones((m,m)) - np.eye(m)
-    
+
     state_dep_scaling = prev_assign @ T_trans
 
     return benefits-lambda_*state_dep_scaling
@@ -152,16 +165,16 @@ def calc_distance_btwn_solutions(agents1, agents2):
 
 #~~~~~~~~~~~~~~~~~~~~STATE DEPENDENT VALUE STUFF~~~~~~~~~~~~~~
 def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits, lambda_,
-                                          state_dep_fn=generic_handover_state_dep_fn, T_trans=None):
+                                          state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None):
     state_dependent_value = 0
 
     benefit_hat = np.copy(benefits[:,:,0])
     if init_assignment is not None: #adjust based on init_assignment if it exists
-        benefit_hat = state_dep_fn(benefits[:,:,0], init_assignment, lambda_, T_trans)
+        benefit_hat = state_dep_fn(benefits[:,:,0], init_assignment, lambda_, extra_handover_info)
     state_dependent_value += (benefit_hat * assignments[0]).sum()
 
     for k in range(len(assignments)-1):
-        benefit_hat = state_dep_fn(benefits[:,:,k+1], assignments[k], lambda_, T_trans)
+        benefit_hat = state_dep_fn(benefits[:,:,k+1], assignments[k], lambda_, extra_handover_info)
         state_dependent_value += (benefit_hat * assignments[k+1]).sum()
 
     return state_dependent_value
