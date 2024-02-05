@@ -19,7 +19,7 @@ from classic_auction import Auction
 from object_track_scenario import timestep_loss_state_dep_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_coverage_matrix_and_graphs_object_tracking_area
 from object_track_utils import calc_pct_objects_tracked, object_tracking_history
 from multi_task_scenario import solve_multitask_w_haal, calc_multiassign_state_dep_fn, get_benefit_matrix_and_graphs_multitask_area
-from plotting_utils import plot_object_track_scenario
+from plotting_utils import plot_object_track_scenario, plot_multitask_scenario
 
 from constellation_sim.ConstellationSim import get_constellation_bens_and_graphs_random_tasks, get_constellation_bens_and_graphs_coverage, ConstellationSim
 from constellation_sim.Satellite import Satellite
@@ -1838,9 +1838,11 @@ def multi_task_test():
 
     lambda_ = 0.5
     print("lambda", lambda_)
-    
+
     ass, tv = solve_multitask_w_haal(full_benefit_matrix_w_synthetic_sats, None, lambda_, 3, distributed=False, verbose=True, extra_handover_info=extra_handover_info)
     print("haal",tv)
+
+    plot_multitask_scenario(hex_to_task_mapping, ass, A_eqiv, "haal_multitask.gif", show=False)
 
     #Pad benefit matrices
     n = full_benefit_matrix_w_synthetic_sats.shape[0]
@@ -1853,8 +1855,10 @@ def multi_task_test():
     ass, tv = solve_wout_handover(padded_benefits, None, lambda_, state_dep_fn=calc_multiassign_state_dep_fn, extra_handover_info=extra_handover_info)
     print("nha",tv)
 
-    ass, tv = solve_greedily(padded_benefits, None, lambda_, state_dep_fn=calc_multiassign_state_dep_fn, extra_handover_info=extra_handover_info)
-    print("greedy",tv)
+    plot_multitask_scenario(hex_to_task_mapping, ass, A_eqiv, "nha_multitask.gif", show=False)
+
+    # ass, tv = solve_greedily(padded_benefits, None, lambda_, state_dep_fn=calc_multiassign_state_dep_fn, extra_handover_info=extra_handover_info)
+    # print("greedy",tv)
 
 if __name__ == "__main__":
     multi_task_test()
