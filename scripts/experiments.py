@@ -13,7 +13,7 @@ from solve_wout_handover import solve_wout_handover
 from solve_w_haal import solve_w_haal
 from solve_w_accelerated_haal import solve_w_accel_haal
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
-from solve_w_CBBA import solve_w_CBBA, solve_w_CBBA_track_iters
+from solve_w_CBBA import solve_w_CBBA
 from solve_greedily import solve_greedily
 from classic_auction import Auction
 from object_track_scenario import timestep_loss_state_dep_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_coverage_matrix_and_graphs_object_tracking_area
@@ -1769,10 +1769,48 @@ def scaling_experiment():
     plt.show()
 
 def auction_speedup_test():
-    pass
+    """
+    Was gonna test if we could speed up auctions by using edited
+    prices from previous timesteps, but decided it was kinda a stupid
+    idea in the end.
+    """
+    with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+        benefits = pickle.load(f)
+    with open("haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+        graphs = pickle.load(f)
+
+    n = benefits.shape[0]
+    m = benefits.shape[1]
+    T = benefits.shape[2]
+    lambda_ = 0.5
+
+    auction = Auction(n, m, benefits=benefits[:,:,0], graph=graphs[0])
+    auction.run_auction()
+    init_assigns = convert_agents_to_assignment_matrix(auction.agents)
+    timestep_1_prices = auction.agents[0].public_prices
+    
+    benefits1 = add_handover_pen_to_benefit_matrix(np.expand_dims(benefits[:,:,1],-1), init_assigns, lambda_)
+    benefits1 = np.squeeze(benefits1)
+    #Run default auction for second timestep
+    def_auction2 = Auction(n, m, benefits=benefits1, graph=graphs[1])
+    def_auction2.run_auction()
+
+    def_iters = def_auction2.n_iterations
+    print(f"Iterations without speedup {def_iters}")
+
+    #Run default auction for second timestep
+    def_auction2 = Auction(n, m, benefits=benefits1, graph=graphs[1], prices=timestep_1_prices)
+    def_auction2.run_auction()
+
+    def_iters = def_auction2.n_iterations
+    print(f"Iterations with old prices speedup {def_iters}")
+
+    #Run sped up auction
+    for j in range(m):
+        prev_benefit = np.sum(benefits[:,j,0])
+        total_benefit = np.sum(benefits1[:,j])
+        print(total_benefit - prev_benefit)
 
 
 if __name__ == "__main__":
-    scaling_experiment()
-    # paper_experiment1()
-    # paper_experiment2_tasking_history()
+    auction_speedup_test()

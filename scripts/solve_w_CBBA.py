@@ -1,7 +1,47 @@
 import numpy as np
 import networkx as nx
 from methods import *
-import cProfile
+
+def solve_w_CBBA(unscaled_benefits, init_assignment, lambda_, L, graphs=None, verbose=False, track_iters=False):
+    n = unscaled_benefits.shape[0]
+    m = unscaled_benefits.shape[1]
+    T = unscaled_benefits.shape[2]
+
+    min_benefit = np.min(unscaled_benefits)
+    benefit_to_add = max(2*lambda_-min_benefit, 0)
+    benefits = unscaled_benefits + benefit_to_add
+
+    if graphs is None:
+        graphs = [nx.complete_graph(n) for i in range(T)]
+
+    curr_assignment = init_assignment
+    
+    chosen_assignments = []
+    total_iterations = 0
+    while len(chosen_assignments) < T:
+        if verbose: print(f"Solving w distributed CBBA, {len(chosen_assignments)}/{T}", end='\r')
+        curr_tstep = len(chosen_assignments)
+        tstep_end = min(curr_tstep+L, T)
+        benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
+
+        len_window = benefit_mat_window.shape[-1]
+
+        if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
+        cbba_auction = CBBAAuction(benefit_mat_window, lambda_, graph=graphs[curr_tstep], verbose=verbose)
+        cbba_auction.run_auction()
+        total_iterations += cbba_auction.n_iterations
+
+        chosen_assignment = convert_agents_to_assignment_matrix(cbba_auction.agents)
+
+        chosen_assignments.append(chosen_assignment)
+    
+    total_value, _ = calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_)
+    real_value = total_value - benefit_to_add*n*T
+
+    if track_iters:
+        return chosen_assignments, real_value, total_iterations/T
+    else:
+        return chosen_assignments, real_value
 
 class CBBAAuction(object):
     def __init__(self, benefits, lambda_, graph=None, verbose=False):
@@ -376,83 +416,6 @@ class CBBAAgent(object):
                 if (n != self.id) and (self.timestamps[n] < self.timestamp_comm_packet[neigh_comm_idx,n]):
                     self.timestamps[n] = self.timestamp_comm_packet[neigh_comm_idx,n]
             self.timestamps[neigh_id] = self.n_iters
-
-def solve_w_CBBA(unscaled_benefits, init_assignment, lambda_, L, graphs=None, verbose=False):
-    n = unscaled_benefits.shape[0]
-    m = unscaled_benefits.shape[1]
-    T = unscaled_benefits.shape[2]
-
-    min_benefit = np.min(unscaled_benefits)
-    benefit_to_add = max(2*lambda_-min_benefit, 0)
-    benefits = unscaled_benefits + benefit_to_add
-
-    if graphs is None:
-        graphs = [nx.complete_graph(n) for i in range(T)]
-
-    curr_assignment = init_assignment
-    
-    chosen_assignments = []
-
-    while len(chosen_assignments) < T:
-        if verbose: print(f"Solving w distributed CBBA, {len(chosen_assignments)}/{T}", end='\r')
-        curr_tstep = len(chosen_assignments)
-        tstep_end = min(curr_tstep+L, T)
-        benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
-
-        len_window = benefit_mat_window.shape[-1]
-
-        if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
-        cbba_auction = CBBAAuction(benefit_mat_window, lambda_, graph=graphs[curr_tstep], verbose=verbose)
-        cbba_auction.run_auction()
-
-
-        chosen_assignment = convert_agents_to_assignment_matrix(cbba_auction.agents)
-
-        chosen_assignments.append(chosen_assignment)
-    
-    total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_)
-    real_value = total_value - benefit_to_add*n*T
-
-    return chosen_assignments, real_value, nh
-
-def solve_w_CBBA_track_iters(unscaled_benefits, init_assignment, lambda_, L, graphs=None, verbose=False):
-    n = unscaled_benefits.shape[0]
-    m = unscaled_benefits.shape[1]
-    T = unscaled_benefits.shape[2]
-
-    min_benefit = np.min(unscaled_benefits)
-    benefit_to_add = max(2*lambda_-min_benefit, 0)
-    benefits = unscaled_benefits + benefit_to_add
-
-    if graphs is None:
-        graphs = [nx.complete_graph(n) for i in range(T)]
-
-    curr_assignment = init_assignment
-    
-    total_iterations = 0
-
-    chosen_assignments = []
-
-    while len(chosen_assignments) < T:
-        if verbose: print(f"Solving w distributed CBBA, {len(chosen_assignments)}/{T}", end='\r')
-        curr_tstep = len(chosen_assignments)
-        tstep_end = min(curr_tstep+L, T)
-        benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
-
-        if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
-        cbba_auction = CBBAAuction(benefit_mat_window, lambda_, graph=graphs[curr_tstep])
-        cbba_auction.run_auction()
-
-
-        chosen_assignment = convert_agents_to_assignment_matrix(cbba_auction.agents)
-
-        chosen_assignments.append(chosen_assignment)
-        total_iterations += cbba_auction.n_iterations
-    
-    total_value, nh = calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, lambda_)
-    real_value = total_value - benefit_to_add*n*T
-
-    return chosen_assignments, real_value, total_iterations/T
 
 if __name__ == "__main__":
     benefits = np.random.rand(100,100,10)

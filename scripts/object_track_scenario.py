@@ -198,31 +198,22 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
     const.sats = active_sats
     truncated_sat_cover_matrix = truncated_sat_cover_matrix[:len(const.sats),:,:] #truncate unused satellites
 
-    print(graphs[0].number_of_nodes())
     #update graphs to reflect new satellite numbering
     for k in range(T):
         nodes_to_remove = [n for n in graphs[k].nodes() if n not in old_to_new_sat_mapping.keys()]
         graphs[k].remove_nodes_from(nodes_to_remove)
         graphs[k] = nx.relabel_nodes(graphs[k], old_to_new_sat_mapping)
 
-    print(graphs[0].number_of_nodes())
-
     print("Num active sats", len(const.sats))
 
     #Create second opportunity for tasks to be completed, with 20% of the scaling
     num_primary_tasks = truncated_sat_cover_matrix.shape[1]
-    sat_cover_matrix_w_backup_tasks = np.zeros((truncated_sat_cover_matrix.shape[0], truncated_sat_cover_matrix.shape[1]*2, truncated_sat_cover_matrix.shape[2]))
-    sat_cover_matrix_w_backup_tasks[:,:truncated_sat_cover_matrix.shape[1],:] = truncated_sat_cover_matrix
-    sat_cover_matrix_w_backup_tasks[:,truncated_sat_cover_matrix.shape[1]:,:] = truncated_sat_cover_matrix * 0.2
-    num_tasks_before_padding = sat_cover_matrix_w_backup_tasks.shape[1]
+    sat_cover_matrix = np.zeros((truncated_sat_cover_matrix.shape[0], truncated_sat_cover_matrix.shape[1]*2, truncated_sat_cover_matrix.shape[2]))
+    sat_cover_matrix[:,:truncated_sat_cover_matrix.shape[1],:] = truncated_sat_cover_matrix
+    sat_cover_matrix[:,truncated_sat_cover_matrix.shape[1]:,:] = truncated_sat_cover_matrix * 0.2
 
-    #if necessary, pad the sat cover matrix with zeros so that n<=m
-    padding_size = max(0,sat_cover_matrix_w_backup_tasks.shape[0]-sat_cover_matrix_w_backup_tasks.shape[1])
-    sat_cover_matrix = np.pad(sat_cover_matrix_w_backup_tasks, ((0,0), (0, padding_size), (0,0)))
     m = sat_cover_matrix.shape[1]
-
-    print("Padding tasks", padding_size)
-
+    
     #Create scaling matrix for task transitions
     task_transition_state_dep_scaling_mat = np.ones((m,m))
     
@@ -231,15 +222,11 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
         task_transition_state_dep_scaling_mat[j,j+num_primary_tasks] = 0
         task_transition_state_dep_scaling_mat[j+num_primary_tasks,j] = 0
 
-    #no penalty when transitioning to a dummy task
-    for j in range(num_tasks_before_padding, m):
-        task_transition_state_dep_scaling_mat[:,j] = 0
-
     #no penalty when transitioning between the same task
-    for j in range(num_tasks_before_padding):
+    for j in range(m):
         task_transition_state_dep_scaling_mat[j,j] = 0
 
-    # #no penalty when transitioning between tasks which are in adjacent hexagons
+    #no penalty when transitioning between tasks which are in adjacent hexagons
     # for j in range(num_primary_tasks):
     #     task_hex = hexagons[j]
     #     neighbor_hexes = h3.k_ring(task_hex, 1)
@@ -248,18 +235,84 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
     #             task_transition_state_dep_scaling_mat[j,hex_to_task_mapping[neighbor_hex]] = 0
     #             task_transition_state_dep_scaling_mat[hex_to_task_mapping[neighbor_hex],j] = 0
 
-    with open('object_track_experiment/sat_cover_matrix_highres.pkl','wb') as f:
+    #             task_transition_state_dep_scaling_mat[j+num_primary_tasks,hex_to_task_mapping[neighbor_hex]] = 0
+    #             task_transition_state_dep_scaling_mat[hex_to_task_mapping[neighbor_hex],j+num_primary_tasks] = 0
+
+    with open('object_track_experiment/sat_cover_matrix.pkl','wb') as f:
         pickle.dump(sat_cover_matrix, f)
-    with open('object_track_experiment/graphs_highres.pkl','wb') as f:
+    with open('object_track_experiment/graphs.pkl','wb') as f:
         pickle.dump(graphs, f)
-    with open('object_track_experiment/task_transition_scaling_highres.pkl','wb') as f:
+    with open('object_track_experiment/task_transition_scaling.pkl','wb') as f:
         pickle.dump(task_transition_state_dep_scaling_mat, f)
-    with open('object_track_experiment/hex_task_map_highres.pkl','wb') as f:
+    with open('object_track_experiment/hex_task_map.pkl','wb') as f:
         pickle.dump(hex_to_task_mapping, f)
-    with open('object_track_experiment/const_object_highres.pkl','wb') as f:
+    with open('object_track_experiment/const_object.pkl','wb') as f:
         pickle.dump(const, f)
     
     return sat_cover_matrix, graphs, task_transition_state_dep_scaling_mat, hex_to_task_mapping, const
+
+def get_filtered_benefits_and_graphs(benefits, graph, curr_assignment, T_trans=None):
+    """
+    Given a benefit matrix and graph, filter out all satellites which are not currently in view of any task,
+    and return the filtered benefit matrix and graph.
+    """
+    n = benefits.shape[0]
+    m = benefits.shape[1]
+    L = benefits.shape[2]
+
+    if T_trans is None:
+        T_trans = np.ones((m,m)) - np.eye(m)
+
+    filtered_graph = graph.copy()
+
+    for i in range(n):
+        if np.sum(benefits[i,:,:]) == 0:
+            graph.remove_node(i)
+
+    #Iterate through every satellite - if it has a nonzero benefit at any point,
+    #add it to a list of active satellites and create a map between old and new indices,
+    #where the new indices are created by removing satellites with zero benefit.
+    old_to_new_sat_mapping = {}
+    active_sats = 0
+    for i in range(n):
+        total_sat_benefits = np.sum(benefits[i,:,:])
+        if total_sat_benefits > 0: #it has nonzero scaling on at least one task at one timestep
+            old_to_new_sat_mapping[i] = active_sats
+            active_sats += 1
+
+    new_to_old_sat_mapping = {v: k for k, v in old_to_new_sat_mapping.items()}
+
+    #Update benefit matrix to reflect new satellite numbering
+    filtered_benefits = np.zeros((active_sats, m, L))
+    for old_sat_idx, new_sat_idx in old_to_new_sat_mapping.items():
+        filtered_benefits[new_sat_idx,:,:] = benefits[old_sat_idx,:,:]
+
+    #Add padding to this new benefit matrix to ensure that n <= m
+    padded_m = max(active_sats, m)
+    filtered_padded_benefits = np.zeros((active_sats, padded_m, L))
+    filtered_padded_benefits[:,:m,:] = filtered_benefits
+
+    #Update T_trans to reflect that padded tasks don't induce a transition penalty
+    padded_T_trans = np.ones((padded_m, padded_m)) - np.eye(padded_m)
+    padded_T_trans[:m,:m] = T_trans
+    for j in range(m, padded_m):
+        padded_T_trans[:,j] = 0
+
+    #update graphs to reflect new satellite numbering
+    nodes_to_remove = [n for n in filtered_graph.nodes() if n not in old_to_new_sat_mapping.keys()]
+    filtered_graph.remove_nodes_from(nodes_to_remove)
+    filtered_graph = nx.relabel_nodes(filtered_graph, old_to_new_sat_mapping)
+
+    #update current assignment to reflect new satellite numbering
+    if curr_assignment is not None:
+        new_assignment = np.zeros((active_sats, padded_m))
+        for i in range(n):
+            if i in old_to_new_sat_mapping.keys():
+                new_assignment[old_to_new_sat_mapping[i],:m] = curr_assignment[i,:]
+    else:
+        new_assignment = None
+
+    return filtered_padded_benefits, filtered_graph, padded_T_trans, new_assignment, new_to_old_sat_mapping
 
 def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, task_trans_state_dep_scaling_mat=None):
     """
@@ -279,6 +332,94 @@ def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, task_trans_state_
     return np.where(state_dep_scaling > 0, benefits*(1-state_dep_scaling)-lambda_, benefits)
 
 def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverage_benefit, object_benefit, init_assignment, lambda_, L, 
+                                      distributed=False, parallel=False, verbose=False,
+                                      eps=0.01, graphs=None, track_iters=False,
+                                      state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=None):
+    """
+    Aim to solve the problem using the HAAL algorithm, but with the benefit matrix
+    changing over time as objects move through the area. We can't precalculate this
+    because we don't want the algorithm to have prior knowledge of the object movement
+    until it actually appears.
+
+    INPUTS:
+        sat_coverage_matrix: n x m x T array, which contains information about what satellites cover which tasks at what time.
+            sat_coverage_matrix[i,j,k] = the ratio of the benefits from task j that satellite i can collect at time k (i.e. 0 if sat can't see task)
+        When parallel_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
+            as is done to parallelize auctions in the distributed version of the algorithm.
+    """
+    if parallel is None: parallel = distributed #If no option is selected, parallel is off for centralized, but on for distributed
+    if distributed and not parallel: print("Note: No serialized version of HAAL-D implemented yet. Solving parallelized.")
+
+    n = sat_coverage_matrix.shape[0]
+    m = sat_coverage_matrix.shape[1]
+    T = sat_coverage_matrix.shape[2]
+
+    if graphs is None and distributed:
+        graphs = [nx.complete_graph(n) for i in range(T)]
+
+    curr_assignment = init_assignment
+    
+    total_iterations = 0 if distributed else None
+    chosen_assignments = []
+    for k in range(T):
+        if verbose: print(f"Solving w HAAL, {k}/{T}", end='\r')
+
+        #build benefit matrix from task_objects and sat_cover_matrix
+        tstep_end = min(k+L, T)
+        sat_coverage_window = sat_coverage_matrix[:,:,k:tstep_end]
+        benefit_window = np.ones_like(sat_coverage_window) * coverage_benefit
+        for task_object in task_objects:
+            #If the object is active at this timestep, add it's benefits for the next L timesteps
+            if k >= task_object.appear_time:
+                for t in range(k, tstep_end):
+                    if task_object.task_idxs[t] is not None:
+                        benefit_window[:,task_object.task_idxs[t],t-k] += object_benefit
+
+        benefit_window = benefit_window * sat_coverage_window #scale benefits by sat coverage scaling
+
+        #We don't want to run auctions with all satellites in the constellation if they can't see any current tasks.
+        #Thus, we filter the benefit matrices so that we only run auctions with the satellites which can see tasks.
+        filtered_benefit_window, filtered_graph, filtered_T_trans, \
+            filtered_assignment, new_to_old_sat_mapping = get_filtered_benefits_and_graphs(benefit_window, graphs[k], curr_assignment, task_trans_state_dep_scaling_mat)
+
+        len_window = filtered_benefit_window.shape[-1]
+
+        all_time_intervals = generate_all_time_intervals(len_window)
+        all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
+
+        if distributed:
+            if not nx.is_connected(filtered_graph): print("WARNING: GRAPH NOT CONNECTED")
+            haal_d_auction = HAAL_D_Parallel_Auction(filtered_benefit_window, filtered_assignment, all_time_intervals, all_time_interval_sequences, 
+                                                     eps=eps, graph=filtered_graph, lambda_=lambda_, state_dep_fn=state_dep_fn,
+                                                     task_trans_state_dep_scaling_mat=filtered_T_trans)
+            haal_d_auction.run_auction()
+            filtered_chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
+
+            total_iterations += haal_d_auction.n_iterations
+        else:
+            filtered_chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, filtered_assignment, filtered_benefit_window, 
+                                                                      lambda_, parallel_approx=parallel, state_dep_fn=state_dep_fn,
+                                                                      task_trans_state_dep_scaling_mat=filtered_T_trans)
+
+        #Map filtered assignments back into the satellite indices of the original benefit matrix.
+        chosen_assignment = np.zeros((n,m))
+        for i in range(n):
+            if i in new_to_old_sat_mapping.keys():
+                chosen_assignment[new_to_old_sat_mapping[i],:] = filtered_chosen_assignment[i,:m]
+
+        chosen_assignments.append(chosen_assignment)
+        curr_assignment = chosen_assignment
+    
+    total_benefits = get_benefits_from_task_objects(coverage_benefit, object_benefit, sat_coverage_matrix, task_objects)
+    total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, total_benefits, lambda_, 
+                                                        state_dep_fn=state_dep_fn, T_trans=task_trans_state_dep_scaling_mat)
+    
+    if not track_iters:
+        return chosen_assignments, total_value
+    else:
+        return chosen_assignments, total_value, total_iterations/T
+
+def solve_object_track_w_dynamic_haal_old(sat_coverage_matrix, task_objects, coverage_benefit, object_benefit, init_assignment, lambda_, L, 
                                       distributed=False, parallel=False, verbose=False,
                                       eps=0.01, graphs=None, track_iters=False,
                                       state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=None):
@@ -350,29 +491,32 @@ def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverag
     total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, total_benefits, lambda_, 
                                                         state_dep_fn=state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
     
-    return chosen_assignments, total_value
+    return chosen_assignments, total_value, total_iterations/T
 
 if __name__ == "__main__":
-    with open('object_track_experiment/sat_cover_matrix_large_const.pkl','rb') as f:
+    with open('object_track_experiment/sat_cover_matrix.pkl','rb') as f:
         sat_cover_matrix = pickle.load(f)
-    with open('object_track_experiment/graphs_large_const.pkl','rb') as f:
+    with open('object_track_experiment/graphs.pkl','rb') as f:
         graphs = pickle.load(f)
-    with open('object_track_experiment/task_transition_scaling_large_const.pkl','rb') as f:
-        task_transition_state_dep_scaling_mat = pickle.load(f)
-    with open('object_track_experiment/hex_task_map_large_const.pkl','rb') as f:
+    with open('object_track_experiment/task_transition_scaling.pkl','rb') as f:
+        T_trans = pickle.load(f)
+    with open('object_track_experiment/hex_task_map.pkl','rb') as f:
         hex_to_task_mapping = pickle.load(f)
-    with open('object_track_experiment/const_object_large_const.pkl','rb') as f:
+    with open('object_track_experiment/const_object.pkl','rb') as f:
         const = pickle.load(f)
 
-    # lat_range = (20, 50)
-    # lon_range = (73, 135)
+    lat_range = (20, 50)
+    lon_range = (73, 135)
+    T = 60
 
-    # get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range)
+    # get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range, T)
     np.random.seed(0)
-    task_objects = init_task_objects(60, const, hex_to_task_mapping, 60)
+    task_objects = init_task_objects(60, const, hex_to_task_mapping, T)
     benefits = get_benefits_from_task_objects(1, 10, sat_cover_matrix, task_objects)
 
-    ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, None, 0.05, 3, parallel_approx=False,
-                                                state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_transition_state_dep_scaling_mat)
+    ass, tv, iters = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, 1, 10, None, 0.5, 3, parallel=True, distributed=True, graphs=graphs,
+                                                state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=T_trans,
+                                                track_iters=True)
     print(tv)
+    print(iters)
     print(is_assignment_mat_sequence_valid(ass))

@@ -118,24 +118,25 @@ def is_assignment_mat_sequence_valid(assignment_mat_seq):
     return True
 
 #~~~~~~~~~~~~~~~~~~~~GENERIC HANDOVER PENALTY STUFF~~~~~~~~~~~~~~
-def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, task_trans_state_dep_scaling_mat=None):
+def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, T_trans=None):
     """
     Adjusts a 2D benefit matrix to account for generic handover penalty (i.e. constant penalty for switching tasks).
 
-    task_trans_state_dep_scaling_mat is a matrix which determines which transitions are active.
+    T_trans is a matrix which determines which transitions between TASKS are penalized.
         It is m x m, where entry ij is the state dependence multiplier that should be applied when switching from task i to task j.
-        (If it is None, then all transitions are scaled by 1.)
-    Then, prev_assign @ task_trans_state_dep_scaling_mat is the matrix which entries of the benefit matrix should be adjusted.
+        (If it is None, then all transitions between different tasks are scaled by 1.)
+    Then, prev_assign @ T_trans is the matrix which entries of the benefit matrix should be adjusted.
     """
     if prev_assign is None: return benefits
 
     m = benefits.shape[1]
 
-    if task_trans_state_dep_scaling_mat is None:
-        task_trans_state_dep_scaling_mat = np.ones((m,m)) - np.eye(m)
-    state_dep_scaling = prev_assign @ task_trans_state_dep_scaling_mat
+    if T_trans is None:
+        T_trans = np.ones((m,m)) - np.eye(m)
+    
+    state_dep_scaling = prev_assign @ T_trans
 
-    return np.where(prev_assign == 0, benefits-lambda_*state_dep_scaling, benefits)
+    return benefits-lambda_*state_dep_scaling
 
 def calc_distance_btwn_solutions(agents1, agents2):
     """
@@ -151,16 +152,16 @@ def calc_distance_btwn_solutions(agents1, agents2):
 
 #~~~~~~~~~~~~~~~~~~~~STATE DEPENDENT VALUE STUFF~~~~~~~~~~~~~~
 def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits, lambda_,
-                                          state_dep_fn=generic_handover_state_dep_fn, task_trans_state_dep_scaling_mat=None):
+                                          state_dep_fn=generic_handover_state_dep_fn, T_trans=None):
     state_dependent_value = 0
 
     benefit_hat = np.copy(benefits[:,:,0])
     if init_assignment is not None: #adjust based on init_assignment if it exists
-        benefit_hat = state_dep_fn(benefits[:,:,0], init_assignment, lambda_, task_trans_state_dep_scaling_mat)
+        benefit_hat = state_dep_fn(benefits[:,:,0], init_assignment, lambda_, T_trans)
     state_dependent_value += (benefit_hat * assignments[0]).sum()
 
     for k in range(len(assignments)-1):
-        benefit_hat = state_dep_fn(benefits[:,:,k+1], assignments[k], lambda_, task_trans_state_dep_scaling_mat)
+        benefit_hat = state_dep_fn(benefits[:,:,k+1], assignments[k], lambda_, T_trans)
         state_dependent_value += (benefit_hat * assignments[k+1]).sum()
 
     return state_dependent_value
@@ -255,9 +256,9 @@ def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_, non_assig
     #If there is no penalty for switching to a non assignment, the don't add a penalty
     #if the new benefits are zero (the task is not valid)
     if not non_assign_pen:
-        adjusted_first_benefits = np.where((prev_assign == 0) & (benefits[:,:,0] != 0), benefits[:,:,0]-lambda_, benefits[:,:,0])
+        adjusted_first_benefits = np.where((prev_assign == 0) & (benefits[:,:,0] != 0), benefits[:,:,0], benefits[:,:,0]+lambda_)
     else:
-        adjusted_first_benefits = np.where(prev_assign == 0, benefits[:,:,0]-lambda_, benefits[:,:,0])
+        adjusted_first_benefits = np.where(prev_assign == 0, benefits[:,:,0], benefits[:,:,0]+lambda_)
     
     adjusted_benefits = np.copy(benefits)
     adjusted_benefits[:,:,0] = adjusted_first_benefits
