@@ -414,7 +414,7 @@ def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverag
     total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, total_benefits, lambda_, 
                                                         state_dep_fn=state_dep_fn, T_trans=task_trans_state_dep_scaling_mat)
     
-    if not track_iters:
+    if not track_iters or not distributed:
         return chosen_assignments, total_value
     else:
         return chosen_assignments, total_value, total_iterations/T
@@ -440,9 +440,8 @@ if __name__ == "__main__":
     task_objects = init_task_objects(60, const, hex_to_task_mapping, T)
     benefits = get_benefits_from_task_objects(1, 10, sat_cover_matrix, task_objects)
 
-    ass, tv, iters = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, 1, 10, None, 0.5, 3, parallel=True, distributed=True, graphs=graphs,
+    ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, 1, 10, None, 0.5, 3, parallel=True, distributed=False, graphs=graphs,
                                                 state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=T_trans,
                                                 track_iters=True)
     print(tv)
-    print(iters)
     print(is_assignment_mat_sequence_valid(ass))
