@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 import time
 import pickle
+from collections import defaultdict
 
 from methods import *
 
@@ -59,32 +60,47 @@ def optimal_baseline_plot():
     avg_mha = 0
     avg_no_handover = 0
 
-    num_avgs = 50
-    for _ in tqdm(range(num_avgs)):
-        benefit = np.random.rand(n,m,T)
+    # num_avgs = 50
+    # for _ in tqdm(range(num_avgs)):
+    #     benefit = np.random.rand(n,m,T)
 
-        #SMHGL centralized, lookahead = 3
-        _, haal_ben, _ = solve_w_haal(benefit, init_ass, lambda_, L)
-        avg_haal += haal_ben/num_avgs
+    #     #SMHGL centralized, lookahead = 3
+    #     _, haal_ben = solve_w_haal(benefit, init_ass, lambda_, L)
+    #     avg_haal += haal_ben/num_avgs
 
-        #MHA
-        _, mha_ben, _ = solve_w_haal(benefit, init_ass, lambda_, 1)
-        avg_mha += mha_ben/num_avgs
+    #     #MHA
+    #     _, mha_ben = solve_w_haal(benefit, init_ass, lambda_, 1)
+    #     avg_mha += mha_ben/num_avgs
 
-        #Naive
-        _, ben, _ = solve_wout_handover(benefit, init_ass, lambda_)
-        avg_no_handover += ben/num_avgs
+    #     #Naive
+    #     _, ben = solve_wout_handover(benefit, init_ass, lambda_)
+    #     avg_no_handover += ben/num_avgs
 
-        #Optimal
-        _, ben, _ = solve_optimally(benefit, init_ass, lambda_)
-        avg_best += ben/num_avgs
+    #     #Optimal
+    #     _, ben = solve_optimally(benefit, init_ass, lambda_)
+    #     avg_best += ben/num_avgs
+    results = [avg_no_handover, avg_mha, avg_haal, avg_best]
 
     fig = plt.figure()
-    plt.bar(["Standard Assignment\nProblem Solution","HAA", f"HAAL (L={L})", "Optimal"], [avg_no_handover, avg_mha, avg_haal, avg_best])
-    plt.ylabel("Value")
+    
+    SMALL_SIZE = 8
+    MEDIUM_SIZE = 12
+    BIGGER_SIZE = 14
+    plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+    plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
+    plt.rc('axes', labelsize=BIGGER_SIZE)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=BIGGER_SIZE)    # legend fontsize
+    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+    
+    results = [7.564384786984931, 8.863084750293483, 9.743930778962238, 9.753256871430807]
+    plt.bar([r"HAA ($\lambda = 0$)","HAA", f"HAAL (L={L})", "Optimal"], results)
+    plt.ylabel("Total Value")
     print(["No Handover","HAA", f"HAAL (L={L})", "Optimal"])
     print([avg_no_handover, avg_mha, avg_haal, avg_best])
-    plt.savefig("opt_comparison.png")
+    plt.savefig("optimal553.pdf")
     plt.show()
 
 def MHA_unit_testing():
@@ -1476,30 +1492,30 @@ def object_tracking_velocity_test():
     plt.show()
 
 def smaller_area_size_object_tracking():
-    with open('object_track_experiment/sat_cover_matrix_highres.pkl','rb') as f:
-        sat_cover_matrix = pickle.load(f)
-    with open('object_track_experiment/graphs_highres.pkl','rb') as f:
-        graphs = pickle.load(f)
-    with open('object_track_experiment/task_transition_scaling_highres.pkl','rb') as f:
-        task_trans_state_dep_scaling_mat = pickle.load(f)
-    with open('object_track_experiment/hex_task_map_highres.pkl','rb') as f:
-        hex_to_task_mapping = pickle.load(f)
-    with open('object_track_experiment/const_object_highres.pkl','rb') as f:
-        const = pickle.load(f)
-
-    # with open('object_track_experiment/sat_cover_matrix_highres_neigh.pkl','rb') as f:
+    # with open('object_track_experiment/sat_cover_matrix_highres.pkl','rb') as f:
     #     sat_cover_matrix = pickle.load(f)
-    # with open('object_track_experiment/graphs_highres_neigh.pkl','rb') as f:
+    # with open('object_track_experiment/graphs_highres.pkl','rb') as f:
     #     graphs = pickle.load(f)
-    # with open('object_track_experiment/task_transition_scaling_highres_neigh.pkl','rb') as f:
+    # with open('object_track_experiment/task_transition_scaling_highres.pkl','rb') as f:
     #     task_trans_state_dep_scaling_mat = pickle.load(f)
-    # with open('object_track_experiment/hex_task_map_highres_neigh.pkl','rb') as f:
+    # with open('object_track_experiment/hex_task_map_highres.pkl','rb') as f:
     #     hex_to_task_mapping = pickle.load(f)
-    # with open('object_track_experiment/const_object_highres_neigh.pkl','rb') as f:
+    # with open('object_track_experiment/const_object_highres.pkl','rb') as f:
     #     const = pickle.load(f)
 
-    lat_range = (20, 50)
-    lon_range = (73, 135)
+    with open('object_track_experiment/sat_cover_matrix_usa.pkl','rb') as f:
+        sat_cover_matrix = pickle.load(f)
+    with open('object_track_experiment/graphs_usa.pkl','rb') as f:
+        graphs = pickle.load(f)
+    with open('object_track_experiment/task_transition_scaling_usa.pkl','rb') as f:
+        task_trans_state_dep_scaling_mat = pickle.load(f)
+    with open('object_track_experiment/hex_task_map_usa.pkl','rb') as f:
+        hex_to_task_mapping = pickle.load(f)
+    with open('object_track_experiment/const_object_usa.pkl','rb') as f:
+        const = pickle.load(f)
+
+    lat_range = (25.81, 49)
+    lon_range = (-124.47, -66.87)
     L = 3
     lambda_ = 0.05
     T = 60
@@ -1513,18 +1529,21 @@ def smaller_area_size_object_tracking():
     task_objects = init_task_objects(num_objects, const, hex_to_task_mapping, T, velocity=10000*u.km/u.hr)
     benefits = get_benefits_from_task_objects(coverage_benefit, object_benefit, sat_cover_matrix, task_objects)
 
+    extra_handover_info = ExtraHandoverPenInfo()
+    ExtraHandoverPenInfo.T_trans = task_trans_state_dep_scaling_mat
+
     print("Dynamic HAAL, Centralized")
     ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, parallel=False,
-                                                state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
+                                                state_dep_fn=timestep_loss_state_dep_fn, extra_handover_info=extra_handover_info)
     print("Value", tv)
     pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     print("pct", pct)
-    # plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
-    #                            "haal_no_neighbors.gif", show=False)
+    plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
+                               "haal_object_track.gif", show=False)
 
     print("Dynamic HAAL, Distributed")
     ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, distributed=True, graphs=graphs,
-                                                state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat, verbose=True)
+                                                state_dep_fn=timestep_loss_state_dep_fn, extra_handover_info=extra_handover_info, verbose=True)
     print("Value", tv)
     pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     print("pct", pct)
@@ -1541,8 +1560,8 @@ def smaller_area_size_object_tracking():
     ass, tv = solve_wout_handover(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
     print("Value", tv)
     print(is_assignment_mat_sequence_valid(ass))
-    # plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
-    #                            "nha_no_neighbors.gif", show=False)
+    plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
+                               "nha_object_track.gif", show=False)
 
     # # object_tracking_history(ass, task_objects, task_trans_state_dep_scaling_mat, sat_cover_matrix)
     pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
@@ -1736,12 +1755,12 @@ def scaling_experiment():
         color = viridis_cmap(L_idx /(max_L-1))
         axes[0].plot(lambdas_over_bens, haal_ass_lengths[L_idx], label=f"L={L_idx+1}", color=color)
         axes[1].plot(lambdas_over_bens, haal_benefit_captured[L_idx], label=f"L={L_idx+1}", color=color)
-    axes[0].plot(lambdas_over_bens, [avg_pass_len]*len(lambdas_over_bens), 'k--', label="Avg. time\ntask in view")
+    axes[0].plot(lambdas_over_bens, [avg_pass_len]*len(lambdas_over_bens), 'k--', label="Avg. Time Task\nin View "+r'($P$)')
 
-    axes[0].set_ylabel("Avg. Length Satellite\nAssigned to Same Task")
+    axes[0].set_ylabel("Avg. Time Satellite\nAssigned to Same Task "+r'($P^{\mathbf{x}}$)')
     axes[1].set_ylabel("Total Benefit")
-    axes[1].set_xlabel(r'$\frac{\lambda}{\beta_{pass, avg}}$')
-    axes[1].xaxis.label.set_fontsize(16)
+    axes[1].set_xlabel(r'$\frac{\lambda}{P^\beta}$')
+    axes[1].xaxis.label.set_fontsize(19.5)
     axes[0].set_xlim(min(lambdas_over_bens), max(lambdas_over_bens))
     axes[1].set_xlim(min(lambdas_over_bens), max(lambdas_over_bens))
 
@@ -1750,7 +1769,7 @@ def scaling_experiment():
         handles.append(handle)
         labels.append(label)
     
-    fig.legend(handles, labels, loc='lower left', bbox_to_anchor=(0.45,0.5), ncol=2)
+    fig.legend(handles, labels, loc='lower left', bbox_to_anchor=(0.4,0.5), ncol=2)
     # axes[0].legend(loc='upper left', bbox_to_anchor=(1, 0.3))
 
     with open("haal_scaling_exp/results.txt", 'w') as f:
@@ -1817,7 +1836,7 @@ def multi_task_test():
     lon_range = (73, 135)
     T = 60
     # full_benefit_matrix_w_synthetic_sats, graphs, T_trans, A_eqiv, \
-    #     _, _ = get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T)
+    #     _, _, tracked_lats, tracked_lons = get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T)
 
     with open('multitask_experiment/benefit_matrix.pkl','rb') as f:
         full_benefit_matrix_w_synthetic_sats = pickle.load(f)
@@ -1831,12 +1850,14 @@ def multi_task_test():
         T_trans = pickle.load(f)
     with open('multitask_experiment/A_eqiv.pkl','rb') as f:
         A_eqiv = pickle.load(f)
-    
+    with open('multitask_experiment/sat_to_track.pkl','rb') as f:
+        sat_to_track = pickle.load(f)   
+
     extra_handover_info = ExtraHandoverPenInfo()
     extra_handover_info.T_trans = T_trans
     extra_handover_info.A_eqiv = A_eqiv
 
-    lambda_ = 0.5
+    lambda_ = 0.2
     print("lambda", lambda_)
 
     ass, tv = solve_multitask_w_haal(full_benefit_matrix_w_synthetic_sats, None, lambda_, 3, distributed=False, verbose=True, extra_handover_info=extra_handover_info)
@@ -1860,5 +1881,31 @@ def multi_task_test():
     # ass, tv = solve_greedily(padded_benefits, None, lambda_, state_dep_fn=calc_multiassign_state_dep_fn, extra_handover_info=extra_handover_info)
     # print("greedy",tv)
 
+def proof_verification_with_full_information():
+    L = 5
+    T = 5
+    n = 50
+    m = 50
+    lambda_ = 0.5
+
+    total_sequences = 0
+    observed_equal = 0
+    for _ in range(100):
+        print(f"Experiment {_}")
+        benefits = np.random.rand(n,m,T)
+
+        base_ass, _ = solve_w_haal(benefits, None, lambda_, T)
+        curr_ass = base_ass
+        for k in range(1,T):
+            new_ass, _ = solve_w_haal(benefits[:,:,k:], curr_ass.pop(0), lambda_, T-k)
+            
+            total_sequences += len(new_ass)
+            equal_array = [int(np.array_equal(new_ass[i], curr_ass[i])) for i in range(len(new_ass))]
+            observed_equal += sum(equal_array)
+
+            curr_ass = new_ass
+
+    print(f"Sequences which were identical: {observed_equal}/{total_sequences}")
+
 if __name__ == "__main__":
-    multi_task_test()
+    proof_verification_with_full_information()

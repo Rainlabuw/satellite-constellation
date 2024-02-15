@@ -156,7 +156,7 @@ def haal_experiment_plots():
         lat = np.random.uniform(-58, 58)
 
         if j == m-1:
-            plt.scatter(lon,lat,color='k',s=3, label='Midsize constellation tasks')
+            plt.scatter(lon,lat,color='k',s=3, label='Midsize constellation task locations')
         else:
             plt.scatter(lon,lat,color='k',s=3)
     
@@ -190,7 +190,7 @@ def haal_experiment_plots():
         # Add the circle to the plot
         circle_gdf.plot(ax=ax, edgecolor='black', facecolor="none", linewidth=2)
 
-    plt.scatter(200, 200, color='black', facecolors='none', label="Midsize constellation sat FOVs, planes 0 and 1")
+    plt.scatter(200, 200, color='black', facecolors='none', label="Midsize constellation sat FOV footprints, planes 0 and 1")
     #~~~~~~~~~~~~~~~~~ EXPERIMENT 2~~~~~~~~~~~~~~~~~~~~~~
     hexagons = generate_global_hexagons(1, 70)
     print(len(hexagons))
@@ -235,14 +235,149 @@ def haal_experiment_plots():
 
     # Overlay the hexagon grid
     # gdf.boundary.plot(ax=ax, color='red', alpha=0.25)
-    plt.scatter(centroid_xs, centroid_ys, color='red', s=3, label="Large constellation tasks")
+    plt.scatter(centroid_xs, centroid_ys, color='red', s=3, label="Large constellation task locations")
     #phantom dot for legend entry
-    plt.scatter(200, 200, color='red', facecolors='none', label="Large constellation sat FOVs, planes 20 and 21")
+    plt.scatter(200, 200, color='red', facecolors='none', label="Large constellation sat FOV footprints, planes 20 and 21")
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     
+    plt.rc('legend', fontsize=14)    # legend fontsize
     plt.legend(loc='lower left')
     plt.xlim(-180, 180)
     plt.ylim(-90, 90)
+    plt.tight_layout()
+    plt.savefig('ground_track.pdf')
+    plt.show()
+    
+def spencer_experiment_plots():
+    earth_image = mpimg.imread('earth.jpg')
+
+    # Plotting
+    fig, ax = plt.subplots(1, 1, figsize=(15, 10))
+
+    # Display the Earth image
+    ax.imshow(earth_image, extent=[-180, 180, -90, 90], aspect='auto')
+
+    earth = Earth
+
+    altitude=550
+    fov=60
+
+    a = earth.R.to(u.km) + altitude*u.km
+    ecc = 0*u.one
+    argp = 0*u.deg
+    #~~~~~~~~~~~~~~~~~ EXPERIMENT 1~~~~~~~~~~~~~~~~~~~~~~
+    m = 450
+    for j in range(m):
+        lon = np.random.uniform(-180, 180)
+        lat = np.random.uniform(-58, 58)
+
+        if j == m-1:
+            plt.scatter(lon,lat,color='k',s=3, label='Midsize constellation task locations')
+        else:
+            plt.scatter(lon,lat,color='k',s=3)
+    
+    const = ConstellationSim(dt=1*u.min)
+    num_sats_per_plane = 18
+    inc = 58*u.deg
+    raan = 0*u.deg
+    for sat_num in range(num_sats_per_plane):
+        ta = sat_num*360/num_sats_per_plane*u.deg
+        sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], fov=fov)
+        const.add_sat(sat)
+    raan = 360/18*u.deg
+    for sat_num in range(num_sats_per_plane):
+        ta = sat_num*360/num_sats_per_plane*u.deg
+        sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], fov=fov)
+        const.add_sat(sat)
+
+    for sat in const.sats:
+        center_lat, center_lon = get_sat_lat_lon(sat)
+        rad = get_radius_of_fov(sat)
+
+        # Generate circle points
+        circle_points = generate_circle_points(center_lon, center_lat, rad)
+
+        # Create a circle polygon
+        circle = Polygon(circle_points)
+
+        # Create a GeoDataFrame for the circle
+        circle_gdf = gpd.GeoDataFrame(geometry=[circle])
+
+        # Add the circle to the plot
+        circle_gdf.plot(ax=ax, edgecolor='red', facecolor="none", linewidth=2)
+
+        plt.scatter(center_lon, center_lat, color='red')
+
+    plt.scatter(200, 200, color='red', facecolors='none', marker=r'$\odot$', label="Midsize constellation satellites and FOVs, planes 0 and 1")
+
+    plt.rc('legend', fontsize=14)    # legend fontsize
+    plt.legend(loc='lower left')
+    plt.xlim(-180, 180)
+    plt.ylim(-90, 90)
+    plt.tight_layout()
+    plt.savefig('midsize_ground_track.pdf')
+    plt.show()
+
+    # Plotting
+    fig, ax = plt.subplots(1, 1, figsize=(15, 10))
+
+    # Display the Earth image
+    ax.imshow(earth_image, extent=[-180, 180, -90, 90], aspect='auto')
+    #~~~~~~~~~~~~~~~~~ EXPERIMENT 2~~~~~~~~~~~~~~~~~~~~~~
+    hexagons = generate_global_hexagons(1, 70)
+    print(len(hexagons))
+    hexagon_polygons, centroids = hexagons_to_geometries(hexagons)
+    gdf = gpd.GeoDataFrame(geometry=hexagon_polygons)
+
+    centroid_xs = [c.x for c in centroids]
+    centroid_ys = [c.y for c in centroids]
+
+    # Create a GeoDataFrame
+    gdf = gpd.GeoDataFrame(geometry=hexagon_polygons)
+
+    const = ConstellationSim(dt=1*u.min)
+    num_sats_per_plane = 25
+    inc = 70*u.deg
+    raan = (20/40)*360*u.deg
+    for sat_num in range(num_sats_per_plane):
+        ta = sat_num*360/num_sats_per_plane*u.deg
+        sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], fov=fov)
+        const.add_sat(sat)
+    raan = (21/40)*360*u.deg
+    for sat_num in range(num_sats_per_plane):
+        ta = sat_num*360/num_sats_per_plane*u.deg
+        sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], fov=fov)
+        const.add_sat(sat)
+
+    for sat in const.sats:
+        center_lat, center_lon = get_sat_lat_lon(sat)
+        rad = get_radius_of_fov(sat)
+
+        # Generate circle points
+        circle_points = generate_circle_points(center_lon, center_lat, rad)
+
+        # Create a circle polygon
+        circle = Polygon(circle_points)
+
+        # Create a GeoDataFrame for the circle
+        circle_gdf = gpd.GeoDataFrame(geometry=[circle])
+
+        # Add the circle to the plot
+        circle_gdf.plot(ax=ax, edgecolor='red', facecolor="none", linewidth=2)
+
+    # Overlay the hexagon grid
+    # gdf.boundary.plot(ax=ax, color='red', alpha=0.25)
+    plt.scatter(centroid_xs, centroid_ys, color='red', s=3, label="Large constellation task locations")
+    #phantom dot for legend entry
+    plt.scatter(200, 200, color='red', facecolors='none', label="Large constellation sat FOV footprints, planes 20 and 21")
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    
+    plt.rc('legend', fontsize=14)    # legend fontsize
+    plt.legend(loc='lower left')
+    plt.xlim(-180, 180)
+    plt.ylim(-90, 90)
+    plt.tight_layout()
+    plt.savefig('large_ground_track.pdf')
     plt.show()
 
 def update_object_track(k, ax, earth_image, task_to_hex_map, sat_cover_matrix, task_objects, assignments, task_trans_state_dep_scaling_mat):
@@ -253,8 +388,8 @@ def update_object_track(k, ax, earth_image, task_to_hex_map, sat_cover_matrix, t
 
     # Display the Earth image background
     ax.imshow(earth_image, extent=[-180, 180, -90, 90], aspect='auto', alpha=0.6)
-    lat_range = (20, 50)
-    lon_range = (73, 135)
+    lat_range = (25.81, 49)
+    lon_range = (-124.47, -66.87)
     plt.xlim(lon_range)
     plt.ylim(lat_range)
 
@@ -397,22 +532,22 @@ def update_multitask(k, ax, task_to_hex_map, assignments, A_eqiv):
         gdf.boundary.plot(ax=ax, color='black', alpha=1)
 
         hatch = hatch_options[real_assigned_sat%len(hatch_options)]
-        gdf.plot(ax=ax, color=color, alpha=1, hatch=hatch)
+        # gdf.plot(ax=ax, color=color, alpha=1, hatch=hatch)
+
+        if k > 0:
+            prev_assigned_sat = np.argmax(assignments[k-1][:,task])
+            prev_assigned_real_sat = prev_assigned_sat % num_real_sats
+
+            if prev_assigned_real_sat == real_assigned_sat:
+                gdf.plot(ax=ax, color=color, alpha=1, hatch=hatch)
+            else:
+                gdf.plot(ax=ax, color='y', alpha=1, hatch="")
+        else:
+            gdf.plot(ax=ax, color='y', alpha=1, hatch="")
 
         if hexagon_centroids[0].x < lon_range[1] and hexagon_centroids[0].x > lon_range[0] and hexagon_centroids[0].y < lat_range[1] and hexagon_centroids[0].y > lat_range[0]:
             plt.text(hexagon_centroids[0].x, hexagon_centroids[0].y, f"{real_assigned_sat}", fontsize=8, color='black')
 
-    #Create legend with phantom dots
-    # plt.scatter(0, 0, color='green', label='Tracked Objects')
-    # plt.scatter(0, 0, color='red', label='Untracked Objects')
-    # fake_verts = [(0, 0), (0, 1), (1, 1)]
-    # ylw_ptch = patches.Polygon(fake_verts, color='green', label='Tracked Regions (intensity is quality of coverage)')
-    # ax.add_patch(ylw_ptch)
-    # ylw_ptch = patches.Polygon(fake_verts, color='yellow', label='Regions undergoing handover transition')
-    # ax.add_patch(ylw_ptch)
-    # ylw_ptch = patches.Polygon(fake_verts, color='red', label='Untracked Regions')
-    # ax.add_patch(ylw_ptch)
-    # plt.legend(loc='lower right')
     plt.title(f"Time: +{k*30}/{T*30} sec.")
 
 def plot_multitask_scenario(hexagon_to_task_mapping, assignments, A_eqiv, save_loc, show=True):
@@ -436,5 +571,97 @@ def plot_multitask_scenario(hexagon_to_task_mapping, assignments, A_eqiv, save_l
 
     ani.save(save_loc, writer='pillow', fps=2, dpi=100)
 
+# def update_multitask_single_sat(k, axes, task_to_hex_map, haal_ass, nha_ass, A_eqiv, lats, lons, sat_id):
+#     k += 17
+#     axes[0].clear()
+#     axes[1].clear()
+
+#     n = haal_ass[k].shape[0]
+#     m = haal_ass[k].shape[1]
+#     T = len(haal_ass)
+#     num_tasks_per_sat = int(A_eqiv[0,:].sum())
+#     num_real_sats = n//num_tasks_per_sat
+
+#     # Display the Earth image background
+#     lat_range = (20, 50)
+#     lon_range = (73, 135)
+#     axes[0].set_xlim(lon_range)
+#     axes[0].set_ylim(lat_range)
+#     axes[1].set_xlim(lon_range)
+#     axes[1].set_ylim(lat_range)
+
+#     prism_cmap = plt.get_cmap('tab20')
+
+#     #Store the coverage level and existence of handover for each task at this time
+#     #for use later in plotting task objects
+#     coverage_by_task = {}
+#     real_sat_task_counts = defaultdict(int)
+#     #Display the region hexagons
+#     for task, hex in task_to_hex_map.items():
+#         hexagon_polygons, hexagon_centroids = hexagons_to_geometries([hex])
+#         gdf = gpd.GeoDataFrame(geometry=hexagon_polygons)
+#         gdf.boundary.plot(ax=axes[0], color='black', alpha=1)
+#         gdf.boundary.plot(ax=axes[1], color='black', alpha=1)
+
+#         #Plot HAAL tasks
+#         assigned_sat = np.argmax(haal_ass[k][:,task])
+#         real_assigned_sat = assigned_sat % num_real_sats
+#         if real_assigned_sat == sat_id:
+#             real_sat_task_counts[real_assigned_sat] += 1
+
+#             if k > 0:
+#                 prev_assigned_sat = np.argmax(haal_ass[k-1][:,task])
+#                 prev_assigned_real_sat = prev_assigned_sat % num_real_sats
+
+#                 if prev_assigned_real_sat == real_assigned_sat:
+#                     gdf.plot(ax=axes[0], color='g', alpha=1)
+#                 else:
+#                     gdf.plot(ax=axes[0], color='y', alpha=1)
+#             else:
+#                 gdf.plot(ax=axes[0], color='y', alpha=1)
+
+#         #Plot NHA tasks
+#         assigned_sat = np.argmax(nha_ass[k][:,task])
+#         real_assigned_sat = assigned_sat % num_real_sats
+#         if real_assigned_sat == sat_id:
+#             real_sat_task_counts[real_assigned_sat] += 1
+
+#             if k > 0:
+#                 prev_assigned_sat = np.argmax(nha_ass[k-1][:,task])
+#                 prev_assigned_real_sat = prev_assigned_sat % num_real_sats
+
+#                 if prev_assigned_real_sat == real_assigned_sat:
+#                     gdf.plot(ax=axes[1], color='g', alpha=1)
+#                 else:
+#                     gdf.plot(ax=axes[1], color='y', alpha=1)
+#             else:
+#                 gdf.plot(ax=axes[1], color='y', alpha=1)
+
+#     axes[0].scatter(lons[k], lats[k], color='r', s=20)
+#     axes[1].scatter(lons[k], lats[k], color='r', s=20)
+#     plt.title(f"Time: +{(k-17)*30}/{(T-17)*30} sec.")
+
+# def plot_single_sat_multitask_scenario(hexagon_to_task_mapping, haal_ass, nha_ass, A_eqiv, save_loc, sat_lats, sat_lons, sat_id, show=True):
+#     T = len(haal_ass)
+#     n = haal_ass[0].shape[0]
+#     m = haal_ass[0].shape[1]
+
+#     time_offset = 17
+#     # Plotting
+#     fig, axes = plt.subplots(1, 2, figsize=(15, 20))
+
+#     # Reverse hex to task mapping:
+#     task_to_hex_mapping = {}
+#     for hex, task in hexagon_to_task_mapping.items():
+#         task_to_hex_mapping[task] = hex
+
+#     ani  = FuncAnimation(fig, update_multitask_single_sat, fargs=(axes, task_to_hex_mapping, haal_ass, nha_ass, A_eqiv, sat_lats, sat_lons, sat_id), 
+#                          frames=T-time_offset, interval=1000, blit=False)
+
+#     if show:
+#         plt.show()
+
+#     ani.save(save_loc, writer='pillow', fps=2, dpi=100)
+
 if __name__ == "__main__":
-    plot_object_track_scenario(None, None, None, None)
+    spencer_experiment_plots()

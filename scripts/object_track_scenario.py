@@ -238,15 +238,15 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
     #             task_transition_state_dep_scaling_mat[j+num_primary_tasks,hex_to_task_mapping[neighbor_hex]] = 0
     #             task_transition_state_dep_scaling_mat[hex_to_task_mapping[neighbor_hex],j+num_primary_tasks] = 0
 
-    with open('object_track_experiment/sat_cover_matrix.pkl','wb') as f:
+    with open('object_track_experiment/sat_cover_matrix_usa.pkl','wb') as f:
         pickle.dump(sat_cover_matrix, f)
-    with open('object_track_experiment/graphs.pkl','wb') as f:
+    with open('object_track_experiment/graphs_usa.pkl','wb') as f:
         pickle.dump(graphs, f)
-    with open('object_track_experiment/task_transition_scaling.pkl','wb') as f:
+    with open('object_track_experiment/task_transition_scaling_usa.pkl','wb') as f:
         pickle.dump(task_transition_state_dep_scaling_mat, f)
-    with open('object_track_experiment/hex_task_map.pkl','wb') as f:
+    with open('object_track_experiment/hex_task_map_usa.pkl','wb') as f:
         pickle.dump(hex_to_task_mapping, f)
-    with open('object_track_experiment/const_object.pkl','wb') as f:
+    with open('object_track_experiment/const_object_usa.pkl','wb') as f:
         pickle.dump(const, f)
     
     return sat_cover_matrix, graphs, task_transition_state_dep_scaling_mat, hex_to_task_mapping, const

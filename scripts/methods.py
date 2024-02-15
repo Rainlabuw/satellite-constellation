@@ -141,7 +141,6 @@ def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover
     try:
         T_trans = extra_handover_info.T_trans
     except AttributeError:
-        print("Info on T_trans not provided, using default")
         T_trans = None
     
     if T_trans is None:
@@ -472,3 +471,16 @@ def calc_pass_statistics(benefits, assigns=None):
         return avg_pass_len, avg_pass_ben, avg_ass_len
     else:
         return avg_pass_len, avg_pass_ben
+    
+def propagate_sat_lat_lons(sat, T, dt):
+    lats = []
+    lons = []
+
+    #Reset orbit to initial
+    sat.orbit = sat.init_orbit
+    for k in range(T):
+        lats.append(sat.orbit.arglat.to_value(u.deg) % 360)
+        lons.append((sat.orbit.L.to_value(u.deg)) % 360 - 15)
+        sat.propagate_orbit(dt)
+    
+    return lats, lons
