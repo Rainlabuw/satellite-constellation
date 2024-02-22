@@ -1,5 +1,5 @@
 import numpy as np
-from methods import *
+from common.methods import *
 import itertools
 
 def gen_perms_of_perms(curr_perm_list, n, T):

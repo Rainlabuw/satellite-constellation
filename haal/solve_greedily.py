@@ -1,4 +1,4 @@
-from methods import *
+from common.methods import *
 import numpy as np
 
 def solve_greedily(benefits, init_assignment, lambda_, state_dep_fn=generic_handover_state_dep_fn,

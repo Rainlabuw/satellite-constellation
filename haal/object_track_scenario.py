@@ -14,8 +14,8 @@ from poliastro.spheroid_location import SpheroidLocation
 from astropy import units as u
 import h3
 
-from methods import *
-from solve_w_haal import choose_time_interval_sequence_centralized, HAAL_D_Parallel_Auction
+from common.methods import *
+from haal.solve_w_haal import choose_time_interval_sequence_centralized, HAAL_D_Parallel_Auction
 
 def init_task_objects(num_objects, const, hex_to_task_mapping, T, velocity=6437*u.km/u.hr):
     """

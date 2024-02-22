@@ -1,5 +1,5 @@
 import numpy as np
-from methods import *
+from common.methods import *
 import networkx as nx
 import time
 

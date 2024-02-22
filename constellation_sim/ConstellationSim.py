@@ -19,7 +19,7 @@ import h3
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
 
-from methods import *
+from common.methods import *
 
 class ConstellationSim(object):
     def __init__(self, dt=1*u.min, isl_dist=None) -> None:

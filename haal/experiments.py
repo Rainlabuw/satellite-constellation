@@ -7,19 +7,19 @@ import time
 import pickle
 from collections import defaultdict
 
-from methods import *
+from common.methods import *
 
-from solve_optimally import solve_optimally
-from solve_wout_handover import solve_wout_handover
-from solve_w_haal import solve_w_haal
-from solve_w_accelerated_haal import solve_w_accel_haal
-from solve_w_centralized_CBBA import solve_w_centralized_CBBA
-from solve_w_CBBA import solve_w_CBBA
-from solve_greedily import solve_greedily
-from object_track_scenario import timestep_loss_state_dep_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_coverage_matrix_and_graphs_object_tracking_area
-from object_track_utils import calc_pct_objects_tracked, object_tracking_history
-from multi_task_scenario import solve_multitask_w_haal, calc_multiassign_state_dep_fn, get_benefit_matrix_and_graphs_multitask_area
-from plotting_utils import plot_object_track_scenario, plot_multitask_scenario
+from haal.solve_optimally import solve_optimally
+from haal.solve_wout_handover import solve_wout_handover
+from haal.solve_w_haal import solve_w_haal
+from haal.solve_w_accelerated_haal import solve_w_accel_haal
+from haal.solve_w_centralized_CBBA import solve_w_centralized_CBBA
+from haal.solve_w_CBBA import solve_w_CBBA
+from haal.solve_greedily import solve_greedily
+from haal.object_track_scenario import timestep_loss_state_dep_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_coverage_matrix_and_graphs_object_tracking_area
+from haal.object_track_utils import calc_pct_objects_tracked, object_tracking_history
+from haal.multi_task_scenario import solve_multitask_w_haal, calc_multiassign_state_dep_fn, get_benefit_matrix_and_graphs_multitask_area
+from haal.plotting_utils import plot_object_track_scenario, plot_multitask_scenario
 
 from constellation_sim.ConstellationSim import get_constellation_bens_and_graphs_random_tasks, get_constellation_bens_and_graphs_coverage, ConstellationSim
 from constellation_sim.Satellite import Satellite
@@ -1907,4 +1907,4 @@ def proof_verification_with_full_information():
     print(f"Sequences which were identical: {observed_equal}/{total_sequences}")
 
 if __name__ == "__main__":
-    smaller_area_size_object_tracking()
+    proof_verification_with_full_information()

@@ -16,8 +16,8 @@ from astropy import units as u
 import h3
 import time
 
-from methods import *
-from solve_w_haal import choose_time_interval_sequence_centralized, HAAL_D_Parallel_Auction
+from common.methods import *
+from haal.solve_w_haal import choose_time_interval_sequence_centralized, HAAL_D_Parallel_Auction
 
 def get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T, fov=60, isl_dist=2500, dt=30*u.second):
     """
