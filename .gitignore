@@ -1,3 +1,13 @@
 .DS_Store
 __pycache__/
 multi_time_auction_algo.py
+haal/haal_experiment1/
+haal/haal_experiment2/
+haal/haal_scaling_exp/
+haal/object_track_experiment/
+haal/multitask_experiment/
+haal/*.jpg
+haal/*.png
+haal/*.pdf
+haal/*.gif
+constellation_sim/*.gif
