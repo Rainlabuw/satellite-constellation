@@ -86,7 +86,7 @@ def convert_central_sol_to_assignment_mat(n, m, assignments):
 
     i.e. for n=m=3, [1,2,0] -> [[0,1,0],[0,0,1],[1,0,0]]
     """
-    assignment_mat = np.zeros((n, m))
+    assignment_mat = np.zeros((n, m), dtype="bool")
     for i, assignment in enumerate(assignments):
         assignment_mat[i, assignment] = 1
 

@@ -5,3 +5,8 @@
 
     Generate 10 sims of 1000 timesteps each for 1,000,000 total training timesteps. (standard haal_experiment1 orbital parameters.)
     Saved as data/benefits_list.pkl, etc.
+
+    Need to run some experiments to see how many tasks are in view at a given time. This can help me size M.
+
+    IDEA: when we have these benefit matrices, convolve both in the task direction and in the agent direction. This can hopefully help us capture
+    things like "how many tasks are available for this agent" and "how many other agents can do this task?"

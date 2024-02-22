@@ -59,13 +59,13 @@ def init_random_constellation(num_planes, num_sats_per_plane, m, T, altitude=550
 
     return benefits, graphs
 
-def worker_process(num_planes, num_sats_per_plane, m, T, isl_dist):
+def worker_process(id, num_planes, num_sats_per_plane, m, T, isl_dist):
     n = num_planes * num_sats_per_plane
 
     # Perform the operations that were inside your loop
     benefits, graphs = init_random_constellation(num_planes, num_sats_per_plane, m, T, isl_dist=isl_dist)
     init_assign = np.eye(n, m)
-    assigns, _, _ = solve_w_haal(benefits, init_assign, 0.5, 3)
+    assigns, _ = solve_w_haal(benefits, init_assign, 0.5, 3)
 
     return benefits, graphs, assigns
 
@@ -79,7 +79,7 @@ def generate_benefit_assignment_pairs(num_sims, num_planes, num_sats_per_plane, 
     graph_list = []
     assignments_list = []
 
-    args = [(num_planes, num_sats_per_plane, m, T, isl_dist) for i in range(num_sims)]
+    args = [(i, num_planes, num_sats_per_plane, m, T, isl_dist) for i in range(num_sims)]
 
     with mp.Pool(mp.cpu_count()) as pool:
         results = pool.starmap(worker_process, args)
@@ -87,6 +87,30 @@ def generate_benefit_assignment_pairs(num_sims, num_planes, num_sats_per_plane, 
     benefit_list, graph_list, assignments_list = zip(*results)
 
     return benefit_list, graph_list, assignments_list
+
+def convert_benefit_assignment_pairs_to_dataset(benefit_list, assignments_list):
+    """
+    Converts a list of benefits and assignments to a dataset for training.
+    """
+    gamma = 0.9
+    L_required = np.ceil(np.log(0.05)/np.log(gamma))
+
+    num_runs = 10
+    for run in range(num_runs):
+        with open(f"rl_constellation/data/benefits_{run}.pkl", 'rb') as f:
+            benefits = pickle.load(f)
+        with open(f"rl_constellation/data/assigns_{run}.pkl", 'rb') as f:
+            assigns = pickle.load(f)
+
+        n = benefits.shape[0]
+        m = benefits.shape[1]
+        T = benefits.shape[2]
+
+        for k in range(T):
+            pass
+
+    for benefits, assigns in zip(benefit_list, assignments_list):
+        pass
 
 if __name__ == "__main__":
     num_planes = 10
@@ -99,10 +123,12 @@ if __name__ == "__main__":
 
     num_sims = 10
     benefit_list, graph_list, assignments_list = generate_benefit_assignment_pairs(num_sims, num_planes, num_sats_per_plane, m, T, isl_dist)
-    
-    with open('benefit_list.pkl', 'wb') as f:
-        pickle.dump(benefit_list, f)
-    with open('graph_list.pkl', 'wb') as f:
-        pickle.dump(graph_list, f)
-    with open('assignments_list.pkl', 'wb') as f:
-        pickle.dump(assignments_list, f)
+
+    for benefits, graphs, assigns, id in zip(benefit_list, graph_list, assignments_list, range(num_sims)):
+        print(f"Saving data from run {id}...")
+        with open(f"rl_constellation/data/benefits_{id}.pkl", 'wb') as f:
+            pickle.dump(benefits, f)
+        with open(f"rl_constellation/data/graphs_{id}.pkl", 'wb') as f:
+            pickle.dump(graphs, f)
+        with open(f"rl_constellation/data/assigns_{id}.pkl", 'wb') as f:
+            pickle.dump(assigns, f)
