@@ -1,0 +1,4 @@
+2/22/24
+    Initializing this directory.
+
+    Wanted to determine smaller scale constellation that would still be fully connected - settled on 10x10 w 4000km link distance after experiments.

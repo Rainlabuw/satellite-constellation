@@ -9,7 +9,6 @@ from collections import defaultdict
 
 from common.methods import *
 
-from scripts.classic_auction import Auction
 from haal.solve_optimally import solve_optimally
 from haal.solve_wout_handover import solve_wout_handover
 from haal.solve_w_haal import solve_w_haal
@@ -101,158 +100,6 @@ def optimal_baseline_plot():
     print(["No Handover","HAA", f"HAAL (L={L})", "Optimal"])
     print([avg_no_handover, avg_mha, avg_haal, avg_best])
     plt.savefig("optimal553.pdf")
-    plt.show()
-
-def compare_alg_benefits_and_handover():
-    """
-    As number of agents increase, how do the benefits
-    and number of handovers increase?
-    """
-    ns = [10, 25]
-    # ns = [10, 15, 20]
-    t_final = 50
-    T = 25
-    lambda_ = 0.5
-
-    no_handover_benefits = []
-    no_handover_handover_benefits = []
-    no_handover_handover_violations = []
-
-    sequential_benefits = []
-    sequential_handover_benefits = []
-    sequential_handover_violations = []
-
-    sga_benefits = []
-    sga_handover_benefits = []
-    sga_handover_violations = []
-    for n in ns:
-        print(f"AGENT {n}")
-        m = n
-        seed = np.random.randint(0, 1000)
-        np.random.seed(seed)
-        # np.random.seed(29)
-        print(f"Seed {seed}")
-        print(f"n: {n}, m: {m}, T: {T}, lambda: {lambda_}")
-        graph = nx.complete_graph(n)
-        benefit_mats_over_time = np.random.rand(n,m,T)
-        
-        # benefit_mats_over_time = generate_benefits_over_time(n, m, T, t_final)
-        #Add 2 lambda_+eps to the benefit matrix to ensure that it's always positive to complete
-        #a task.
-        # benefit_mats_over_time += 2*lambda_ + 0.01
-
-
-        #solve each timestep independently
-        assignment_mats = []
-        benefits = []
-        for k in range(T):
-            print(k, end='\r')
-            a = Auction(n, m, benefits=benefit_mats_over_time[:,:,k], graph=graph)
-            benefit = a.run_auction()
-
-            assignment_mat = convert_agents_to_assignment_matrix(a.agents)
-            assignment_mats.append(assignment_mat)
-
-            benefits.append(benefit)
-        
-        handover_ben = sum(benefits) + calc_assign_seq_handover_penalty(assignment_mats, lambda_)
-        print("Solving sequentially, each timestep independently")
-        print(f"\tBenefit without considering handover: {sum(benefits)}")
-        print(f"\tBenefit with handover penalty: {handover_ben}")
-
-        no_handover_benefits.append(sum(benefits))
-        no_handover_handover_benefits.append(handover_ben)
-        no_handover_handover_violations.append(calc_assign_seq_handover_penalty(assignment_mats, lambda_))
-
-        #solve each timestep sequentially
-        assignment_mats = []
-        benefits = []
-        
-        #solve first timestep separately
-        a = Auction(n, m, benefits=benefit_mats_over_time[:,:,0], graph=graph)
-        benefit = a.run_auction()
-
-        assignment_mat = convert_agents_to_assignment_matrix(a.agents)
-        assignment_mats.append(assignment_mat)
-        benefits.append(benefit)
-
-        prev_assignment_mat = assignment_mat
-        for k in range(1, T):
-            print(k, end='\r')
-            #Generate assignment for the task minimizing handover
-            benefit_mat_w_handover = add_handover_pen_to_benefit_matrix(benefit_mats_over_time[:,:,k], prev_assignment_mat, lambda_)
-
-            a = Auction(n, m, benefits=benefit_mat_w_handover, graph=graph)
-            a.run_auction()
-            choices = [ag.choice for ag in a.agents]
-
-            assignment_mat = convert_agents_to_assignment_matrix(a.agents)
-            assignment_mats.append(assignment_mat)
-
-            prev_assignment_mat = assignment_mat
-
-            #Calculate the benefits from a task with the normal benefit matrix
-            benefit = benefit_mats_over_time[:,:,k]*assignment_mat
-
-            benefits.append(benefit.sum())
-
-        handover_ben = sum(benefits) + calc_assign_seq_handover_penalty(assignment_mats, lambda_)
-        print("Solving sequentially, each timestep considering the last one")
-        print(f"\tBenefit without considering handover: {sum(benefits)}")
-        print(f"\tBenefit with handover penalty: {handover_ben}")
-
-        sequential_benefits.append(sum(benefits))
-        sequential_handover_benefits.append(handover_ben)
-
-        #solve each timestep sequentially with greedy
-        _, sg_assignment_mats, _ = solve_w_centralized_CBBA(benefit_mats_over_time, lambda_)
-        sg_benefit = 0
-        for k, sg_assignment_mat in enumerate(sg_assignment_mats):
-            sg_benefit += (benefit_mats_over_time[:,:,k]*sg_assignment_mat).sum()
-
-        handover_ben = sg_benefit + calc_assign_seq_handover_penalty(sg_assignment_mats, lambda_)
-
-        print("Solving with greedy algorithm")
-        print(f"\tBenefit without considering handover: {sg_benefit}")
-        print(f"\tBenefit with handover penalty: {handover_ben}")
-    
-        sga_benefits.append(sg_benefit)
-        sga_handover_benefits.append(handover_ben)
-
-    print("done")
-    print(no_handover_benefits)
-    print(no_handover_handover_benefits)
-    print(sequential_benefits)
-    print(sequential_handover_benefits)
-    print(sga_benefits)
-    print(sga_handover_benefits)
-
-
-    fig, axs = plt.subplots(2, 1, figsize=(10, 10))
-
-    # Top subplot
-    axs[0].set_title('Benefits without handover penalty')
-    axs[0].set_xlabel('Number of agents')
-    axs[0].set_ylabel('Total benefit')
-    axs[0].bar(np.arange(len(no_handover_benefits)), no_handover_benefits, width=0.2, label='Naive')
-    axs[0].bar(np.arange(len(sga_benefits))+0.2, sga_benefits, width=0.2, label='SGA')
-    axs[0].bar(np.arange(len(sequential_benefits))+0.4, sequential_benefits, width=0.2, label='MHA (Ours)')
-    axs[0].set_xticks(np.arange(len(no_handover_benefits)))
-    axs[0].set_xticklabels([str(n) for n in ns])
-    axs[0].legend(loc='lower center')
-
-    # Bottom subplot
-    axs[1].set_title('Total Benefits, including handover penalty')
-    axs[1].set_xlabel('Number of agents')
-    axs[1].set_ylabel('Average Benefit')
-    axs[1].bar(np.arange(len(no_handover_handover_benefits)), no_handover_handover_benefits, width=0.2, label='Naive')
-    axs[1].bar(np.arange(len(sga_handover_benefits))+0.2, sga_handover_benefits, width=0.2, label='CBBA')
-    axs[1].bar(np.arange(len(sequential_handover_benefits))+0.4, sequential_handover_benefits, width=0.2, label='MHA (Ours)')
-    axs[1].set_xticks(np.arange(len(no_handover_handover_benefits)))
-    axs[1].set_xticklabels([str(n) for n in ns])
-    #add a legend to the bottom middle of the subplot
-    axs[1].legend(loc='lower center')
-
     plt.show()
 
 def distributed_comparison():
@@ -839,9 +686,9 @@ def connectivity_testing():
 
     # plt.show()
 
-    _, graphs = get_constellation_bens_and_graphs_random_tasks(18, 18, 1, 93, isl_dist=2500)
+    _, graphs = get_constellation_bens_and_graphs_random_tasks(10, 10, 1, 93, isl_dist=4000)
     pct_connected = sum([nx.is_connected(graph) for graph in graphs])/93
-    print(pct_connected)
+    print("\n",pct_connected)
 
 def paper_experiment2_compute_assigns():
     lambda_ = 0.5
@@ -1613,48 +1460,48 @@ def scaling_experiment():
     plt.savefig("haal_scaling_exp/paper_scaling.pdf")
     plt.show()
 
-def auction_speedup_test():
-    """
-    Was gonna test if we could speed up auctions by using edited
-    prices from previous timesteps, but decided it was kinda a stupid
-    idea in the end.
-    """
-    with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
-        benefits = pickle.load(f)
-    with open("haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
-        graphs = pickle.load(f)
+# def auction_speedup_test():
+#     """
+#     Was gonna test if we could speed up auctions by using edited
+#     prices from previous timesteps, but decided it was kinda a stupid
+#     idea in the end.
+#     """
+#     with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+#         benefits = pickle.load(f)
+#     with open("haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+#         graphs = pickle.load(f)
 
-    n = benefits.shape[0]
-    m = benefits.shape[1]
-    T = benefits.shape[2]
-    lambda_ = 0.5
+#     n = benefits.shape[0]
+#     m = benefits.shape[1]
+#     T = benefits.shape[2]
+#     lambda_ = 0.5
 
-    auction = Auction(n, m, benefits=benefits[:,:,0], graph=graphs[0])
-    auction.run_auction()
-    init_assigns = convert_agents_to_assignment_matrix(auction.agents)
-    timestep_1_prices = auction.agents[0].public_prices
+#     auction = Auction(n, m, benefits=benefits[:,:,0], graph=graphs[0])
+#     auction.run_auction()
+#     init_assigns = convert_agents_to_assignment_matrix(auction.agents)
+#     timestep_1_prices = auction.agents[0].public_prices
     
-    benefits1 = add_handover_pen_to_benefit_matrix(np.expand_dims(benefits[:,:,1],-1), init_assigns, lambda_)
-    benefits1 = np.squeeze(benefits1)
-    #Run default auction for second timestep
-    def_auction2 = Auction(n, m, benefits=benefits1, graph=graphs[1])
-    def_auction2.run_auction()
+#     benefits1 = add_handover_pen_to_benefit_matrix(np.expand_dims(benefits[:,:,1],-1), init_assigns, lambda_)
+#     benefits1 = np.squeeze(benefits1)
+#     #Run default auction for second timestep
+#     def_auction2 = Auction(n, m, benefits=benefits1, graph=graphs[1])
+#     def_auction2.run_auction()
 
-    def_iters = def_auction2.n_iterations
-    print(f"Iterations without speedup {def_iters}")
+#     def_iters = def_auction2.n_iterations
+#     print(f"Iterations without speedup {def_iters}")
 
-    #Run default auction for second timestep
-    def_auction2 = Auction(n, m, benefits=benefits1, graph=graphs[1], prices=timestep_1_prices)
-    def_auction2.run_auction()
+#     #Run default auction for second timestep
+#     def_auction2 = Auction(n, m, benefits=benefits1, graph=graphs[1], prices=timestep_1_prices)
+#     def_auction2.run_auction()
 
-    def_iters = def_auction2.n_iterations
-    print(f"Iterations with old prices speedup {def_iters}")
+#     def_iters = def_auction2.n_iterations
+#     print(f"Iterations with old prices speedup {def_iters}")
 
-    #Run sped up auction
-    for j in range(m):
-        prev_benefit = np.sum(benefits[:,j,0])
-        total_benefit = np.sum(benefits1[:,j])
-        print(total_benefit - prev_benefit)
+#     #Run sped up auction
+#     for j in range(m):
+#         prev_benefit = np.sum(benefits[:,j,0])
+#         total_benefit = np.sum(benefits1[:,j])
+#         print(total_benefit - prev_benefit)
 
 def multi_task_test():
     lat_range = (20, 50)
@@ -1733,4 +1580,4 @@ def proof_verification_with_full_information():
     print(f"Sequences which were identical: {observed_equal}/{total_sequences}")
 
 if __name__ == "__main__":
-    proof_verification_with_full_information()
+    connectivity_testing()
