@@ -9,6 +9,7 @@ from collections import defaultdict
 
 from common.methods import *
 
+from scripts.classic_auction import Auction
 from haal.solve_optimally import solve_optimally
 from haal.solve_wout_handover import solve_wout_handover
 from haal.solve_w_haal import solve_w_haal
@@ -100,181 +101,6 @@ def optimal_baseline_plot():
     print(["No Handover","HAA", f"HAAL (L={L})", "Optimal"])
     print([avg_no_handover, avg_mha, avg_haal, avg_best])
     plt.savefig("optimal553.pdf")
-    plt.show()
-
-def MHA_unit_testing():
-    """
-    Tests MHA in various cases where solutions are known.
-    """
-    # Case where no solutions are the best.
-    benefits = np.zeros((4,4,2))
-    benefits[:,:,0] = np.array([[100, 1, 0, 0],
-                                [1, 100, 0, 0],
-                                [0, 0, 0.2, 0.1],
-                                [0, 0, 0.1, 0.2]])
-    
-    benefits[:,:,1] = np.array([[1, 1000, 0, 0],
-                                [1000, 1, 0, 0],
-                                [0, 0, 0.1, 0.3],
-                                [0, 0, 0.3, 0.1]])
-
-    print("Expect no solution to be optimal (2198.8) but them to be same for all lookaheads")
-    for lookahead in range(1,benefits.shape[-1]+1):
-        multi_auction = HAAL_Auction(benefits, None, lookahead)
-        multi_auction.run_auctions()
-        ben = multi_auction.calc_value_and_num_handovers()
-        print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
-
-    #Case where a combined solution is the best.
-    benefits = np.zeros((3,3,3))
-    benefits[:,:,0] = np.array([[0.1, 0, 0],
-                                [0, 0.1, 0],
-                                [0, 0, 0.1]])
-    benefits[:,:,1] = np.array([[0, 0, 0.1],
-                                [0.1, 0, 0],
-                                [0, 0.1, 0]])
-    benefits[:,:,2] = np.array([[0.1, 1000, 0],
-                                [0, 0.1, 1000],
-                                [1000, 0, 0.1]])
-
-    print("Expect combined solution to be optimal (3000) only at lookahead of 3")
-    for lookahead in range(1,benefits.shape[-1]+1):
-        multi_auction = HAAL_Auction(benefits, None, lookahead)
-        multi_auction.run_auctions()
-        ben,_ = multi_auction.calc_value_and_num_handovers()
-        print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
-
-def compare_MHA_to_other_algs():
-    #Case where we expect solutions to get increasingly better as lookahead window increases
-    n = 50
-    m = 50
-    T = 95
-    lambda_ = 1
-
-    print("Comparing performance of HAAL to other algorithms")
-    num_avgs = 10
-
-    haal2_ben = 0
-    haal2_nh = 0
-
-    haal5_ben = 0
-    haal5_nh = 0
-
-    mha_ben = 0
-    mha_nh = 0
-
-    no_handover_ben = 0
-    no_handover_nh = 0
-
-    sga_ben = 0
-    sga_nh = 0
-    for _ in range(num_avgs):
-        print(f"Run {_}/{num_avgs}")
-        # benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
-        benefits, _ = get_benefits_and_graphs_from_constellation(n, m, T)
-        print("Generated realistic benefits")
-
-        #SMHGL centralized, lookahead = 2
-        multi_auction = HAAL_Auction(benefits, None, 2, lambda_=lambda_)
-        multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_value_and_num_handovers()
-        haal2_ben += ben/num_avgs
-        haal2_nh += nh/num_avgs
-
-        #SMHGL centralized, lookahead = 5
-        multi_auction = HAAL_Auction(benefits, None, 5, lambda_=lambda_)
-        multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_value_and_num_handovers()
-        haal5_ben += ben/num_avgs
-        haal5_nh += nh/num_avgs
-
-        #MHA
-        multi_auction = HAAL_Auction(benefits, None, 1, lambda_=lambda_)
-        multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_value_and_num_handovers()
-        mha_ben += ben/num_avgs
-        mha_nh += nh/num_avgs
-
-        #Naive
-        _, ben, nh = solve_wout_handover(benefits, lambda_)
-        no_handover_ben += ben/num_avgs
-        no_handover_nh += nh/num_avgs
-
-        #SGA/CBBA
-        handover_ben, _, handover_nh = solve_w_centralized_CBBA(benefits, lambda_)
-
-        sga_ben += handover_ben/num_avgs
-        sga_nh += handover_nh/num_avgs
-
-    fig, axes = plt.subplots(2,1)
-    axes[0].bar(["Naive", "SGA", "MHA", "HAAL2", "HAAL5"],[no_handover_ben, sga_ben, mha_ben, haal2_ben, haal5_ben])
-    axes[0].set_title("Average benefit across 10 runs")
-    # axes[0].set_xlabel("Lookahead timesteps")
-
-    axes[1].bar(["Naive", "SGA", "MHA", "HAAL2", "HAAL5"],[no_handover_nh, sga_nh, mha_nh, haal2_nh, haal5_nh])
-    
-    axes[1].set_title("Average number of handovers across 10 runs")
-    fig.suptitle(f"Test with n={n}, m={m}, T={T}, lambda={lambda_}, realistic-ish benefits")
-
-    plt.show()
-
-def test_MHA_lookahead_performance():
-    """
-    Test performance of MHA as lookahead window increases.
-
-    Hopefully, general trend is that performance increases as lookahead increases.
-    """
-    print("Expect performance to generally increase as lookahead increases")
-    n = 36*15
-    m = 300
-    T = 93
-    lambda_ = 1
-
-    max_lookahead = 6
-    num_avgs = 1
-
-    resulting_bens = []
-    resulting_approx_bens = []
-    handovers = []
-    benefits, graphs = get_constellation_bens_and_graphs_random_tasks(36, 15, m, T, altitude=500)
-    m = benefits.shape[1]
-
-    init_assignment = np.eye(n,m)
-    for lookahead in range(1,max_lookahead+1):
-        avg_ben = 0
-        avg_nh = 0
-        avg_approx_ben = 0
-        for _ in range(num_avgs):
-            print(f"Lookahead {lookahead} ({_}/{num_avgs})", end='\r')
-            # benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
-            # benefits, graphs = get_benefits_and_graphs_from_constellation(10, 10, m, T, altitude=500)
-            # benefits = np.random.rand(n,m,T)
-
-            #HAAL with true lookaheads
-            _, ben, nh = solve_w_haal(benefits, init_assignment, lambda_, lookahead, distributed=False, verbose=True)
-            avg_ben += ben/num_avgs
-            avg_nh += nh/num_avgs
-            
-            # #HAAL (distributed)
-            # _, ben, nh = solve_w_haal(benefits, init_assignment, lambda_, lookahead, distributed=True)
-            # avg_approx_ben += ben/num_avgs
-
-        resulting_bens.append(avg_ben)
-        # resulting_approx_bens.append(avg_approx_ben)
-        handovers.append(avg_nh)
-
-    plt.plot(range(1,max_lookahead+1), resulting_bens, label="HAAL (Centralized)")
-    # plt.plot(range(1,max_lookahead+1), resulting_approx_bens, label="HAAL (Distributed)")
-    plt.title(f"Lookahead vs. accuracy, n={n}, m={m}, T={T}")
-    plt.xlabel("Lookahead timesteps")
-    plt.ylabel(f"Average benefit across {num_avgs} runs")
-    plt.legend()
-    plt.savefig("lookahead_vs_benefit.png")
-    plt.show()
-
-    plt.figure()
-    plt.plot(range(1,max_lookahead+1), handovers)
-    plt.title("Num handovers vs. lookahead")
     plt.show()
 
 def compare_alg_benefits_and_handover():
@@ -531,7 +357,7 @@ def realistic_orbital_simulation():
         # for L in range(1,max_L+1):
         for L in [1,3,6]:
             print(f"lookahead {L}")
-            _, d_val, _, avg_iters = solve_w_haald_track_iters(benefits, init_assignment, lambda_, L, graphs=graphs, verbose=True)
+            _, d_val, _, avg_iters = solve_w_haal(benefits, init_assignment, lambda_, L, graphs=graphs, verbose=True, track_iters=True)
 
             iters_by_lookahead.append(avg_iters)
             value_by_lookahead.append(d_val)
