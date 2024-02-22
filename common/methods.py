@@ -97,7 +97,7 @@ def convert_agents_to_assignment_matrix(agents):
     Convert list of agents as returned by auction to assignment matrix.
     (grab the choice in each Agent's .choice attribute and put it into a matrix.)
     """
-    assignment_matrix = np.zeros((len(agents), len(agents[0].benefits)))
+    assignment_matrix = np.zeros((len(agents), len(agents[0].benefits)), dtype="bool")
     for i, agent in enumerate(agents):
         assignment_matrix[i, agent.choice] = 1
     return assignment_matrix

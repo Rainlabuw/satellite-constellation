@@ -3,6 +3,8 @@ Generating training data from HAAL for RL algorithms.
 """
 import numpy as np
 import pickle
+import multiprocessing as mp
+
 from common.methods import *
 
 from astropy import units as u
@@ -14,13 +16,15 @@ from constellation_sim.ConstellationSim import ConstellationSim
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
 
+from haal.solve_w_haal import solve_w_haal
+
 def init_random_constellation(num_planes, num_sats_per_plane, m, T, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
     Initialize a random constellation with num_planes planes and num_sats_per_plane satellites per plane.
 
     Tasks are placed randomly.
     """
-    const = ConstellationSim(dt=dt, isl_dist=isl_dist)
+    const = ConstellationSim(dt=dt, isl_dist=isl_dist, dtype=np.float16)
     earth = Earth
 
     #~~~~~~~~~Generate a constellation of satellites at <altitude> km.~~~~~~~~~~~~~
@@ -53,15 +57,52 @@ def init_random_constellation(num_planes, num_sats_per_plane, m, T, altitude=550
 
     benefits, graphs = const.propagate_orbits(T, calc_fov_benefits)
 
-    with open('data/uncompressed_benefits.pkl', 'wb') as f:
-        pickle.dump(benefits, f)
-    benefits = np.array(benefits, dtype=np.float16)
-    with open('data/compressed_benefits.pkl', 'wb') as f:
-        pickle.dump(benefits, f)
-    with open('data/graphs.pkl', 'wb') as f:
-        pickle.dump(graphs, f)
-
     return benefits, graphs
 
+def worker_process(num_planes, num_sats_per_plane, m, T, isl_dist):
+    n = num_planes * num_sats_per_plane
+
+    # Perform the operations that were inside your loop
+    benefits, graphs = init_random_constellation(num_planes, num_sats_per_plane, m, T, isl_dist=isl_dist)
+    init_assign = np.eye(n, m)
+    assigns, _, _ = solve_w_haal(benefits, init_assign, 0.5, 3)
+
+    return benefits, graphs, assigns
+
+def generate_benefit_assignment_pairs(num_sims, num_planes, num_sats_per_plane, m, T, isl_dist):
+    """
+    Generates a list of benefits and assignments for a given number of planes and satellites per plane.
+
+    Lists will be len <num_sims>, each with benefit matrices and assignments from <T> time steps.
+    """
+    benefit_list = []
+    graph_list = []
+    assignments_list = []
+
+    args = [(num_planes, num_sats_per_plane, m, T, isl_dist) for i in range(num_sims)]
+
+    with mp.Pool(mp.cpu_count()) as pool:
+        results = pool.starmap(worker_process, args)
+
+    benefit_list, graph_list, assignments_list = zip(*results)
+
+    return benefit_list, graph_list, assignments_list
+
 if __name__ == "__main__":
-    init_random_constellation(10, 10, 350, 1000, isl_dist=4000)
+    num_planes = 10
+    num_sats_per_plane = 10
+    n = num_planes*num_sats_per_plane
+    m = 350
+
+    T = 1000
+    isl_dist = 4000
+
+    num_sims = 10
+    benefit_list, graph_list, assignments_list = generate_benefit_assignment_pairs(num_sims, num_planes, num_sats_per_plane, m, T, isl_dist)
+    
+    with open('benefit_list.pkl', 'wb') as f:
+        pickle.dump(benefit_list, f)
+    with open('graph_list.pkl', 'wb') as f:
+        pickle.dump(graph_list, f)
+    with open('assignments_list.pkl', 'wb') as f:
+        pickle.dump(assignments_list, f)

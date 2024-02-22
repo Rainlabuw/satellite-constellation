@@ -2,3 +2,6 @@
     Initializing this directory.
 
     Wanted to determine smaller scale constellation that would still be fully connected - settled on 10x10 w 4000km link distance after experiments.
+
+    Generate 10 sims of 1000 timesteps each for 1,000,000 total training timesteps. (standard haal_experiment1 orbital parameters.)
+    Saved as data/benefits_list.pkl, etc.
