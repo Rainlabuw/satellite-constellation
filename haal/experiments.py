@@ -16,7 +16,6 @@ from solve_w_accelerated_haal import solve_w_accel_haal
 from solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from solve_w_CBBA import solve_w_CBBA
 from solve_greedily import solve_greedily
-from classic_auction import Auction
 from object_track_scenario import timestep_loss_state_dep_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_coverage_matrix_and_graphs_object_tracking_area
 from object_track_utils import calc_pct_objects_tracked, object_tracking_history
 from multi_task_scenario import solve_multitask_w_haal, calc_multiassign_state_dep_fn, get_benefit_matrix_and_graphs_multitask_area
@@ -1503,18 +1502,18 @@ def smaller_area_size_object_tracking():
     # with open('object_track_experiment/const_object_highres.pkl','rb') as f:
     #     const = pickle.load(f)
 
-    with open('object_track_experiment/sat_cover_matrix_usa.pkl','rb') as f:
-        sat_cover_matrix = pickle.load(f)
-    with open('object_track_experiment/graphs_usa.pkl','rb') as f:
-        graphs = pickle.load(f)
-    with open('object_track_experiment/task_transition_scaling_usa.pkl','rb') as f:
-        task_trans_state_dep_scaling_mat = pickle.load(f)
-    with open('object_track_experiment/hex_task_map_usa.pkl','rb') as f:
-        hex_to_task_mapping = pickle.load(f)
-    with open('object_track_experiment/const_object_usa.pkl','rb') as f:
-        const = pickle.load(f)
+    # with open('object_track_experiment/sat_cover_matrix_usa.pkl','rb') as f:
+    #     sat_cover_matrix = pickle.load(f)
+    # with open('object_track_experiment/graphs_usa.pkl','rb') as f:
+    #     graphs = pickle.load(f)
+    # with open('object_track_experiment/task_transition_scaling_usa.pkl','rb') as f:
+    #     task_trans_state_dep_scaling_mat = pickle.load(f)
+    # with open('object_track_experiment/hex_task_map_usa.pkl','rb') as f:
+    #     hex_to_task_mapping = pickle.load(f)
+    # with open('object_track_experiment/const_object_usa.pkl','rb') as f:
+    #     const = pickle.load(f)
 
-    lat_range = (25.81, 49)
+    lat_range = (22, 52)
     lon_range = (-124.47, -66.87)
     L = 3
     lambda_ = 0.05
@@ -1523,7 +1522,7 @@ def smaller_area_size_object_tracking():
     coverage_benefit = 1
     object_benefit = 10
 
-    # sat_cover_matrix, graphs, task_trans_state_dep_scaling_mat, hex_to_task_mapping, const = get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range, T)
+    sat_cover_matrix, graphs, task_trans_state_dep_scaling_mat, hex_to_task_mapping, const = get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range, T)
 
     np.random.seed(42)
     task_objects = init_task_objects(num_objects, const, hex_to_task_mapping, T, velocity=10000*u.km/u.hr)
@@ -1908,4 +1907,4 @@ def proof_verification_with_full_information():
     print(f"Sequences which were identical: {observed_equal}/{total_sequences}")
 
 if __name__ == "__main__":
-    proof_verification_with_full_information()
+    smaller_area_size_object_tracking()

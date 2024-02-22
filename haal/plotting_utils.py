@@ -388,7 +388,7 @@ def update_object_track(k, ax, earth_image, task_to_hex_map, sat_cover_matrix, t
 
     # Display the Earth image background
     ax.imshow(earth_image, extent=[-180, 180, -90, 90], aspect='auto', alpha=0.6)
-    lat_range = (25.81, 49)
+    lat_range = (22, 52)
     lon_range = (-124.47, -66.87)
     plt.xlim(lon_range)
     plt.ylim(lat_range)
