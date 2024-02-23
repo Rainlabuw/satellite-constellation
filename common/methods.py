@@ -164,7 +164,7 @@ def calc_distance_btwn_solutions(agents1, agents2):
 
 #~~~~~~~~~~~~~~~~~~~~STATE DEPENDENT VALUE STUFF~~~~~~~~~~~~~~
 def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits, lambda_,
-                                          state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None):
+                                          state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None, gamma=1):
     state_dependent_value = 0
 
     benefit_hat = np.copy(benefits[:,:,0])
@@ -174,7 +174,7 @@ def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits
 
     for k in range(len(assignments)-1):
         benefit_hat = state_dep_fn(benefits[:,:,k+1], assignments[k], lambda_, extra_handover_info)
-        state_dependent_value += (benefit_hat * assignments[k+1]).sum()
+        state_dependent_value += (benefit_hat * assignments[k+1]).sum() * gamma**(k+1)
 
     return state_dependent_value
 

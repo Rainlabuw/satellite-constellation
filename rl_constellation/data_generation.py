@@ -65,8 +65,7 @@ def worker_process(id, num_planes, num_sats_per_plane, m, T, isl_dist):
     # Perform the operations that were inside your loop
     benefits, graphs = init_random_constellation(num_planes, num_sats_per_plane, m, T, isl_dist=isl_dist)
     init_assign = np.eye(n, m)
-    assigns, _ = solve_w_haal(benefits, init_assign, 0.5, 3)
-
+    assigns, _ = solve_w_haal(benefits, init_assign, 0.5, 3, verbose=True)
     return benefits, graphs, assigns
 
 def generate_benefit_assignment_pairs(num_sims, num_planes, num_sats_per_plane, m, T, isl_dist):
@@ -124,11 +123,11 @@ if __name__ == "__main__":
     num_sims = 10
     benefit_list, graph_list, assignments_list = generate_benefit_assignment_pairs(num_sims, num_planes, num_sats_per_plane, m, T, isl_dist)
 
-    for benefits, graphs, assigns, id in zip(benefit_list, graph_list, assignments_list, range(num_sims)):
-        print(f"Saving data from run {id}...")
-        with open(f"rl_constellation/data/benefits_{id}.pkl", 'wb') as f:
-            pickle.dump(benefits, f)
-        with open(f"rl_constellation/data/graphs_{id}.pkl", 'wb') as f:
-            pickle.dump(graphs, f)
-        with open(f"rl_constellation/data/assigns_{id}.pkl", 'wb') as f:
-            pickle.dump(assigns, f)
+    # for benefits, graphs, assigns, id in zip(benefit_list, graph_list, assignments_list, range(num_sims)):
+    #     print(f"Saving data from run {id}...")
+    with open(f"rl_constellation/data/benefits_list_{id}.pkl", 'wb') as f:
+        pickle.dump(benefit_list, f)
+    with open(f"rl_constellation/data/graphs_list_{id}.pkl", 'wb') as f:
+        pickle.dump(graph_list, f)
+    with open(f"rl_constellation/data/assigns_list_{id}.pkl", 'wb') as f:
+        pickle.dump(assignments_list, f)

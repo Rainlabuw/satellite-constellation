@@ -1579,5 +1579,23 @@ def proof_verification_with_full_information():
 
     print(f"Sequences which were identical: {observed_equal}/{total_sequences}")
 
+def num_tasks_per_satellite():
+    with open("haal/haal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
+        benefits = pickle.load(f)
+
+    n = benefits.shape[0]
+    m = benefits.shape[1]
+
+    total_tasks = 0
+    for i in range(n):
+        ben_slice = benefits[i,:,:6]
+
+        total_bens = np.sum(ben_slice, axis=1)
+        
+        available_tasks = np.where(total_bens > 0, 1, 0)
+        total_tasks += np.sum(available_tasks)
+    
+    print(total_tasks/n)
+
 if __name__ == "__main__":
-    connectivity_testing()
+    num_tasks_per_satellite()
