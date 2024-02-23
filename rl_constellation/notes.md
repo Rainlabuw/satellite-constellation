@@ -12,5 +12,10 @@ Generated value function and policy pairs for just a sungle of the 10 sims, and 
 For that reason, switching to on the fly sampling and training - pick random numbers corresponding to datasets and timesteps, generate the pairs right then,
 and then train on that minibatch.
 
-(IDEA: when we have these benefit matrices, convolve both in the task direction and in the agent direction. This can hopefully help us capture
+Created function for generating batches on the fly^. Am pretraining the vlaue network now. I think I need to reconsider how exactly the policy network
+targets are being chosen - seems like we want the network to be predicting the discounted value of each task, not just the current value (after all, thats the whole premise of why this auction would perform well.) In that case, we need to develop a way of figuring out the counterfactual benefits that each agent would recieve from getting to do a given task in the first timestep, and then letting HAAL adjust.
+
+Also: managed to get pytorch working with mls tensors, which has a significant speedup: ~33% in a task that was not only GPU bound. This suggests that it is quite a significant speedup over CPU operations :)
+
+(*IDEA*: when we have these benefit matrices, convolve both in the task direction and in the agent direction. This can hopefully help us capture
 things like "how many tasks are available for this agent" and "how many other agents can do this task?")
