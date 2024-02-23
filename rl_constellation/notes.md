@@ -1,0 +1,16 @@
+#### 2/22/24
+Initializing this directory.
+
+Wanted to determine smaller scale constellation that would still be fully connected - settled on 10x10 w 4000km link distance after experiments.
+
+Generate 10 sims of 1000 timesteps each for 1,000,000 total training timesteps. (standard haal_experiment1 orbital parameters.)
+Saved as data/benefits_list.pkl, etc.
+
+HAAL experiment 1 has an average task in view of 8.67, and experiment 2 has avg. 14.4. Thus, I think M=10 for a constellation of 10x10 should be fine.
+
+Generated value function and policy pairs for just a sungle of the 10 sims, and it was already 40 Gb, so 10x that would be far too much.
+For that reason, switching to on the fly sampling and training - pick random numbers corresponding to datasets and timesteps, generate the pairs right then,
+and then train on that minibatch.
+
+(IDEA: when we have these benefit matrices, convolve both in the task direction and in the agent direction. This can hopefully help us capture
+things like "how many tasks are available for this agent" and "how many other agents can do this task?")

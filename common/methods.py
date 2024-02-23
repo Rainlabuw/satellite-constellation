@@ -135,7 +135,6 @@ def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover
     Then, prev_assign @ T_trans is the matrix which entries of the benefit matrix should be adjusted.
     """
     if prev_assign is None: return benefits
-
     m = benefits.shape[1]
 
     try:
