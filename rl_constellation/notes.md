@@ -19,3 +19,6 @@ Also: managed to get pytorch working with mls tensors, which has a significant s
 
 (*IDEA*: when we have these benefit matrices, convolve both in the task direction and in the agent direction. This can hopefully help us capture
 things like "how many tasks are available for this agent" and "how many other agents can do this task?")
+
+#### 2/23/24
+Pretrained for 2000 batches with a learning rate of 0.005 rather than 0.01. Loss seemed to plateau at 0.025 for both the training and test set, so perhaps this is as good as it will get. Need to work on pretraining the policy network now.
