@@ -31,34 +31,53 @@ def get_local_and_neighboring_benefits(benefits, i, M):
     global_benefits = np.delete(global_benefits, i, axis=0) #remove agent i
     global_benefits = np.delete(global_benefits, top_local_tasks, axis=1) #remove top M tasks
 
-    return local_benefits, neighboring_benefits, global_benefits
+    return top_local_tasks, local_benefits, neighboring_benefits, global_benefits
 
-def generate_training_data_pairs(benefits_list, assignments_list, M, L):
+def generate_training_data_pairs(benefits_list, assignments_list, M, L, gamma=0.9, lambda_=0.6,
+                                 state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None):
     """
     Given a list of benefits and assignments, generates a list of training data pairs.
-    """
-    lambda_ = 0.5
-    gamma = 0.9
-    min_L = np.ceil(np.log(0.05)/np.log(gamma))
 
-    training_data_pairs = []
+    L ~ np.ceil(np.log(0.05)/np.log(gamma))
+    """
+    value_func_training_pairs = []
+    policy_func_training_pairs = []
     for benefits, assigns, in zip(benefits_list, assignments_list):
         n = benefits.shape[0]
         m = benefits.shape[1]
         T = benefits.shape[2]
 
-        for k in range(T-min_L):
-            handover_adjusted_benefits = np.copy(benefits[:,:,k:k+L]) #add handover penalty to the benefits
+        for k in range(T-L):
+            if k == 0:
+                prev_assign = np.eye(n,m)
+                agent_prev_assign = np.expand_dims(prev_assign[i,:],0)
+            else:
+                prev_assign = assigns[k-1]
+                agent_prev_assign = np.expand_dims(prev_assign[i,:],0)
+
+            #add handover penalty to the benefits
+            handover_adjusted_benefits = state_dep_fn(np.copy(benefits[:,:,k:k+L]), prev_assign, lambda_, extra_handover_info)
             for i in range(n):
-                local_benefits, neighboring_benefits, global_benefits = get_local_and_neighboring_benefits(benefits[:,:,k:k+L], i, M)
+                #~~~~~~~~~~ CALC TRAINING INPUT DATA~~~~~~~~~~~
+                top_local_tasks, local_benefits, neighboring_benefits, global_benefits = get_local_and_neighboring_benefits(handover_adjusted_benefits, i, M)
                 inputs = (local_benefits, neighboring_benefits, global_benefits)
 
-                discounted_value = calc_assign_seq_state_dependent_value(np.eye(n,m), assigns[k:], benefits[:,:,k], lambda_,
+                #Compute agent benefit and assignments, maintaining the same shapes
+                agent_benefits = np.expand_dims(np.copy(benefits[i,:,k:k+L]), axis=0)
+                agent_assigns = [np.expand_dims(assigns[t][i,:],0) for t in range(k,k+L)]
+
+                #~~~~~~~~~~ CALC VALUE FUNC TRAINING OUTPUT DATA~~~~~~~~~~~
+                discounted_value = calc_assign_seq_state_dependent_value(agent_prev_assign, agent_assigns, agent_benefits, lambda_,
                                             state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None, gamma=gamma)
 
-                training_data_pairs.append((local_benefits, neighboring_benefits, global_benefits, assignments[i][t]))
+                value_func_training_pairs.append((inputs, discounted_value))
 
-    return training_data_pairs
+                #~~~~~~~~~~ CALC POLICY TRAINING OUTPUT DATA~~~~~~~~~~~
+                local_benefits = handover_adjusted_benefits[i, top_local_tasks, 0]
+                
+                policy_func_training_pairs.append((inputs, local_benefits))
+
+    return value_func_training_pairs, policy_func_training_pairs
 
 if __name__ == "__main__":
     benefits = np.random.rand(10, 10, 10)
