@@ -22,3 +22,7 @@ things like "how many tasks are available for this agent" and "how many other ag
 
 #### 2/23/24
 Pretrained for 2000 batches with a learning rate of 0.005 rather than 0.01. Loss seemed to plateau at 0.025 for both the training and test set, so perhaps this is as good as it will get. Need to work on pretraining the policy network now.
+
+#### 2/24/24
+Implemented policy network pretraining, but was extremely slow to the point that it's unworkable, and didn't seem to be improving on the test set (although its probably too early to tell.)
+Need to reimplement a threaded version of the policy pretraining, and if thats still not fast enough figure out a heuristic that can get us values which are good enough.
