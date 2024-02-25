@@ -2,13 +2,138 @@ import numpy as np
 from tqdm import tqdm
 import pickle
 import torch
+from torch.utils.data import Dataset, DataLoader
 import time
+# from ray import tune
 
 from common.methods import *
 
 from rl_constellation.networks import ValueNetwork, PolicyNetwork
 
 from haal.solve_w_haal import solve_w_haal
+
+class DynamicDataset(Dataset):
+    """
+    Takes a list of benefits and assignments and generates a dataset of training data for the value and policy networks.
+    """
+    def __init__(self, benefits_list, assignments_list, M, L, L_max, lambda_=0.5, gamma=0.9, 
+                 state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None, calc_policy_outputs=True, calc_value_outputs=True):
+        self.benefits_list = benefits_list
+        self.assignments_list = assignments_list
+        self.M = M
+        self.L = L
+        self.L_max = L_max
+        
+        self.lambda_ = lambda_
+        self.gamma = gamma
+
+        self.state_dep_fn = state_dep_fn
+        self.extra_handover_info = extra_handover_info
+
+        self.calc_policy_outputs = calc_policy_outputs
+        self.calc_value_outputs = calc_value_outputs
+
+        self.length = len(benefits_list) * (benefits_list[0].shape[2]-L_max) * benefits_list[0].shape[0]
+
+    def __len__(self):
+        return self.length
+    
+    def __getitem__(self, idx):
+        """
+        Selects a random entry in the provided benefit and assignment databases,
+        and generates the associated data point on the fly.
+        """
+        selected_bens_assigns_ind = np.random.choice(len(self.benefits_list))
+
+        #pick a random benefit matrix from the list of sims
+        benefits = self.benefits_list[selected_bens_assigns_ind]
+        assigns = self.assignments_list[selected_bens_assigns_ind]
+        n = benefits.shape[0]
+        m = benefits.shape[1]
+
+        #pick a random time step
+        k = np.random.randint(benefits.shape[2]-self.L_max)
+
+        #pick a random agent
+        i = np.random.randint(n)
+
+        truncated_benefits = benefits[:,:,k:k+self.L_max]
+        truncated_assigns = assigns[k:k+self.L_max]
+        if k == 0: prev_assign = np.eye(n,m)
+        else: prev_assign = assigns[k-1]
+
+        return self.generate_training_data_pair(truncated_benefits, truncated_assigns, prev_assign, i)
+    
+    def calc_counterfactual_haal_value(self, benefits, prev_assign, agent, chosen_action):
+        """
+        Calculates the value that would be returned by HAAL over the next L_max timesteps
+        if the chosen action was chosen by the agent.
+
+        NOTE: assumes L=3 for the purposes of HAAL, because that's what was used to generate the data
+        """
+        adjusted_benefits = np.copy(benefits)
+        #make the value for the chosen action very high so it is always chosen
+        adjusted_benefits[agent, chosen_action, 0] = 1000
+
+        T = adjusted_benefits.shape[2]
+
+        ass, _ = solve_w_haal(adjusted_benefits, prev_assign, self.lambda_, 3)
+
+        #Calculate benefits using the unadjusted benefits (so the 1000 doesnt inflate our value)
+        agent_benefits = np.expand_dims(np.copy(benefits[agent,:,:]), axis=0)
+        agent_assigns = [np.expand_dims(ass[t][agent,:],0) for t in range(T)]
+        agent_prev_assign = np.expand_dims(prev_assign[agent,:],0)
+
+        discounted_value = calc_assign_seq_state_dependent_value(agent_prev_assign, agent_assigns, agent_benefits, self.lambda_,
+                                    state_dep_fn=self.state_dep_fn, extra_handover_info=self.extra_handover_info, gamma=self.gamma)
+        
+        return discounted_value
+
+    def generate_training_data_pair(self, benefits, assigns, prev_assign, i):
+        """
+        Given a location in the benefit and assignment matrices, 
+        computes the training data for the value and policy networks on the fly.
+
+        Expects a benefit tensor and list of assignment matrices (assuming it is already n x m x T)
+
+        Note that while self.L is the lookahead range to give to the neural network, T is L_max,
+        or the window at which to stop calculating discounted value (because it is too small to matter).
+        """
+        normalizing_value = sum([0.75*self.gamma**t for t in range(self.L)])
+
+        n = benefits.shape[0]
+        m = benefits.shape[1]
+        T = benefits.shape[2]
+
+        #add handover penalty to the benefits
+        handover_adjusted_benefits = np.copy(benefits[:,:,:self.L])
+        handover_adjusted_benefits[:,:,0] = self.state_dep_fn(handover_adjusted_benefits[:,:,0], prev_assign, self.lambda_, self.extra_handover_info)
+
+        agent_prev_assign = np.expand_dims(prev_assign[i,:],0)
+
+        #~~~~~~~~~~ CALC TRAINING INPUT DATA~~~~~~~~~~~
+        top_local_tasks, local_benefits, neighboring_benefits, global_benefits = get_local_and_neighboring_benefits(handover_adjusted_benefits, i, self.M)
+
+        #Compute agent benefit and assignments, maintaining the same shapes
+        agent_benefits = np.expand_dims(np.copy(benefits[i,:,:]), axis=0)
+        agent_assigns = [np.expand_dims(assigns[t][i,:],0) for t in range(T)]
+
+        #~~~~~~~~~~ CALC VALUE FUNC TRAINING OUTPUT DATA~~~~~~~~~~~
+        if self.calc_value_outputs:
+            discounted_value = calc_assign_seq_state_dependent_value(agent_prev_assign, agent_assigns, agent_benefits, self.lambda_,
+                                        state_dep_fn=self.state_dep_fn, extra_handover_info=self.extra_handover_info, gamma=self.gamma)
+            target_value_output = discounted_value/normalizing_value
+        else:
+            target_value_output = 0
+
+        #~~~~~~~~~~ CALC POLICY TRAINING OUTPUT DATA~~~~~~~~~~~
+        target_policy_outputs = np.zeros(self.M)
+        if self.calc_policy_outputs:
+            for idx, chosen_task in enumerate(top_local_tasks):
+                target_policy_outputs[idx] = self.calc_counterfactual_haal_value(benefits, prev_assign, i, chosen_task)
+            target_policy_outputs = target_policy_outputs/normalizing_value
+
+        return local_benefits, neighboring_benefits, global_benefits, target_value_output, target_policy_outputs
 
 def get_local_and_neighboring_benefits(benefits, i, M):
     """
@@ -41,84 +166,87 @@ def get_local_and_neighboring_benefits(benefits, i, M):
 
     return top_local_tasks, local_benefits, neighboring_benefits, global_benefits
 
-def generate_training_data_pair(benefits, assigns, prev_assign, i, M, L, lambda_=0.5, gamma=0.9,
-                                state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None):
-    """
-    Given a benefit tensor and list of assignment matrices (assuming it is already n x m x T)
+# def generate_training_data_pair(benefits, assigns, prev_assign, i, M, L, lambda_=0.5, gamma=0.9,
+#                                 state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None):
+#     """
+#     TECHNICALLY THIS IS FASTER, BUT ITS LESS CLEAN
+#     Given a benefit tensor and list of assignment matrices (assuming it is already n x m x T)
 
-    Note that L is the lookahead range to give to the neural network, while T is L_max,
-    or the window at which to stop calculating discounted value (because it is too small to matter).
-    """
-    normalizing_value = sum([1*gamma**t for t in range(L)])
+#     Note that L is the lookahead range to give to the neural network, while T is L_max,
+#     or the window at which to stop calculating discounted value (because it is too small to matter).
+#     """
+#     normalizing_value = sum([1*gamma**t for t in range(L)])
 
-    n = benefits.shape[0]
-    m = benefits.shape[1]
-    T = benefits.shape[2]
+#     n = benefits.shape[0]
+#     m = benefits.shape[1]
+#     T = benefits.shape[2]
 
-    #add handover penalty to the benefits
-    handover_adjusted_benefits = np.copy(benefits[:,:,:L])
-    handover_adjusted_benefits[:,:,0] = state_dep_fn(handover_adjusted_benefits[:,:,0], prev_assign, lambda_, extra_handover_info)
+#     #add handover penalty to the benefits
+#     handover_adjusted_benefits = np.copy(benefits[:,:,:L])
+#     handover_adjusted_benefits[:,:,0] = state_dep_fn(handover_adjusted_benefits[:,:,0], prev_assign, lambda_, extra_handover_info)
 
-    agent_prev_assign = np.expand_dims(prev_assign[i,:],0)
+#     agent_prev_assign = np.expand_dims(prev_assign[i,:],0)
 
-    #~~~~~~~~~~ CALC TRAINING INPUT DATA~~~~~~~~~~~
-    top_local_tasks, local_benefits, neighboring_benefits, global_benefits = get_local_and_neighboring_benefits(handover_adjusted_benefits, i, M)
+#     #~~~~~~~~~~ CALC TRAINING INPUT DATA~~~~~~~~~~~
+#     top_local_tasks, local_benefits, neighboring_benefits, global_benefits = get_local_and_neighboring_benefits(handover_adjusted_benefits, i, M)
 
-    #Compute agent benefit and assignments, maintaining the same shapes
-    agent_benefits = np.expand_dims(np.copy(benefits[i,:,:]), axis=0)
-    agent_assigns = [np.expand_dims(assigns[t][i,:],0) for t in range(T)]
+#     #Compute agent benefit and assignments, maintaining the same shapes
+#     agent_benefits = np.expand_dims(np.copy(benefits[i,:,:]), axis=0)
+#     agent_assigns = [np.expand_dims(assigns[t][i,:],0) for t in range(T)]
 
-    #~~~~~~~~~~ CALC VALUE FUNC TRAINING OUTPUT DATA~~~~~~~~~~~
-    discounted_value = calc_assign_seq_state_dependent_value(agent_prev_assign, agent_assigns, agent_benefits, lambda_,
-                                state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None, gamma=gamma)
-    target_value_output = discounted_value/normalizing_value
+#     #~~~~~~~~~~ CALC VALUE FUNC TRAINING OUTPUT DATA~~~~~~~~~~~
+#     discounted_value = calc_assign_seq_state_dependent_value(agent_prev_assign, agent_assigns, agent_benefits, lambda_,
+#                                 state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None, gamma=gamma)
+#     target_value_output = discounted_value/normalizing_value
 
-    #~~~~~~~~~~ CALC POLICY TRAINING OUTPUT DATA~~~~~~~~~~~
-    # TODO: update policy training data to use the counterfactual HAAL benefits
-    unnormalized_policy_outputs = handover_adjusted_benefits[i, top_local_tasks, 0]
-    target_policy_outputs = unnormalized_policy_outputs/normalizing_value
+#     #~~~~~~~~~~ CALC POLICY TRAINING OUTPUT DATA~~~~~~~~~~~
+#     # TODO: update policy training data to use the counterfactual HAAL benefits
+#     unnormalized_policy_outputs = handover_adjusted_benefits[i, top_local_tasks, 0]
+#     target_policy_outputs = unnormalized_policy_outputs/normalizing_value
 
-    return local_benefits, neighboring_benefits, global_benefits, target_value_output, target_policy_outputs
+#     return local_benefits, neighboring_benefits, global_benefits, target_value_output, target_policy_outputs
 
-def build_batch_of_training_data(k_range, batch_size, benefits_list, assignments_list, M, L, L_max):
-    n = benefits_list[0].shape[0]
-    m = benefits_list[0].shape[1]
-    T = benefits_list[0].shape[2]
+# def build_batch_of_training_data(k_range, batch_size, benefits_list, assignments_list, M, L, L_max):
+#     n = benefits_list[0].shape[0]
+#     m = benefits_list[0].shape[1]
+#     T = benefits_list[0].shape[2]
     
-    #Build batch of inputs to train on
-    local_benefits_batch = np.zeros((batch_size, 1, M, L))
-    neighboring_benefits_batch = np.zeros((batch_size, n-1, M, L))
-    global_benefits_batch = np.zeros((batch_size, n-1, m-M, L))
+#     #Build batch of inputs to train on
+#     local_benefits_batch = np.zeros((batch_size, 1, M, L))
+#     neighboring_benefits_batch = np.zeros((batch_size, n-1, M, L))
+#     global_benefits_batch = np.zeros((batch_size, n-1, m-M, L))
 
-    target_value_batch = np.zeros((batch_size,1))
-    for batch_ind in range(batch_size):
-        selected_bens_assigns_ind = np.random.choice(len(benefits_list))
+#     target_value_batch = np.zeros((batch_size,1))
+#     target_policy_batch = np.zeros((batch_size,M))
+#     for batch_ind in range(batch_size):
+#         selected_bens_assigns_ind = np.random.choice(len(benefits_list))
 
-        #pick a random benefit matrix from the list of sims
-        benefits = benefits_list[selected_bens_assigns_ind]
-        assigns = assignments_list[selected_bens_assigns_ind]
+#         #pick a random benefit matrix from the list of sims
+#         benefits = benefits_list[selected_bens_assigns_ind]
+#         assigns = assignments_list[selected_bens_assigns_ind]
 
-        #pick a random time step
-        k = np.random.randint(k_range[0], k_range[1])
+#         #pick a random time step
+#         k = np.random.randint(k_range[0], k_range[1])
 
-        #pick a random agent
-        i = np.random.randint(n)
+#         #pick a random agent
+#         i = np.random.randint(n)
 
-        truncated_benefits = benefits[:,:,k:k+L_max]
-        truncated_assigns = assigns[k:k+L_max]
-        if k == 0: prev_assign = np.eye(n,m)
-        else: prev_assign = assigns[k-1]
+#         truncated_benefits = benefits[:,:,k:k+L_max]
+#         truncated_assigns = assigns[k:k+L_max]
+#         if k == 0: prev_assign = np.eye(n,m)
+#         else: prev_assign = assigns[k-1]
 
-        local_benefits, neighboring_benefits, global_benefits, target_value_output, target_policy_outputs = \
-            generate_training_data_pair(truncated_benefits, truncated_assigns, prev_assign, i, M, L)
+#         local_benefits, neighboring_benefits, global_benefits, target_value_output, target_policy_outputs = \
+#             generate_training_data_pair(truncated_benefits, truncated_assigns, prev_assign, i, M, L)
         
-        local_benefits_batch[batch_ind, 0, :, :] = local_benefits
-        neighboring_benefits_batch[batch_ind, :, :, :] = neighboring_benefits
-        global_benefits_batch[batch_ind, :, :, :] = global_benefits
+#         local_benefits_batch[batch_ind, 0, :, :] = local_benefits
+#         neighboring_benefits_batch[batch_ind, :, :, :] = neighboring_benefits
+#         global_benefits_batch[batch_ind, :, :, :] = global_benefits
 
-        target_value_batch[batch_ind,0] = target_value_output
+#         target_value_batch[batch_ind,0] = target_value_output
+#         target_policy_batch[batch_ind,:] = target_policy_outputs
 
-    return local_benefits_batch, neighboring_benefits_batch, global_benefits_batch, target_value_batch
+#     return local_benefits_batch, neighboring_benefits_batch, global_benefits_batch, target_value_batch, target_policy_batch
 
 def pretrain_value_network():
     with open("rl_constellation/data/benefits_list.pkl", "rb") as f:
@@ -131,9 +259,18 @@ def pretrain_value_network():
     L_max = int(np.ceil(np.log(0.05)/np.log(0.9)))
     L = 10
     M = 10
-    batch_size = 64
+    batch_size = 256
 
     training_data_timestep_start = 90
+    train_benefits_list = [b[:,:,training_data_timestep_start:] for b in benefits_list]
+    train_assigns_list = [a[training_data_timestep_start:] for a in assignments_list]
+    train_dataset = DynamicDataset(train_benefits_list, train_assigns_list, M, L, L_max, calc_policy_outputs=False)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size)
+
+    test_benefits_list = [b[:,:,:training_data_timestep_start+L_max] for b in benefits_list]
+    test_assigns_list = [a[:training_data_timestep_start+L_max] for a in assignments_list]
+    test_dataset = DynamicDataset(test_benefits_list, test_assigns_list, M, L, L_max, calc_policy_outputs=False)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size)
 
     n = benefits_list[0].shape[0]
     m = benefits_list[0].shape[1]
@@ -148,50 +285,156 @@ def pretrain_value_network():
 
     losses = []
     test_losses = []
-    for _ in tqdm(range(2000)):
-        #Build batch of inputs to train on
-        training_timestep_range = (training_data_timestep_start, T-L_max)
-        local_benefits_batch, neighboring_benefits_batch, global_benefits_batch, target_value_batch = \
-            build_batch_of_training_data(training_timestep_range, batch_size, benefits_list, assignments_list, M, L, L_max)
-
-        #Forward pass
-        local_benefits_batch = torch.tensor(local_benefits_batch, dtype=torch.float32).to(device)
-        neighboring_benefits_batch = torch.tensor(neighboring_benefits_batch, dtype=torch.float32).to(device)
-        global_benefits_batch = torch.tensor(global_benefits_batch, dtype=torch.float32).to(device)
-
-        output_value_batch = value_network(local_benefits_batch, neighboring_benefits_batch, global_benefits_batch)
-        
-        #Compute loss compared to target value
-        target_value_batch = torch.tensor(target_value_batch, dtype=torch.float32).to(device)
-        criterion = torch.nn.MSELoss()
-        loss = criterion(output_value_batch, target_value_batch)
-
-        # print(f"Loss: {loss} in {time.time()-start} seconds")
-
-        #Backward pass
-        value_network.zero_grad()
-        loss.backward()
-        optimizer.step()
-        losses.append(loss.item())
-
-        #test on test set
-        if _ % 100 == 0:
-            test_timestep_range = (0, training_data_timestep_start)
-            local_benefits_batch, neighboring_benefits_batch, global_benefits_batch, target_value_batch = \
-                build_batch_of_training_data(test_timestep_range, batch_size, benefits_list, assignments_list, M, L, L_max)
+    num_epochs = 5
+    max_batches_per_epoch = 100
+    for epoch in range(num_epochs):
+        for i, data in enumerate(train_dataloader, 0):
+            print(f"Epoch {epoch}/{num_epochs}, {i}/{max_batches_per_epoch}")
+            #Build batch of inputs to train on
+            (local_benefits_batch, neighboring_benefits_batch, global_benefits_batch, target_value_batch, _) = data
 
             #Forward pass
-            local_benefits_batch = torch.tensor(local_benefits_batch, dtype=torch.float32).to(device)
-            neighboring_benefits_batch = torch.tensor(neighboring_benefits_batch, dtype=torch.float32).to(device)
-            global_benefits_batch = torch.tensor(global_benefits_batch, dtype=torch.float32).to(device)
-            
-            #Compute loss compared to test value
-            target_value_batch = torch.tensor(target_value_batch, dtype=torch.float32).to(device)
-            criterion = torch.nn.MSELoss()
-            test_loss = criterion(output_value_batch, target_value_batch)
-            test_losses.append(test_loss.item())
+            local_benefits_batch = local_benefits_batch[:, None, :, :] #Add size 1 dimension for the num agents
+            local_benefits_batch = local_benefits_batch.float().to(device)
+            neighboring_benefits_batch = neighboring_benefits_batch.float().to(device)
+            global_benefits_batch = global_benefits_batch.float().to(device)
 
-    torch.save(value_network.state_dict(), "rl_constellation/networks/value_network_pretrained.pt")
+            output_value_batch = torch.squeeze(value_network(local_benefits_batch, neighboring_benefits_batch, global_benefits_batch))
+            
+            #Compute loss compared to target value
+            target_value_batch = target_value_batch.float().to(device)
+            criterion = torch.nn.MSELoss()
+            loss = criterion(output_value_batch, target_value_batch)
+
+            #Backward pass
+            value_network.zero_grad()
+            loss.backward()
+            optimizer.step()
+            losses.append(loss.item())
+
+            if i > max_batches_per_epoch: break
+
+        test_steps = 0
+        test_loss_tot = 0
+        for i, data in enumerate(test_dataloader, 0):
+            with torch.no_grad():
+                (local_benefits_batch, neighboring_benefits_batch, global_benefits_batch, target_value_batch, _) = data
+                local_benefits_batch = local_benefits_batch[:, None, :, :] #Add size 1 dimension for the num agents
+                local_benefits_batch = local_benefits_batch.float().to(device)
+                neighboring_benefits_batch = neighboring_benefits_batch.float().to(device)
+                global_benefits_batch = global_benefits_batch.float().to(device)
+                
+                output_value_batch = torch.squeeze(value_network(local_benefits_batch, neighboring_benefits_batch, global_benefits_batch))
+
+                #Compute loss compared to test value
+                target_value_batch = target_value_batch.float().to(device)
+                criterion = torch.nn.MSELoss()
+                test_loss = criterion(output_value_batch, target_value_batch)
+                test_losses.append(test_loss.item())
+
+                test_loss_tot += test_loss.item()
+                test_steps += 1
+            
+            if i > max_batches_per_epoch//4: break
+        print(f"TEST LOSS: {test_loss_tot/test_steps}")
+
+    torch.save(value_network.state_dict(), "rl_constellation/networks/value_network_pretrained_new.pt")
+
+    fig, axes = plt.subplots(1,2)
+    axes[0].plot(losses)
+    axes[1].plot(test_losses)
+    plt.show()
+
+def pretrain_policy_network():
+    with open("rl_constellation/data/benefits_list.pkl", "rb") as f:
+        benefits_list = pickle.load(f)
+        print("Loaded benefits list.")
+    with open("rl_constellation/data/assigns_list.pkl", "rb") as f:
+        assignments_list = pickle.load(f)
+        print("Loaded assignments list.")
+
+    L_max = int(np.ceil(np.log(0.05)/np.log(0.9)))
+    L = 10
+    M = 10
+    batch_size = 64
+
+    training_data_timestep_start = 90
+    train_benefits_list = [b[:,:,training_data_timestep_start:] for b in benefits_list]
+    train_assigns_list = [a[training_data_timestep_start:] for a in assignments_list]
+    train_dataset = DynamicDataset(train_benefits_list, train_assigns_list, M, L, L_max, calc_value_outputs=False)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size)
+
+    test_benefits_list = [b[:,:,:training_data_timestep_start+L_max] for b in benefits_list]
+    test_assigns_list = [a[:training_data_timestep_start+L_max] for a in assignments_list]
+    test_dataset = DynamicDataset(test_benefits_list, test_assigns_list, M, L, L_max, calc_value_outputs=False)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size)
+
+    n = benefits_list[0].shape[0]
+    m = benefits_list[0].shape[1]
+    T = benefits_list[0].shape[2]
+    num_filters = 10
+    hidden_units = 64
+    policy_network = PolicyNetwork(L, n, m, M, num_filters, hidden_units)
+
+    optimizer = torch.optim.SGD(policy_network.parameters(), lr=0.005)
+    device = torch.device("mps")
+    policy_network.to(device)
+
+    losses = []
+    test_losses = []
+    max_batches_per_epoch = 25
+    num_epochs = 10
+    for epoch in range(num_epochs):
+        print(f"Starting epoch {epoch}...")
+        for i, data in enumerate(train_dataloader, 0):
+            if i >= max_batches_per_epoch: break
+            print(f"Epoch {epoch}/{num_epochs}, {i}/{max_batches_per_epoch}")
+            #Build batch of inputs to train on
+            (local_benefits_batch, neighboring_benefits_batch, global_benefits_batch, _, target_policy_batch) = data
+
+            #Forward pass
+            local_benefits_batch = local_benefits_batch[:, None, :, :] #Add size 1 dimension for the num agents
+            local_benefits_batch = local_benefits_batch.float().to(device)
+            neighboring_benefits_batch = neighboring_benefits_batch.float().to(device)
+            global_benefits_batch = global_benefits_batch.float().to(device)
+
+            output_policy_batch = torch.squeeze(policy_network(local_benefits_batch, neighboring_benefits_batch, global_benefits_batch))
+            
+            #Compute loss compared to target value
+            target_policy_batch = target_policy_batch.float().to(device)
+            criterion = torch.nn.MSELoss()
+            loss = criterion(output_policy_batch, target_policy_batch)
+
+            #Backward pass
+            policy_network.zero_grad()
+            loss.backward()
+            optimizer.step()
+            losses.append(loss.item())
+
+        test_steps = 0
+        test_loss_tot = 0
+        for i, data in enumerate(test_dataloader, 0):
+            if i >= max_batches_per_epoch/4: break
+            with torch.no_grad():
+                (local_benefits_batch, neighboring_benefits_batch, global_benefits_batch, _, target_policy_batch) = data
+                local_benefits_batch = local_benefits_batch[:, None, :, :] #Add size 1 dimension for the num agents
+                local_benefits_batch = local_benefits_batch.float().to(device)
+                neighboring_benefits_batch = neighboring_benefits_batch.float().to(device)
+                global_benefits_batch = global_benefits_batch.float().to(device)
+                
+                output_policy_batch = torch.squeeze(policy_network(local_benefits_batch, neighboring_benefits_batch, global_benefits_batch))
+
+                #Compute loss compared to test value
+                target_policy_batch = target_policy_batch.float().to(device)
+                criterion = torch.nn.MSELoss()
+                test_loss = criterion(output_policy_batch, target_policy_batch)
+
+                test_loss_tot += test_loss.item()
+                test_steps += 1
+
+        print(f"TEST LOSS: {test_loss_tot/test_steps}")
+
+    torch.save(policy_network.state_dict(), "rl_constellation/networks/policy_network_pretrained.pt")
 
     fig, axes = plt.subplots(1,2)
     axes[0].plot(losses)
@@ -199,4 +442,4 @@ def pretrain_value_network():
     plt.show()
 
 if __name__ == "__main__":
-    pretrain_value_network()
+    pretrain_policy_network()
