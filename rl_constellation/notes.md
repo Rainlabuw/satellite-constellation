@@ -26,3 +26,13 @@ Pretrained for 2000 batches with a learning rate of 0.005 rather than 0.01. Loss
 #### 2/24/24
 Implemented policy network pretraining, but was extremely slow to the point that it's unworkable, and didn't seem to be improving on the test set (although its probably too early to tell.)
 Need to reimplement a threaded version of the policy pretraining, and if thats still not fast enough figure out a heuristic that can get us values which are good enough.
+
+#### 2/25/24
+Multithreaded version didnt actually cause a speedup, but a simplification (using the precalculated assignments after a certain point rather than recalculating) did.
+
+Successfully trained a policy network to ~convergence (0.04 loss), but potentially still more room to train before overfitting. Default policy network has 10 filters, 64 hidden units.
+
+Tested this policy on a real benefit matrix, and it was awful, but also significantly better than random assignments, which may actually be worse because that means that there's no bug, it's just an awful policy. Need to investigate slightly more tomorrow and ensure that there is indeed no bug.
+RL: -2146, HAAL: 2361, NHA: 1553, Random: -4568
+
+It will also probably be critical to speed up the evaluation of the RL policies, either by multithreading the NN evaluations, putting them on the GPU, or something else, given that this will be running in the environment loop many times.

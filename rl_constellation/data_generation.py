@@ -87,30 +87,6 @@ def generate_benefit_assignment_pairs(num_sims, num_planes, num_sats_per_plane, 
 
     return benefit_list, graph_list, assignments_list
 
-def convert_benefit_assignment_pairs_to_dataset(benefit_list, assignments_list):
-    """
-    Converts a list of benefits and assignments to a dataset for training.
-    """
-    gamma = 0.9
-    L_required = np.ceil(np.log(0.05)/np.log(gamma))
-
-    num_runs = 10
-    for run in range(num_runs):
-        with open(f"rl_constellation/data/benefits_{run}.pkl", 'rb') as f:
-            benefits = pickle.load(f)
-        with open(f"rl_constellation/data/assigns_{run}.pkl", 'rb') as f:
-            assigns = pickle.load(f)
-
-        n = benefits.shape[0]
-        m = benefits.shape[1]
-        T = benefits.shape[2]
-
-        for k in range(T):
-            pass
-
-    for benefits, assigns in zip(benefit_list, assignments_list):
-        pass
-
 if __name__ == "__main__":
     num_planes = 10
     num_sats_per_plane = 10
