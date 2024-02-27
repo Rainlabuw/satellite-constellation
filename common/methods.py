@@ -235,26 +235,32 @@ def calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 
     return total_benefit, num_handovers
 
 #~~~~~~~~~~~~~~~~~~~~BENEFIT MATRIX UTILITIES~~~~~~~~~~~~~~
-def generate_benefits_over_time(n, m, T, t_final, scale_min=0.5, scale_max=2):
+def generate_benefits_over_time(n, m, T, width_min, width_max, scale_min=0.25, scale_max=2):
     """
     lightweight way of generating "constellation-like" benefit matrices.
     """
     benefits = np.zeros((n,m,T))
     for i in range(n):
         for j in range(m):
-            #where is the benefit curve maximized
-            time_center = np.random.uniform(0, t_final)
+            #Determine if task is active for this sat ever
+            task_active = 1 if np.random.rand() > 0.75 else 0
 
-            #how wide is the benefit curve
-            time_spread = np.random.uniform(0, t_final/2)
+            if task_active:
+                #where is the benefit curve maximized
+                time_center = np.random.uniform(0, T)
 
-            #how high is the benefit curve
-            benefit_scale = np.random.uniform(scale_min, scale_max)
+                #how wide is the benefit curve
+                time_spread = np.random.uniform(width_min, width_max)
+                sigma_2 = np.sqrt(time_spread**2/-8/np.log(0.05))
 
-            #iterate from time zero to t_final with 100 steps in between
-            for t_index, t in enumerate(np.linspace(0, t_final, T)):
-                #calculate the benefit at time t
-                benefits[i,j,t_index] = benefit_scale*np.exp(-(t-time_center)**2/time_spread**2)
+                #how high is the benefit curve
+                benefit_scale = np.random.uniform(scale_min, scale_max)
+                if i == 0 and j == 0:
+                    print(f"benefit_scale: {benefit_scale}, time_center: {time_center}, time_spread: {time_spread}")    
+                #iterate from time zero to t_final with 100 steps in between
+                for t in range(T):
+                    #calculate the benefit at time t
+                    benefits[i,j,t] = benefit_scale*np.exp(-(t-time_center)**2/sigma_2/2)
     return benefits
 
 def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_, non_assign_pen=True):

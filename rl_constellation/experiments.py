@@ -62,5 +62,29 @@ def test_rl_policy():
     ass, tv = solve_randomly(benefits, None, lambda_)
     print(tv)
 
+def test_lightweight():
+    n = 100
+    m = 350 
+    T = 93
+    ben = generate_benefits_over_time(n,m,T, 3, 6, 0.25, 2)
+
+    # with open(f"rl_constellation/data/100_sat_const_benefits.pkl", 'rb') as f:
+    #     ben = pickle.load(f)
+
+    # n = ben.shape[0]
+    # m = ben.shape[1]
+    # T = ben.shape[2]
+
+    num_tasks_in_view = []
+    for i in range(n):
+        for k in range(T):
+            num_tasks_in_view.append(np.sum(np.where(ben[i,:,k] > 0.01, 1, 0)))
+
+    min_val = min(num_tasks_in_view)
+    max_val = max(num_tasks_in_view)
+    bins = np.arange(min_val-0.5, max_val+1.5, 1)
+    plt.hist(num_tasks_in_view, bins=bins)
+    plt.show()
+
 if __name__ == "__main__":
-    test_rl_policy()
+    test_lightweight()

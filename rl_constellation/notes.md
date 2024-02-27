@@ -36,3 +36,16 @@ Tested this policy on a real benefit matrix, and it was awful, but also signific
 RL: -2146, HAAL: 2361, NHA: 1553, Random: -4568
 
 It will also probably be critical to speed up the evaluation of the RL policies, either by multithreading the NN evaluations, putting them on the GPU, or something else, given that this will be running in the environment loop many times.
+
+#### 2/26/24
+Decided to switch fully to generating artifical tasks so I can iterate much faster. In order to better generate these benefit matrices, did some experiments on the number of tasks in view at a given time.
+
+Turns out, the tasks in view w/ benefits greater than 0.01 for the real 10x10 constellation case is ~3 at the median
+
+![real_tasks](plots/task_in_view_dist_100sat.png)
+
+Perhaps one issue is that satellites were bidding for far too many tasks? with M=10 and a weakly trained net, it didnt yet know to not bid as high on tasks that were actually just useless?
+
+In any case, generated artificial benefits with this distribution:
+
+![artificial_tasks](plots/task_in_view_dist_artificial.png)
