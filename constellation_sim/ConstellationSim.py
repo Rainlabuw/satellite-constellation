@@ -249,7 +249,7 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
             const.add_sat(sat)
 
     #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    hexagons = generate_smooth_coverage_hexagons((-inc.to_value(u.deg), -inc.to_value(u.deg)), (-180, 180))
+    hexagons = generate_smooth_coverage_hexagons((-inc.to_value(u.deg), inc.to_value(u.deg)), (-180, 180))
     
     #Add tasks at centroid of all hexagons
     for hexagon in hexagons:
