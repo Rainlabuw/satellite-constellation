@@ -2,6 +2,7 @@ from astropy import units as u
 from astropy import constants as c
 import numpy as np
 import matplotlib.pyplot as plt
+from copy import deepcopy
 
 from poliastro.bodies import Earth
 from poliastro.twobody import Orbit
@@ -9,6 +10,8 @@ from poliastro.twobody import Orbit
 class Satellite(object):
     def __init__(self, orbit, neighbors, benefits, id=None, plane_id=None, fov=60):
         self.orbit = orbit
+        #Can disable if worried about performance, just used for plotting
+        self.init_orbit = deepcopy(orbit)
 
         self.neighbors = neighbors
         self.benefits = benefits

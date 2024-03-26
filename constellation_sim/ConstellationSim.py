@@ -19,10 +19,10 @@ import h3
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
 
-from methods import *
+from common.methods import *
 
 class ConstellationSim(object):
-    def __init__(self, dt=1*u.min, isl_dist=None) -> None:
+    def __init__(self, dt=1*u.min, isl_dist=None, dtype=np.float64) -> None:
         self.sats = []
         self.tasks = []
 
@@ -41,6 +41,8 @@ class ConstellationSim(object):
 
         self.task_lat_range = None
         self.task_lon_range = None
+
+        self.dtype = dtype
 
     def add_sat(self, sat):
         sat.id = len(self.sats)
@@ -137,7 +139,7 @@ class ConstellationSim(object):
         given a benefit function which computes a benefit from a sat and a task.
         """
         self.orbits_over_time = defaultdict(list)
-        self.benefits_over_time = np.zeros((self.n, self.m, T))
+        self.benefits_over_time = np.zeros((self.n, self.m, T), dtype=self.dtype)
         self.graphs_over_time = []
         for k in range(T):
             print(f"Propagating orbits and computing benefits + neighbors, T={k}/{T}...",end='\r')
@@ -247,7 +249,7 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
             const.add_sat(sat)
 
     #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    hexagons = generate_smooth_coverage_hexagons((-inc.to_value(u.deg), -inc.to_value(u.deg)), (-180, 180))
+    hexagons = generate_smooth_coverage_hexagons((-inc.to_value(u.deg), inc.to_value(u.deg)), (-180, 180))
     
     #Add tasks at centroid of all hexagons
     for hexagon in hexagons:

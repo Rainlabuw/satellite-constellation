@@ -14,8 +14,8 @@ from poliastro.spheroid_location import SpheroidLocation
 from astropy import units as u
 import h3
 
-from methods import *
-from solve_w_haal import choose_time_interval_sequence_centralized, HAAL_D_Parallel_Auction
+from common.methods import *
+from haal.solve_w_haal import choose_time_interval_sequence_centralized, HAAL_D_Parallel_Auction
 
 def init_task_objects(num_objects, const, hex_to_task_mapping, T, velocity=6437*u.km/u.hr):
     """
@@ -238,15 +238,15 @@ def get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range
     #             task_transition_state_dep_scaling_mat[j+num_primary_tasks,hex_to_task_mapping[neighbor_hex]] = 0
     #             task_transition_state_dep_scaling_mat[hex_to_task_mapping[neighbor_hex],j+num_primary_tasks] = 0
 
-    with open('object_track_experiment/sat_cover_matrix.pkl','wb') as f:
+    with open('object_track_experiment/sat_cover_matrix_usa.pkl','wb') as f:
         pickle.dump(sat_cover_matrix, f)
-    with open('object_track_experiment/graphs.pkl','wb') as f:
+    with open('object_track_experiment/graphs_usa.pkl','wb') as f:
         pickle.dump(graphs, f)
-    with open('object_track_experiment/task_transition_scaling.pkl','wb') as f:
+    with open('object_track_experiment/task_transition_scaling_usa.pkl','wb') as f:
         pickle.dump(task_transition_state_dep_scaling_mat, f)
-    with open('object_track_experiment/hex_task_map.pkl','wb') as f:
+    with open('object_track_experiment/hex_task_map_usa.pkl','wb') as f:
         pickle.dump(hex_to_task_mapping, f)
-    with open('object_track_experiment/const_object.pkl','wb') as f:
+    with open('object_track_experiment/const_object_usa.pkl','wb') as f:
         pickle.dump(const, f)
     
     return sat_cover_matrix, graphs, task_transition_state_dep_scaling_mat, hex_to_task_mapping, const
@@ -323,7 +323,7 @@ def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, extra_handover_in
     losing the entire benefit of the task in the first timestep, plus a small
     extra penalty (lambda_).
 
-    Expects a 2D (n x m) benefit matrix.
+    Expects a 3D (n x m x L) benefit matrix.
 
     Also expects extra_handover info to contain T transition matrix.
     """
@@ -341,7 +341,10 @@ def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, extra_handover_in
 
     state_dep_scaling = prev_assign @ T_trans
 
-    return np.where(state_dep_scaling > 0, benefits*(1-state_dep_scaling)-lambda_, benefits)
+    benefits_hat = np.copy(benefits)
+    benefits_hat[:,:,0] = np.where(state_dep_scaling > 0, benefits[:,:,0]*(1-state_dep_scaling)-lambda_, benefits[:,:,0])
+
+    return benefits_hat
 
 def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverage_benefit, object_benefit, init_assignment, lambda_, L, 
                                       distributed=False, parallel=False, verbose=False,

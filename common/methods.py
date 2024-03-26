@@ -86,7 +86,7 @@ def convert_central_sol_to_assignment_mat(n, m, assignments):
 
     i.e. for n=m=3, [1,2,0] -> [[0,1,0],[0,0,1],[1,0,0]]
     """
-    assignment_mat = np.zeros((n, m))
+    assignment_mat = np.zeros((n, m), dtype="bool")
     for i, assignment in enumerate(assignments):
         assignment_mat[i, assignment] = 1
 
@@ -97,7 +97,7 @@ def convert_agents_to_assignment_matrix(agents):
     Convert list of agents as returned by auction to assignment matrix.
     (grab the choice in each Agent's .choice attribute and put it into a matrix.)
     """
-    assignment_matrix = np.zeros((len(agents), len(agents[0].benefits)))
+    assignment_matrix = np.zeros((len(agents), len(agents[0].benefits)), dtype="bool")
     for i, agent in enumerate(agents):
         assignment_matrix[i, agent.choice] = 1
     return assignment_matrix
@@ -126,7 +126,7 @@ class ExtraHandoverPenInfo(object):
 
 def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover_info=None):
     """
-    Adjusts a 2D benefit matrix to account for generic handover penalty (i.e. constant penalty for switching tasks).
+    Adjusts a 3D benefit matrix to account for generic handover penalty (i.e. constant penalty for switching tasks).
 
     extra_info is an object which can contain extra information about the handover penalty - it should store T_trans.
     T_trans is a matrix which determines which transitions between TASKS are penalized.
@@ -135,7 +135,6 @@ def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover
     Then, prev_assign @ T_trans is the matrix which entries of the benefit matrix should be adjusted.
     """
     if prev_assign is None: return benefits
-
     m = benefits.shape[1]
 
     try:
@@ -148,7 +147,10 @@ def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover
 
     state_dep_scaling = prev_assign @ T_trans
 
-    return benefits-lambda_*state_dep_scaling
+    benefits_hat = np.copy(benefits)
+    benefits_hat[:,:,0] = benefits[:,:,0]-lambda_*state_dep_scaling
+
+    return benefits_hat
 
 def calc_distance_btwn_solutions(agents1, agents2):
     """
@@ -164,17 +166,17 @@ def calc_distance_btwn_solutions(agents1, agents2):
 
 #~~~~~~~~~~~~~~~~~~~~STATE DEPENDENT VALUE STUFF~~~~~~~~~~~~~~
 def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits, lambda_,
-                                          state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None):
+                                          state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None, gamma=1):
     state_dependent_value = 0
 
     benefit_hat = np.copy(benefits[:,:,0])
     if init_assignment is not None: #adjust based on init_assignment if it exists
-        benefit_hat = state_dep_fn(benefits[:,:,0], init_assignment, lambda_, extra_handover_info)
-    state_dependent_value += (benefit_hat * assignments[0]).sum()
+        benefit_hat = state_dep_fn(np.expand_dims(benefits[:,:,0], axis=2), init_assignment, lambda_, extra_handover_info)
+    state_dependent_value += (np.squeeze(benefit_hat) * assignments[0]).sum()
 
     for k in range(len(assignments)-1):
-        benefit_hat = state_dep_fn(benefits[:,:,k+1], assignments[k], lambda_, extra_handover_info)
-        state_dependent_value += (benefit_hat * assignments[k+1]).sum()
+        benefit_hat = state_dep_fn(np.expand_dims(benefits[:,:,k+1], axis=2), assignments[k], lambda_, extra_handover_info)
+        state_dependent_value += (np.squeeze(benefit_hat) * assignments[k+1]).sum() * gamma**(k+1)
 
     return state_dependent_value
 
@@ -236,26 +238,32 @@ def calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 
     return total_benefit, num_handovers
 
 #~~~~~~~~~~~~~~~~~~~~BENEFIT MATRIX UTILITIES~~~~~~~~~~~~~~
-def generate_benefits_over_time(n, m, T, t_final, scale_min=0.5, scale_max=2):
+def generate_benefits_over_time(n, m, T, width_min, width_max, scale_min=0.25, scale_max=2):
     """
     lightweight way of generating "constellation-like" benefit matrices.
     """
     benefits = np.zeros((n,m,T))
     for i in range(n):
         for j in range(m):
-            #where is the benefit curve maximized
-            time_center = np.random.uniform(0, t_final)
+            #Determine if task is active for this sat ever
+            task_active = 1 if np.random.rand() > 0.75 else 0
 
-            #how wide is the benefit curve
-            time_spread = np.random.uniform(0, t_final/2)
+            if task_active:
+                #where is the benefit curve maximized
+                time_center = np.random.uniform(0, T)
 
-            #how high is the benefit curve
-            benefit_scale = np.random.uniform(scale_min, scale_max)
+                #how wide is the benefit curve
+                time_spread = np.random.uniform(width_min, width_max)
+                sigma_2 = np.sqrt(time_spread**2/-8/np.log(0.05))
 
-            #iterate from time zero to t_final with 100 steps in between
-            for t_index, t in enumerate(np.linspace(0, t_final, T)):
-                #calculate the benefit at time t
-                benefits[i,j,t_index] = benefit_scale*np.exp(-(t-time_center)**2/time_spread**2)
+                #how high is the benefit curve
+                benefit_scale = np.random.uniform(scale_min, scale_max)
+                if i == 0 and j == 0:
+                    print(f"benefit_scale: {benefit_scale}, time_center: {time_center}, time_spread: {time_spread}")    
+                #iterate from time zero to t_final with 100 steps in between
+                for t in range(T):
+                    #calculate the benefit at time t
+                    benefits[i,j,t] = benefit_scale*np.exp(-(t-time_center)**2/sigma_2/2)
     return benefits
 
 def add_handover_pen_to_benefit_matrix(benefits, prev_assign, lambda_, non_assign_pen=True):

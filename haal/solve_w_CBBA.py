@@ -1,6 +1,6 @@
 import numpy as np
 import networkx as nx
-from methods import *
+from common.methods import *
 
 def solve_w_CBBA(unscaled_benefits, init_assignment, lambda_, L, graphs=None, verbose=False, track_iters=False):
     n = unscaled_benefits.shape[0]

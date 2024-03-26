@@ -1,5 +1,5 @@
 import numpy as np
-from methods import *
+from common.methods import *
 
 def solve_wout_handover(benefit_mats_over_time, init_assignment, lambda_, state_dep_fn=generic_handover_state_dep_fn,
                         extra_handover_info=None):

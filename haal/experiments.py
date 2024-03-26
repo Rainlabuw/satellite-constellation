@@ -5,21 +5,21 @@ import numpy as np
 from tqdm import tqdm
 import time
 import pickle
+from collections import defaultdict
 
-from methods import *
+from common.methods import *
 
-from solve_optimally import solve_optimally
-from solve_wout_handover import solve_wout_handover
-from solve_w_haal import solve_w_haal
-from solve_w_accelerated_haal import solve_w_accel_haal
-from solve_w_centralized_CBBA import solve_w_centralized_CBBA
-from solve_w_CBBA import solve_w_CBBA
-from solve_greedily import solve_greedily
-from classic_auction import Auction
-from object_track_scenario import timestep_loss_state_dep_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_coverage_matrix_and_graphs_object_tracking_area
-from object_track_utils import calc_pct_objects_tracked, object_tracking_history
-from multi_task_scenario import solve_multitask_w_haal, calc_multiassign_state_dep_fn, get_benefit_matrix_and_graphs_multitask_area
-from plotting_utils import plot_object_track_scenario, plot_multitask_scenario
+from haal.solve_optimally import solve_optimally
+from haal.solve_wout_handover import solve_wout_handover
+from haal.solve_w_haal import solve_w_haal
+from haal.solve_w_accelerated_haal import solve_w_accel_haal
+from haal.solve_w_centralized_CBBA import solve_w_centralized_CBBA
+from haal.solve_w_CBBA import solve_w_CBBA
+from haal.solve_greedily import solve_greedily
+from haal.object_track_scenario import timestep_loss_state_dep_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_coverage_matrix_and_graphs_object_tracking_area
+from haal.object_track_utils import calc_pct_objects_tracked, object_tracking_history
+from haal.multi_task_scenario import solve_multitask_w_haal, calc_multiassign_state_dep_fn, get_benefit_matrix_and_graphs_multitask_area
+from haal.plotting_utils import plot_object_track_scenario, plot_multitask_scenario
 
 from constellation_sim.ConstellationSim import get_constellation_bens_and_graphs_random_tasks, get_constellation_bens_and_graphs_coverage, ConstellationSim
 from constellation_sim.Satellite import Satellite
@@ -59,359 +59,47 @@ def optimal_baseline_plot():
     avg_mha = 0
     avg_no_handover = 0
 
-    num_avgs = 50
-    for _ in tqdm(range(num_avgs)):
-        benefit = np.random.rand(n,m,T)
+    # num_avgs = 50
+    # for _ in tqdm(range(num_avgs)):
+    #     benefit = np.random.rand(n,m,T)
 
-        #SMHGL centralized, lookahead = 3
-        _, haal_ben, _ = solve_w_haal(benefit, init_ass, lambda_, L)
-        avg_haal += haal_ben/num_avgs
+    #     #SMHGL centralized, lookahead = 3
+    #     _, haal_ben = solve_w_haal(benefit, init_ass, lambda_, L)
+    #     avg_haal += haal_ben/num_avgs
 
-        #MHA
-        _, mha_ben, _ = solve_w_haal(benefit, init_ass, lambda_, 1)
-        avg_mha += mha_ben/num_avgs
+    #     #MHA
+    #     _, mha_ben = solve_w_haal(benefit, init_ass, lambda_, 1)
+    #     avg_mha += mha_ben/num_avgs
 
-        #Naive
-        _, ben, _ = solve_wout_handover(benefit, init_ass, lambda_)
-        avg_no_handover += ben/num_avgs
+    #     #Naive
+    #     _, ben = solve_wout_handover(benefit, init_ass, lambda_)
+    #     avg_no_handover += ben/num_avgs
 
-        #Optimal
-        _, ben, _ = solve_optimally(benefit, init_ass, lambda_)
-        avg_best += ben/num_avgs
+    #     #Optimal
+    #     _, ben = solve_optimally(benefit, init_ass, lambda_)
+    #     avg_best += ben/num_avgs
+    results = [avg_no_handover, avg_mha, avg_haal, avg_best]
 
     fig = plt.figure()
-    plt.bar(["Standard Assignment\nProblem Solution","HAA", f"HAAL (L={L})", "Optimal"], [avg_no_handover, avg_mha, avg_haal, avg_best])
-    plt.ylabel("Value")
+    
+    SMALL_SIZE = 8
+    MEDIUM_SIZE = 12
+    BIGGER_SIZE = 14
+    plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+    plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
+    plt.rc('axes', labelsize=BIGGER_SIZE)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=BIGGER_SIZE)    # legend fontsize
+    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+    
+    results = [7.564384786984931, 8.863084750293483, 9.743930778962238, 9.753256871430807]
+    plt.bar([r"HAA ($\lambda = 0$)","HAA", f"HAAL (L={L})", "Optimal"], results)
+    plt.ylabel("Total Value")
     print(["No Handover","HAA", f"HAAL (L={L})", "Optimal"])
     print([avg_no_handover, avg_mha, avg_haal, avg_best])
-    plt.savefig("opt_comparison.png")
-    plt.show()
-
-def MHA_unit_testing():
-    """
-    Tests MHA in various cases where solutions are known.
-    """
-    # Case where no solutions are the best.
-    benefits = np.zeros((4,4,2))
-    benefits[:,:,0] = np.array([[100, 1, 0, 0],
-                                [1, 100, 0, 0],
-                                [0, 0, 0.2, 0.1],
-                                [0, 0, 0.1, 0.2]])
-    
-    benefits[:,:,1] = np.array([[1, 1000, 0, 0],
-                                [1000, 1, 0, 0],
-                                [0, 0, 0.1, 0.3],
-                                [0, 0, 0.3, 0.1]])
-
-    print("Expect no solution to be optimal (2198.8) but them to be same for all lookaheads")
-    for lookahead in range(1,benefits.shape[-1]+1):
-        multi_auction = HAAL_Auction(benefits, None, lookahead)
-        multi_auction.run_auctions()
-        ben = multi_auction.calc_value_and_num_handovers()
-        print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
-
-    #Case where a combined solution is the best.
-    benefits = np.zeros((3,3,3))
-    benefits[:,:,0] = np.array([[0.1, 0, 0],
-                                [0, 0.1, 0],
-                                [0, 0, 0.1]])
-    benefits[:,:,1] = np.array([[0, 0, 0.1],
-                                [0.1, 0, 0],
-                                [0, 0.1, 0]])
-    benefits[:,:,2] = np.array([[0.1, 1000, 0],
-                                [0, 0.1, 1000],
-                                [1000, 0, 0.1]])
-
-    print("Expect combined solution to be optimal (3000) only at lookahead of 3")
-    for lookahead in range(1,benefits.shape[-1]+1):
-        multi_auction = HAAL_Auction(benefits, None, lookahead)
-        multi_auction.run_auctions()
-        ben,_ = multi_auction.calc_value_and_num_handovers()
-        print(f"\tBenefit from combined solution, lookahead {lookahead}: {ben}")
-
-def compare_MHA_to_other_algs():
-    #Case where we expect solutions to get increasingly better as lookahead window increases
-    n = 50
-    m = 50
-    T = 95
-    lambda_ = 1
-
-    print("Comparing performance of HAAL to other algorithms")
-    num_avgs = 10
-
-    haal2_ben = 0
-    haal2_nh = 0
-
-    haal5_ben = 0
-    haal5_nh = 0
-
-    mha_ben = 0
-    mha_nh = 0
-
-    no_handover_ben = 0
-    no_handover_nh = 0
-
-    sga_ben = 0
-    sga_nh = 0
-    for _ in range(num_avgs):
-        print(f"Run {_}/{num_avgs}")
-        # benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
-        benefits, _ = get_benefits_and_graphs_from_constellation(n, m, T)
-        print("Generated realistic benefits")
-
-        #SMHGL centralized, lookahead = 2
-        multi_auction = HAAL_Auction(benefits, None, 2, lambda_=lambda_)
-        multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_value_and_num_handovers()
-        haal2_ben += ben/num_avgs
-        haal2_nh += nh/num_avgs
-
-        #SMHGL centralized, lookahead = 5
-        multi_auction = HAAL_Auction(benefits, None, 5, lambda_=lambda_)
-        multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_value_and_num_handovers()
-        haal5_ben += ben/num_avgs
-        haal5_nh += nh/num_avgs
-
-        #MHA
-        multi_auction = HAAL_Auction(benefits, None, 1, lambda_=lambda_)
-        multi_auction.run_auctions()
-        ben, nh = multi_auction.calc_value_and_num_handovers()
-        mha_ben += ben/num_avgs
-        mha_nh += nh/num_avgs
-
-        #Naive
-        _, ben, nh = solve_wout_handover(benefits, lambda_)
-        no_handover_ben += ben/num_avgs
-        no_handover_nh += nh/num_avgs
-
-        #SGA/CBBA
-        handover_ben, _, handover_nh = solve_w_centralized_CBBA(benefits, lambda_)
-
-        sga_ben += handover_ben/num_avgs
-        sga_nh += handover_nh/num_avgs
-
-    fig, axes = plt.subplots(2,1)
-    axes[0].bar(["Naive", "SGA", "MHA", "HAAL2", "HAAL5"],[no_handover_ben, sga_ben, mha_ben, haal2_ben, haal5_ben])
-    axes[0].set_title("Average benefit across 10 runs")
-    # axes[0].set_xlabel("Lookahead timesteps")
-
-    axes[1].bar(["Naive", "SGA", "MHA", "HAAL2", "HAAL5"],[no_handover_nh, sga_nh, mha_nh, haal2_nh, haal5_nh])
-    
-    axes[1].set_title("Average number of handovers across 10 runs")
-    fig.suptitle(f"Test with n={n}, m={m}, T={T}, lambda={lambda_}, realistic-ish benefits")
-
-    plt.show()
-
-def test_MHA_lookahead_performance():
-    """
-    Test performance of MHA as lookahead window increases.
-
-    Hopefully, general trend is that performance increases as lookahead increases.
-    """
-    print("Expect performance to generally increase as lookahead increases")
-    n = 36*15
-    m = 300
-    T = 93
-    lambda_ = 1
-
-    max_lookahead = 6
-    num_avgs = 1
-
-    resulting_bens = []
-    resulting_approx_bens = []
-    handovers = []
-    benefits, graphs = get_constellation_bens_and_graphs_random_tasks(36, 15, m, T, altitude=500)
-    m = benefits.shape[1]
-
-    init_assignment = np.eye(n,m)
-    for lookahead in range(1,max_lookahead+1):
-        avg_ben = 0
-        avg_nh = 0
-        avg_approx_ben = 0
-        for _ in range(num_avgs):
-            print(f"Lookahead {lookahead} ({_}/{num_avgs})", end='\r')
-            # benefits = generate_benefits_over_time(n, m, 10, T, scale_min=1, scale_max=2)
-            # benefits, graphs = get_benefits_and_graphs_from_constellation(10, 10, m, T, altitude=500)
-            # benefits = np.random.rand(n,m,T)
-
-            #HAAL with true lookaheads
-            _, ben, nh = solve_w_haal(benefits, init_assignment, lambda_, lookahead, distributed=False, verbose=True)
-            avg_ben += ben/num_avgs
-            avg_nh += nh/num_avgs
-            
-            # #HAAL (distributed)
-            # _, ben, nh = solve_w_haal(benefits, init_assignment, lambda_, lookahead, distributed=True)
-            # avg_approx_ben += ben/num_avgs
-
-        resulting_bens.append(avg_ben)
-        # resulting_approx_bens.append(avg_approx_ben)
-        handovers.append(avg_nh)
-
-    plt.plot(range(1,max_lookahead+1), resulting_bens, label="HAAL (Centralized)")
-    # plt.plot(range(1,max_lookahead+1), resulting_approx_bens, label="HAAL (Distributed)")
-    plt.title(f"Lookahead vs. accuracy, n={n}, m={m}, T={T}")
-    plt.xlabel("Lookahead timesteps")
-    plt.ylabel(f"Average benefit across {num_avgs} runs")
-    plt.legend()
-    plt.savefig("lookahead_vs_benefit.png")
-    plt.show()
-
-    plt.figure()
-    plt.plot(range(1,max_lookahead+1), handovers)
-    plt.title("Num handovers vs. lookahead")
-    plt.show()
-
-def compare_alg_benefits_and_handover():
-    """
-    As number of agents increase, how do the benefits
-    and number of handovers increase?
-    """
-    ns = [10, 25]
-    # ns = [10, 15, 20]
-    t_final = 50
-    T = 25
-    lambda_ = 0.5
-
-    no_handover_benefits = []
-    no_handover_handover_benefits = []
-    no_handover_handover_violations = []
-
-    sequential_benefits = []
-    sequential_handover_benefits = []
-    sequential_handover_violations = []
-
-    sga_benefits = []
-    sga_handover_benefits = []
-    sga_handover_violations = []
-    for n in ns:
-        print(f"AGENT {n}")
-        m = n
-        seed = np.random.randint(0, 1000)
-        np.random.seed(seed)
-        # np.random.seed(29)
-        print(f"Seed {seed}")
-        print(f"n: {n}, m: {m}, T: {T}, lambda: {lambda_}")
-        graph = nx.complete_graph(n)
-        benefit_mats_over_time = np.random.rand(n,m,T)
-        
-        # benefit_mats_over_time = generate_benefits_over_time(n, m, T, t_final)
-        #Add 2 lambda_+eps to the benefit matrix to ensure that it's always positive to complete
-        #a task.
-        # benefit_mats_over_time += 2*lambda_ + 0.01
-
-
-        #solve each timestep independently
-        assignment_mats = []
-        benefits = []
-        for k in range(T):
-            print(k, end='\r')
-            a = Auction(n, m, benefits=benefit_mats_over_time[:,:,k], graph=graph)
-            benefit = a.run_auction()
-
-            assignment_mat = convert_agents_to_assignment_matrix(a.agents)
-            assignment_mats.append(assignment_mat)
-
-            benefits.append(benefit)
-        
-        handover_ben = sum(benefits) + calc_assign_seq_handover_penalty(assignment_mats, lambda_)
-        print("Solving sequentially, each timestep independently")
-        print(f"\tBenefit without considering handover: {sum(benefits)}")
-        print(f"\tBenefit with handover penalty: {handover_ben}")
-
-        no_handover_benefits.append(sum(benefits))
-        no_handover_handover_benefits.append(handover_ben)
-        no_handover_handover_violations.append(calc_assign_seq_handover_penalty(assignment_mats, lambda_))
-
-        #solve each timestep sequentially
-        assignment_mats = []
-        benefits = []
-        
-        #solve first timestep separately
-        a = Auction(n, m, benefits=benefit_mats_over_time[:,:,0], graph=graph)
-        benefit = a.run_auction()
-
-        assignment_mat = convert_agents_to_assignment_matrix(a.agents)
-        assignment_mats.append(assignment_mat)
-        benefits.append(benefit)
-
-        prev_assignment_mat = assignment_mat
-        for k in range(1, T):
-            print(k, end='\r')
-            #Generate assignment for the task minimizing handover
-            benefit_mat_w_handover = add_handover_pen_to_benefit_matrix(benefit_mats_over_time[:,:,k], prev_assignment_mat, lambda_)
-
-            a = Auction(n, m, benefits=benefit_mat_w_handover, graph=graph)
-            a.run_auction()
-            choices = [ag.choice for ag in a.agents]
-
-            assignment_mat = convert_agents_to_assignment_matrix(a.agents)
-            assignment_mats.append(assignment_mat)
-
-            prev_assignment_mat = assignment_mat
-
-            #Calculate the benefits from a task with the normal benefit matrix
-            benefit = benefit_mats_over_time[:,:,k]*assignment_mat
-
-            benefits.append(benefit.sum())
-
-        handover_ben = sum(benefits) + calc_assign_seq_handover_penalty(assignment_mats, lambda_)
-        print("Solving sequentially, each timestep considering the last one")
-        print(f"\tBenefit without considering handover: {sum(benefits)}")
-        print(f"\tBenefit with handover penalty: {handover_ben}")
-
-        sequential_benefits.append(sum(benefits))
-        sequential_handover_benefits.append(handover_ben)
-
-        #solve each timestep sequentially with greedy
-        _, sg_assignment_mats, _ = solve_w_centralized_CBBA(benefit_mats_over_time, lambda_)
-        sg_benefit = 0
-        for k, sg_assignment_mat in enumerate(sg_assignment_mats):
-            sg_benefit += (benefit_mats_over_time[:,:,k]*sg_assignment_mat).sum()
-
-        handover_ben = sg_benefit + calc_assign_seq_handover_penalty(sg_assignment_mats, lambda_)
-
-        print("Solving with greedy algorithm")
-        print(f"\tBenefit without considering handover: {sg_benefit}")
-        print(f"\tBenefit with handover penalty: {handover_ben}")
-    
-        sga_benefits.append(sg_benefit)
-        sga_handover_benefits.append(handover_ben)
-
-    print("done")
-    print(no_handover_benefits)
-    print(no_handover_handover_benefits)
-    print(sequential_benefits)
-    print(sequential_handover_benefits)
-    print(sga_benefits)
-    print(sga_handover_benefits)
-
-
-    fig, axs = plt.subplots(2, 1, figsize=(10, 10))
-
-    # Top subplot
-    axs[0].set_title('Benefits without handover penalty')
-    axs[0].set_xlabel('Number of agents')
-    axs[0].set_ylabel('Total benefit')
-    axs[0].bar(np.arange(len(no_handover_benefits)), no_handover_benefits, width=0.2, label='Naive')
-    axs[0].bar(np.arange(len(sga_benefits))+0.2, sga_benefits, width=0.2, label='SGA')
-    axs[0].bar(np.arange(len(sequential_benefits))+0.4, sequential_benefits, width=0.2, label='MHA (Ours)')
-    axs[0].set_xticks(np.arange(len(no_handover_benefits)))
-    axs[0].set_xticklabels([str(n) for n in ns])
-    axs[0].legend(loc='lower center')
-
-    # Bottom subplot
-    axs[1].set_title('Total Benefits, including handover penalty')
-    axs[1].set_xlabel('Number of agents')
-    axs[1].set_ylabel('Average Benefit')
-    axs[1].bar(np.arange(len(no_handover_handover_benefits)), no_handover_handover_benefits, width=0.2, label='Naive')
-    axs[1].bar(np.arange(len(sga_handover_benefits))+0.2, sga_handover_benefits, width=0.2, label='CBBA')
-    axs[1].bar(np.arange(len(sequential_handover_benefits))+0.4, sequential_handover_benefits, width=0.2, label='MHA (Ours)')
-    axs[1].set_xticks(np.arange(len(no_handover_handover_benefits)))
-    axs[1].set_xticklabels([str(n) for n in ns])
-    #add a legend to the bottom middle of the subplot
-    axs[1].legend(loc='lower center')
-
+    plt.savefig("optimal553.pdf")
     plt.show()
 
 def distributed_comparison():
@@ -516,7 +204,7 @@ def realistic_orbital_simulation():
         # for L in range(1,max_L+1):
         for L in [1,3,6]:
             print(f"lookahead {L}")
-            _, d_val, _, avg_iters = solve_w_haald_track_iters(benefits, init_assignment, lambda_, L, graphs=graphs, verbose=True)
+            _, d_val, _, avg_iters = solve_w_haal(benefits, init_assignment, lambda_, L, graphs=graphs, verbose=True, track_iters=True)
 
             iters_by_lookahead.append(avg_iters)
             value_by_lookahead.append(d_val)
@@ -998,9 +686,9 @@ def connectivity_testing():
 
     # plt.show()
 
-    _, graphs = get_constellation_bens_and_graphs_random_tasks(18, 18, 1, 93, isl_dist=2500)
+    _, graphs = get_constellation_bens_and_graphs_random_tasks(10, 10, 1, 93, isl_dist=4000)
     pct_connected = sum([nx.is_connected(graph) for graph in graphs])/93
-    print(pct_connected)
+    print("\n",pct_connected)
 
 def paper_experiment2_compute_assigns():
     lambda_ = 0.5
@@ -1476,30 +1164,30 @@ def object_tracking_velocity_test():
     plt.show()
 
 def smaller_area_size_object_tracking():
-    with open('object_track_experiment/sat_cover_matrix_highres.pkl','rb') as f:
-        sat_cover_matrix = pickle.load(f)
-    with open('object_track_experiment/graphs_highres.pkl','rb') as f:
-        graphs = pickle.load(f)
-    with open('object_track_experiment/task_transition_scaling_highres.pkl','rb') as f:
-        task_trans_state_dep_scaling_mat = pickle.load(f)
-    with open('object_track_experiment/hex_task_map_highres.pkl','rb') as f:
-        hex_to_task_mapping = pickle.load(f)
-    with open('object_track_experiment/const_object_highres.pkl','rb') as f:
-        const = pickle.load(f)
-
-    # with open('object_track_experiment/sat_cover_matrix_highres_neigh.pkl','rb') as f:
+    # with open('object_track_experiment/sat_cover_matrix_highres.pkl','rb') as f:
     #     sat_cover_matrix = pickle.load(f)
-    # with open('object_track_experiment/graphs_highres_neigh.pkl','rb') as f:
+    # with open('object_track_experiment/graphs_highres.pkl','rb') as f:
     #     graphs = pickle.load(f)
-    # with open('object_track_experiment/task_transition_scaling_highres_neigh.pkl','rb') as f:
+    # with open('object_track_experiment/task_transition_scaling_highres.pkl','rb') as f:
     #     task_trans_state_dep_scaling_mat = pickle.load(f)
-    # with open('object_track_experiment/hex_task_map_highres_neigh.pkl','rb') as f:
+    # with open('object_track_experiment/hex_task_map_highres.pkl','rb') as f:
     #     hex_to_task_mapping = pickle.load(f)
-    # with open('object_track_experiment/const_object_highres_neigh.pkl','rb') as f:
+    # with open('object_track_experiment/const_object_highres.pkl','rb') as f:
     #     const = pickle.load(f)
 
-    lat_range = (20, 50)
-    lon_range = (73, 135)
+    # with open('object_track_experiment/sat_cover_matrix_usa.pkl','rb') as f:
+    #     sat_cover_matrix = pickle.load(f)
+    # with open('object_track_experiment/graphs_usa.pkl','rb') as f:
+    #     graphs = pickle.load(f)
+    # with open('object_track_experiment/task_transition_scaling_usa.pkl','rb') as f:
+    #     task_trans_state_dep_scaling_mat = pickle.load(f)
+    # with open('object_track_experiment/hex_task_map_usa.pkl','rb') as f:
+    #     hex_to_task_mapping = pickle.load(f)
+    # with open('object_track_experiment/const_object_usa.pkl','rb') as f:
+    #     const = pickle.load(f)
+
+    lat_range = (22, 52)
+    lon_range = (-124.47, -66.87)
     L = 3
     lambda_ = 0.05
     T = 60
@@ -1507,24 +1195,27 @@ def smaller_area_size_object_tracking():
     coverage_benefit = 1
     object_benefit = 10
 
-    # sat_cover_matrix, graphs, task_trans_state_dep_scaling_mat, hex_to_task_mapping, const = get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range, T)
+    sat_cover_matrix, graphs, task_trans_state_dep_scaling_mat, hex_to_task_mapping, const = get_sat_coverage_matrix_and_graphs_object_tracking_area(lat_range, lon_range, T)
 
     np.random.seed(42)
     task_objects = init_task_objects(num_objects, const, hex_to_task_mapping, T, velocity=10000*u.km/u.hr)
     benefits = get_benefits_from_task_objects(coverage_benefit, object_benefit, sat_cover_matrix, task_objects)
 
+    extra_handover_info = ExtraHandoverPenInfo()
+    ExtraHandoverPenInfo.T_trans = task_trans_state_dep_scaling_mat
+
     print("Dynamic HAAL, Centralized")
     ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, parallel=False,
-                                                state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
+                                                state_dep_fn=timestep_loss_state_dep_fn, extra_handover_info=extra_handover_info)
     print("Value", tv)
     pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     print("pct", pct)
-    # plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
-    #                            "haal_no_neighbors.gif", show=False)
+    plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
+                               "haal_object_track.gif", show=False)
 
     print("Dynamic HAAL, Distributed")
     ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, distributed=True, graphs=graphs,
-                                                state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat, verbose=True)
+                                                state_dep_fn=timestep_loss_state_dep_fn, extra_handover_info=extra_handover_info, verbose=True)
     print("Value", tv)
     pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     print("pct", pct)
@@ -1541,8 +1232,8 @@ def smaller_area_size_object_tracking():
     ass, tv = solve_wout_handover(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
     print("Value", tv)
     print(is_assignment_mat_sequence_valid(ass))
-    # plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
-    #                            "nha_no_neighbors.gif", show=False)
+    plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
+                               "nha_object_track.gif", show=False)
 
     # # object_tracking_history(ass, task_objects, task_trans_state_dep_scaling_mat, sat_cover_matrix)
     pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
@@ -1568,53 +1259,54 @@ def paper_experiment1():
     max_L = test_optimal_L(timestep, altitude, fov)
     print(max_L)
     
-    lambda_ = 1.5
+    lambda_ = 0.5
 
     # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=2500)
 
-    # with open("haal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
+    # with open("haal/haal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
     #     pickle.dump(benefits,f)
-    # with open("haal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
+    # with open("haal/haal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
     #     pickle.dump(graphs,f)
 
-    # with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
-    #     benefits = pickle.load(f)
-    # with open("haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
-    #     graphs = pickle.load(f)
+    with open("haal/haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+        benefits = pickle.load(f)
+    with open("haal/haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+        graphs = pickle.load(f)
 
-    # _, no_handover_val = solve_wout_handover(benefits, None, lambda_)
+    _, no_handover_val = solve_wout_handover(benefits, None, lambda_)
 
-    # # _, cbba_val = solve_w_centralized_CBBA(benefits, None, lambda_, max_L, verbose=True)
-    # cbba_val = 0
+    # _, cbba_val = solve_w_centralized_CBBA(benefits, None, lambda_, max_L, verbose=True)
+    cbba_val = 0
 
-    # _, greedy_val = solve_greedily(benefits, None, lambda_)
-    # print(greedy_val)
-    # itersd_by_lookahead = []
-    # valued_by_lookahead = []
+    _, greedy_val = solve_greedily(benefits, None, lambda_)
+    print(greedy_val)
+    itersd_by_lookahead = []
+    valued_by_lookahead = []
 
-    # iterscbba_by_lookahead = []
-    # valuecbba_by_lookahead = []
+    iterscbba_by_lookahead = []
+    valuecbba_by_lookahead = []
 
-    # valuec_by_lookahead = []
-    # for L in range(1,max_L+1):
-    #     print(f"lookahead {L}")
-    #     # _, cbba_val, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
-    #     # iterscbba_by_lookahead.append(avg_iters)
-    #     # valuecbba_by_lookahead.append(cbba_val)
+    valuec_by_lookahead = []
+    for L in range(1,max_L+1):
+        print(f"lookahead {L}")
+        # _, cbba_val, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
+        # iterscbba_by_lookahead.append(avg_iters)
+        # valuecbba_by_lookahead.append(cbba_val)
         
-    #     # _, d_val, avg_iters = solve_w_haal(benefits, None, lambda_, L, graphs=graphs, verbose=True, track_iters=True, distributed=True)
-    #     # itersd_by_lookahead.append(avg_iters)
-    #     # valued_by_lookahead.append(d_val)
+        _, d_val, avg_iters = solve_w_haal(benefits, None, lambda_, L, graphs=graphs, verbose=True, track_iters=True, distributed=True)
+        print(d_val, avg_iters)
+        itersd_by_lookahead.append(avg_iters)
+        valued_by_lookahead.append(d_val)
 
-    #     _, c_val = solve_w_haal(benefits, None, lambda_, L, distributed=False, verbose=True)
-    #     valuec_by_lookahead.append(c_val)
+        _, c_val = solve_w_haal(benefits, None, lambda_, L, distributed=False, verbose=True)
+        valuec_by_lookahead.append(c_val)
 
     # #Values from 1/31, before scaling experiments
     valuecbba_by_lookahead = [4208.38020192484, 4412.873727755446, 4657.90330919782, 4717.85859678172, 4710.212483240204, 4726.329218229788]
-    valuec_by_lookahead = [6002.840671517548, 7636.731195199751, 7581.29374466441, 7435.882168254755, 7511.4534257400755, 7591.261917337481]
-    itersd_by_lookahead = [54.89247311827957, 61.17204301075269, 68.46236559139786, 72.64516129032258, 79.10752688172043, 80.02150537634408]
+    # valuec_by_lookahead = [6002.840671517548, 7636.731195199751, 7581.29374466441, 7435.882168254755, 7511.4534257400755, 7591.261917337481]
+    # itersd_by_lookahead = [54.89247311827957, 61.17204301075269, 68.46236559139786, 72.64516129032258, 79.10752688172043, 80.02150537634408]
     iterscbba_by_lookahead = [18.50537634408602, 26.0, 29.193548387096776, 33.11827956989247, 34.806451612903224, 37.29032258064516]
-    valued_by_lookahead = [6021.705454081699, 7622.246684035546, 7585.4110847804, 7294.093230272816, 7437.211996201664, 7559.402984912062]
+    # valued_by_lookahead = [6021.705454081699, 7622.246684035546, 7585.4110847804, 7294.093230272816, 7437.211996201664, 7559.402984912062]
     greedy_val = 3650.418056196203
     no_handover_val = 4078.018608711949
 
@@ -1736,12 +1428,12 @@ def scaling_experiment():
         color = viridis_cmap(L_idx /(max_L-1))
         axes[0].plot(lambdas_over_bens, haal_ass_lengths[L_idx], label=f"L={L_idx+1}", color=color)
         axes[1].plot(lambdas_over_bens, haal_benefit_captured[L_idx], label=f"L={L_idx+1}", color=color)
-    axes[0].plot(lambdas_over_bens, [avg_pass_len]*len(lambdas_over_bens), 'k--', label="Avg. time\ntask in view")
+    axes[0].plot(lambdas_over_bens, [avg_pass_len]*len(lambdas_over_bens), 'k--', label="Avg. Time Task\nin View "+r'($P$)')
 
-    axes[0].set_ylabel("Avg. Length Satellite\nAssigned to Same Task")
+    axes[0].set_ylabel("Avg. Time Satellite\nAssigned to Same Task "+r'($P^{\mathbf{x}}$)')
     axes[1].set_ylabel("Total Benefit")
-    axes[1].set_xlabel(r'$\frac{\lambda}{P^{\beta}}$')
-    axes[1].xaxis.label.set_fontsize(16)
+    axes[1].set_xlabel(r'$\frac{\lambda}{P^\beta}$')
+    axes[1].xaxis.label.set_fontsize(19.5)
     axes[0].set_xlim(min(lambdas_over_bens), max(lambdas_over_bens))
     axes[1].set_xlim(min(lambdas_over_bens), max(lambdas_over_bens))
 
@@ -1750,7 +1442,7 @@ def scaling_experiment():
         handles.append(handle)
         labels.append(label)
     
-    fig.legend(handles, labels, loc='lower left', bbox_to_anchor=(0.45,0.5), ncol=2)
+    fig.legend(handles, labels, loc='lower left', bbox_to_anchor=(0.4,0.5), ncol=2)
     # axes[0].legend(loc='upper left', bbox_to_anchor=(1, 0.3))
 
     with open("haal_scaling_exp/results.txt", 'w') as f:
@@ -1769,55 +1461,55 @@ def scaling_experiment():
     plt.savefig("haal_scaling_exp/paper_scaling.pdf")
     plt.show()
 
-def auction_speedup_test():
-    """
-    Was gonna test if we could speed up auctions by using edited
-    prices from previous timesteps, but decided it was kinda a stupid
-    idea in the end.
-    """
-    with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
-        benefits = pickle.load(f)
-    with open("haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
-        graphs = pickle.load(f)
+# def auction_speedup_test():
+#     """
+#     Was gonna test if we could speed up auctions by using edited
+#     prices from previous timesteps, but decided it was kinda a stupid
+#     idea in the end.
+#     """
+#     with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+#         benefits = pickle.load(f)
+#     with open("haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+#         graphs = pickle.load(f)
 
-    n = benefits.shape[0]
-    m = benefits.shape[1]
-    T = benefits.shape[2]
-    lambda_ = 0.5
+#     n = benefits.shape[0]
+#     m = benefits.shape[1]
+#     T = benefits.shape[2]
+#     lambda_ = 0.5
 
-    auction = Auction(n, m, benefits=benefits[:,:,0], graph=graphs[0])
-    auction.run_auction()
-    init_assigns = convert_agents_to_assignment_matrix(auction.agents)
-    timestep_1_prices = auction.agents[0].public_prices
+#     auction = Auction(n, m, benefits=benefits[:,:,0], graph=graphs[0])
+#     auction.run_auction()
+#     init_assigns = convert_agents_to_assignment_matrix(auction.agents)
+#     timestep_1_prices = auction.agents[0].public_prices
     
-    benefits1 = add_handover_pen_to_benefit_matrix(np.expand_dims(benefits[:,:,1],-1), init_assigns, lambda_)
-    benefits1 = np.squeeze(benefits1)
-    #Run default auction for second timestep
-    def_auction2 = Auction(n, m, benefits=benefits1, graph=graphs[1])
-    def_auction2.run_auction()
+#     benefits1 = add_handover_pen_to_benefit_matrix(np.expand_dims(benefits[:,:,1],-1), init_assigns, lambda_)
+#     benefits1 = np.squeeze(benefits1)
+#     #Run default auction for second timestep
+#     def_auction2 = Auction(n, m, benefits=benefits1, graph=graphs[1])
+#     def_auction2.run_auction()
 
-    def_iters = def_auction2.n_iterations
-    print(f"Iterations without speedup {def_iters}")
+#     def_iters = def_auction2.n_iterations
+#     print(f"Iterations without speedup {def_iters}")
 
-    #Run default auction for second timestep
-    def_auction2 = Auction(n, m, benefits=benefits1, graph=graphs[1], prices=timestep_1_prices)
-    def_auction2.run_auction()
+#     #Run default auction for second timestep
+#     def_auction2 = Auction(n, m, benefits=benefits1, graph=graphs[1], prices=timestep_1_prices)
+#     def_auction2.run_auction()
 
-    def_iters = def_auction2.n_iterations
-    print(f"Iterations with old prices speedup {def_iters}")
+#     def_iters = def_auction2.n_iterations
+#     print(f"Iterations with old prices speedup {def_iters}")
 
-    #Run sped up auction
-    for j in range(m):
-        prev_benefit = np.sum(benefits[:,j,0])
-        total_benefit = np.sum(benefits1[:,j])
-        print(total_benefit - prev_benefit)
+#     #Run sped up auction
+#     for j in range(m):
+#         prev_benefit = np.sum(benefits[:,j,0])
+#         total_benefit = np.sum(benefits1[:,j])
+#         print(total_benefit - prev_benefit)
 
 def multi_task_test():
     lat_range = (20, 50)
     lon_range = (73, 135)
     T = 60
     # full_benefit_matrix_w_synthetic_sats, graphs, T_trans, A_eqiv, \
-    #     _, _ = get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T)
+    #     _, _, tracked_lats, tracked_lons = get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T)
 
     with open('multitask_experiment/benefit_matrix.pkl','rb') as f:
         full_benefit_matrix_w_synthetic_sats = pickle.load(f)
@@ -1831,12 +1523,14 @@ def multi_task_test():
         T_trans = pickle.load(f)
     with open('multitask_experiment/A_eqiv.pkl','rb') as f:
         A_eqiv = pickle.load(f)
-    
+    with open('multitask_experiment/sat_to_track.pkl','rb') as f:
+        sat_to_track = pickle.load(f)   
+
     extra_handover_info = ExtraHandoverPenInfo()
     extra_handover_info.T_trans = T_trans
     extra_handover_info.A_eqiv = A_eqiv
 
-    lambda_ = 0.5
+    lambda_ = 0.2
     print("lambda", lambda_)
 
     ass, tv = solve_multitask_w_haal(full_benefit_matrix_w_synthetic_sats, None, lambda_, 3, distributed=False, verbose=True, extra_handover_info=extra_handover_info)
@@ -1860,5 +1554,49 @@ def multi_task_test():
     # ass, tv = solve_greedily(padded_benefits, None, lambda_, state_dep_fn=calc_multiassign_state_dep_fn, extra_handover_info=extra_handover_info)
     # print("greedy",tv)
 
+def proof_verification_with_full_information():
+    L = 5
+    T = 5
+    n = 50
+    m = 50
+    lambda_ = 0.5
+
+    total_sequences = 0
+    observed_equal = 0
+    for _ in range(100):
+        print(f"Experiment {_}")
+        benefits = np.random.rand(n,m,T)
+
+        base_ass, _ = solve_w_haal(benefits, None, lambda_, T)
+        curr_ass = base_ass
+        for k in range(1,T):
+            new_ass, _ = solve_w_haal(benefits[:,:,k:], curr_ass.pop(0), lambda_, T-k)
+            
+            total_sequences += len(new_ass)
+            equal_array = [int(np.array_equal(new_ass[i], curr_ass[i])) for i in range(len(new_ass))]
+            observed_equal += sum(equal_array)
+
+            curr_ass = new_ass
+
+    print(f"Sequences which were identical: {observed_equal}/{total_sequences}")
+
+def num_tasks_per_satellite():
+    with open("haal/haal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
+        benefits = pickle.load(f)
+
+    n = benefits.shape[0]
+    m = benefits.shape[1]
+
+    total_tasks = 0
+    for i in range(n):
+        ben_slice = benefits[i,:,:6]
+
+        total_bens = np.sum(ben_slice, axis=1)
+        
+        available_tasks = np.where(total_bens > 0, 1, 0)
+        total_tasks += np.sum(available_tasks)
+    
+    print(total_tasks/n)
+
 if __name__ == "__main__":
-    multi_task_test()
+    paper_experiment1()

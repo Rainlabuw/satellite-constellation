@@ -1,5 +1,5 @@
 import numpy as np
-from methods import *
+from common.methods import *
 
 class SequentialCBBAAgent(object):
    def __init__(self, num_timesteps):
