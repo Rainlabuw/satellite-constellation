@@ -323,7 +323,7 @@ def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, extra_handover_in
     losing the entire benefit of the task in the first timestep, plus a small
     extra penalty (lambda_).
 
-    Expects a 2D (n x m) benefit matrix.
+    Expects a 3D (n x m x L) benefit matrix.
 
     Also expects extra_handover info to contain T transition matrix.
     """
@@ -341,7 +341,10 @@ def timestep_loss_state_dep_fn(benefits, prev_assign, lambda_, extra_handover_in
 
     state_dep_scaling = prev_assign @ T_trans
 
-    return np.where(state_dep_scaling > 0, benefits*(1-state_dep_scaling)-lambda_, benefits)
+    benefits_hat = np.copy(benefits)
+    benefits_hat[:,:,0] = np.where(state_dep_scaling > 0, benefits[:,:,0]*(1-state_dep_scaling)-lambda_, benefits[:,:,0])
+
+    return benefits_hat
 
 def solve_object_track_w_dynamic_haal(sat_coverage_matrix, task_objects, coverage_benefit, object_benefit, init_assignment, lambda_, L, 
                                       distributed=False, parallel=False, verbose=False,

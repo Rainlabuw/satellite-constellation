@@ -126,7 +126,7 @@ class ExtraHandoverPenInfo(object):
 
 def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover_info=None):
     """
-    Adjusts a 2D benefit matrix to account for generic handover penalty (i.e. constant penalty for switching tasks).
+    Adjusts a 3D benefit matrix to account for generic handover penalty (i.e. constant penalty for switching tasks).
 
     extra_info is an object which can contain extra information about the handover penalty - it should store T_trans.
     T_trans is a matrix which determines which transitions between TASKS are penalized.
@@ -147,7 +147,10 @@ def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover
 
     state_dep_scaling = prev_assign @ T_trans
 
-    return benefits-lambda_*state_dep_scaling
+    benefits_hat = np.copy(benefits)
+    benefits_hat[:,:,0] = benefits[:,:,0]-lambda_*state_dep_scaling
+
+    return benefits_hat
 
 def calc_distance_btwn_solutions(agents1, agents2):
     """
@@ -168,12 +171,12 @@ def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits
 
     benefit_hat = np.copy(benefits[:,:,0])
     if init_assignment is not None: #adjust based on init_assignment if it exists
-        benefit_hat = state_dep_fn(benefits[:,:,0], init_assignment, lambda_, extra_handover_info)
-    state_dependent_value += (benefit_hat * assignments[0]).sum()
+        benefit_hat = state_dep_fn(np.expand_dims(benefits[:,:,0], axis=2), init_assignment, lambda_, extra_handover_info)
+    state_dependent_value += (np.squeeze(benefit_hat) * assignments[0]).sum()
 
     for k in range(len(assignments)-1):
-        benefit_hat = state_dep_fn(benefits[:,:,k+1], assignments[k], lambda_, extra_handover_info)
-        state_dependent_value += (benefit_hat * assignments[k+1]).sum() * gamma**(k+1)
+        benefit_hat = state_dep_fn(np.expand_dims(benefits[:,:,k+1], axis=2), assignments[k], lambda_, extra_handover_info)
+        state_dependent_value += (np.squeeze(benefit_hat) * assignments[k+1]).sum() * gamma**(k+1)
 
     return state_dependent_value
 

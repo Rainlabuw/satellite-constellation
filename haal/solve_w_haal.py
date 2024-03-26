@@ -93,8 +93,8 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
             #Note that if we're not approximating, we incentivize staying close to the previous assignment calculated during this
             #time interval sequence, not the actual assignment that the agents currently have (i.e. prev_assignment)
             benefit_hat = np.copy(combined_benefit_mat)
-            if not parallel_approx: benefit_hat[:,:,0] = state_dep_fn(benefit_hat[:,:,0], tis_assignment_curr, lambda_, extra_handover_info)
-            else: benefit_hat[:,:,0] = state_dep_fn(benefit_hat[:,:,0], prev_assignment, lambda_, extra_handover_info)
+            if not parallel_approx: benefit_hat = state_dep_fn(benefit_hat, tis_assignment_curr, lambda_, extra_handover_info)
+            else: benefit_hat = state_dep_fn(benefit_hat, prev_assignment, lambda_, extra_handover_info)
             benefit_hat = benefit_hat.sum(axis=-1)
 
             #Generate an assignment using a centralized solution.
@@ -337,7 +337,7 @@ class HAAL_D_Parallel_Agent(object):
         if time_interval_benefits.ndim == 2: #make sure time_interval_benefits is 3D
             time_interval_benefits = np.expand_dims(time_interval_benefits, axis=2)
 
-        time_interval_benefits[:,:,0] = self.state_dep_fn(time_interval_benefits[:,:,0], prev_assignment, self.lambda_, self.extra_handover_info)
+        time_interval_benefits = self.state_dep_fn(time_interval_benefits, prev_assignment, self.lambda_, self.extra_handover_info)
         benefit_hat = np.squeeze(time_interval_benefits.sum(axis=-1))
 
         return benefit_hat

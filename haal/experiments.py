@@ -1259,53 +1259,54 @@ def paper_experiment1():
     max_L = test_optimal_L(timestep, altitude, fov)
     print(max_L)
     
-    lambda_ = 1.5
+    lambda_ = 0.5
 
     # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=2500)
 
-    # with open("haal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
+    # with open("haal/haal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
     #     pickle.dump(benefits,f)
-    # with open("haal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
+    # with open("haal/haal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
     #     pickle.dump(graphs,f)
 
-    # with open("haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
-    #     benefits = pickle.load(f)
-    # with open("haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
-    #     graphs = pickle.load(f)
+    with open("haal/haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+        benefits = pickle.load(f)
+    with open("haal/haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+        graphs = pickle.load(f)
 
-    # _, no_handover_val = solve_wout_handover(benefits, None, lambda_)
+    _, no_handover_val = solve_wout_handover(benefits, None, lambda_)
 
-    # # _, cbba_val = solve_w_centralized_CBBA(benefits, None, lambda_, max_L, verbose=True)
-    # cbba_val = 0
+    # _, cbba_val = solve_w_centralized_CBBA(benefits, None, lambda_, max_L, verbose=True)
+    cbba_val = 0
 
-    # _, greedy_val = solve_greedily(benefits, None, lambda_)
-    # print(greedy_val)
-    # itersd_by_lookahead = []
-    # valued_by_lookahead = []
+    _, greedy_val = solve_greedily(benefits, None, lambda_)
+    print(greedy_val)
+    itersd_by_lookahead = []
+    valued_by_lookahead = []
 
-    # iterscbba_by_lookahead = []
-    # valuecbba_by_lookahead = []
+    iterscbba_by_lookahead = []
+    valuecbba_by_lookahead = []
 
-    # valuec_by_lookahead = []
-    # for L in range(1,max_L+1):
-    #     print(f"lookahead {L}")
-    #     # _, cbba_val, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
-    #     # iterscbba_by_lookahead.append(avg_iters)
-    #     # valuecbba_by_lookahead.append(cbba_val)
+    valuec_by_lookahead = []
+    for L in range(1,max_L+1):
+        print(f"lookahead {L}")
+        # _, cbba_val, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
+        # iterscbba_by_lookahead.append(avg_iters)
+        # valuecbba_by_lookahead.append(cbba_val)
         
-    #     # _, d_val, avg_iters = solve_w_haal(benefits, None, lambda_, L, graphs=graphs, verbose=True, track_iters=True, distributed=True)
-    #     # itersd_by_lookahead.append(avg_iters)
-    #     # valued_by_lookahead.append(d_val)
+        _, d_val, avg_iters = solve_w_haal(benefits, None, lambda_, L, graphs=graphs, verbose=True, track_iters=True, distributed=True)
+        print(d_val, avg_iters)
+        itersd_by_lookahead.append(avg_iters)
+        valued_by_lookahead.append(d_val)
 
-    #     _, c_val = solve_w_haal(benefits, None, lambda_, L, distributed=False, verbose=True)
-    #     valuec_by_lookahead.append(c_val)
+        _, c_val = solve_w_haal(benefits, None, lambda_, L, distributed=False, verbose=True)
+        valuec_by_lookahead.append(c_val)
 
     # #Values from 1/31, before scaling experiments
     valuecbba_by_lookahead = [4208.38020192484, 4412.873727755446, 4657.90330919782, 4717.85859678172, 4710.212483240204, 4726.329218229788]
-    valuec_by_lookahead = [6002.840671517548, 7636.731195199751, 7581.29374466441, 7435.882168254755, 7511.4534257400755, 7591.261917337481]
-    itersd_by_lookahead = [54.89247311827957, 61.17204301075269, 68.46236559139786, 72.64516129032258, 79.10752688172043, 80.02150537634408]
+    # valuec_by_lookahead = [6002.840671517548, 7636.731195199751, 7581.29374466441, 7435.882168254755, 7511.4534257400755, 7591.261917337481]
+    # itersd_by_lookahead = [54.89247311827957, 61.17204301075269, 68.46236559139786, 72.64516129032258, 79.10752688172043, 80.02150537634408]
     iterscbba_by_lookahead = [18.50537634408602, 26.0, 29.193548387096776, 33.11827956989247, 34.806451612903224, 37.29032258064516]
-    valued_by_lookahead = [6021.705454081699, 7622.246684035546, 7585.4110847804, 7294.093230272816, 7437.211996201664, 7559.402984912062]
+    # valued_by_lookahead = [6021.705454081699, 7622.246684035546, 7585.4110847804, 7294.093230272816, 7437.211996201664, 7559.402984912062]
     greedy_val = 3650.418056196203
     no_handover_val = 4078.018608711949
 
@@ -1598,4 +1599,4 @@ def num_tasks_per_satellite():
     print(total_tasks/n)
 
 if __name__ == "__main__":
-    num_tasks_per_satellite()
+    paper_experiment1()
