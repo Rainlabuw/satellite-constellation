@@ -15,13 +15,53 @@ from constellation_sim.Task import Task
 from haal.solve_w_haal import HAAL_D_Parallel_Auction, choose_time_interval_sequence_centralized
 from common.methods import *
 
-def var_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover_info=None):
+def generate_benefits_from_satcover_and_var(sat_cover_matrix, prev_assign, lambda_,
+                                            task_vars, base_sensor_var, var_add):
     """
-    Apply a variance penalty to the measurements taken first.
-    """
-    pass
+    Create a benefit matrix based on the previous assignment and the variances of each area.
+    As a handover penalty, the sensor variance of the first measurement of a given task is much higher.
 
-def get_science_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
+    INPUTS:
+     - a 3D (n x m x T) matrix of the satellite coverage matrix, as well as previous assignments.
+     - lambda_ is in this case the amount the sensor covariance is multiplied for the first measurement.
+     - task_vars is the m variances of the tasks at the current state.
+     - base_sensor_var is the baseline sensor variance
+     - var_add is how much variance is added at each time step.
+    """
+    n = sat_cover_matrix.shape[0]
+    m = sat_cover_matrix.shape[1]
+    T = sat_cover_matrix.shape[2]
+
+    benefit_matrix = np.zeros_like(sat_cover_matrix)
+
+    #Transform curr_var (m,) to (n,m) by repeating the value across the agent axis (axis 0).
+    #This array will track the variance of each task j, assuming that it was done by satellite i.
+    agent_task_vars = np.tile(task_vars, (n, 1))
+    for k in range(T):
+        for i in range(n):
+            for j in range(m):
+                #Calculate the sensor variance for sat i measuring task j at time k
+                if sat_cover_matrix[i,j,k] == 0: sensor_var = 1000000
+                else: sensor_var = base_sensor_var / sat_cover_matrix[i,j,k]
+
+                #if the task was not previously assigned, multiply the sensor variance by lambda_ (>1)
+                if prev_assign[i,j] != 1 and k == 0:
+                    sensor_var *= lambda_
+
+                #Calculate the new variance for the task after taking the observation.
+                #The reduction in variance is the benefit for the agent-task pair.
+                new_agent_task_var = 1/(1/agent_task_vars[i,j] + 1/sensor_var)
+                benefit_matrix[i,j,k] = agent_task_vars[i,j] - new_agent_task_var
+
+                #Update the variance of the task based on the new measurement
+                agent_task_vars[i,j] = new_agent_task_var
+
+        #Add variance to all tasks
+        agent_task_vars += var_add
+
+    return benefit_matrix
+
+def get_science_constellation_satcovers_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
     Generate benefit matrix of with (num_planes*sats_per_plane)
     satellites covering the entire surface of the earth, with tasks
@@ -231,7 +271,7 @@ if __name__ == "__main__":
     lambda_ = 0.05
     L = 6
 
-    # sat_cover_matrix, graphs = get_science_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane, T, i)
+    # sat_cover_matrix, graphs = get_science_constellation_satcovers_and_graphs_coverage(num_planes, num_sats_per_plane, T, i)
     # with open('soil_moisture/soil_data/sat_cover_matrix.pkl','wb') as f:
     #     pickle.dump(sat_cover_matrix, f)
     # with open('soil_moisture/soil_data/graphs.pkl','wb') as f:
