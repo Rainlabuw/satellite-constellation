@@ -1740,7 +1740,7 @@ def scaling_experiment():
 
     axes[0].set_ylabel("Avg. Length Satellite\nAssigned to Same Task")
     axes[1].set_ylabel("Total Benefit")
-    axes[1].set_xlabel(r'$\frac{\lambda}{\beta_{pass, avg}}$')
+    axes[1].set_xlabel(r'$\frac{\lambda}{P^{\beta}}$')
     axes[1].xaxis.label.set_fontsize(16)
     axes[0].set_xlim(min(lambdas_over_bens), max(lambdas_over_bens))
     axes[1].set_xlim(min(lambdas_over_bens), max(lambdas_over_bens))
