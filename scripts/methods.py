@@ -124,7 +124,7 @@ class ExtraHandoverPenInfo(object):
     """
     pass
 
-def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover_info=None):
+def generic_handover_pen_benefit_fn(benefits, prev_assign, lambda_, benefit_info=None):
     """
     Adjusts a 2D benefit matrix to account for generic handover penalty (i.e. constant penalty for switching tasks).
 
@@ -139,7 +139,7 @@ def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover
     m = benefits.shape[1]
 
     try:
-        T_trans = extra_handover_info.T_trans
+        T_trans = benefit_info.T_trans
     except AttributeError:
         T_trans = None
     
@@ -164,16 +164,16 @@ def calc_distance_btwn_solutions(agents1, agents2):
 
 #~~~~~~~~~~~~~~~~~~~~STATE DEPENDENT VALUE STUFF~~~~~~~~~~~~~~
 def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits, lambda_,
-                                          state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None):
+                                          benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
     state_dependent_value = 0
 
     benefit_hat = np.copy(benefits[:,:,0])
     if init_assignment is not None: #adjust based on init_assignment if it exists
-        benefit_hat = state_dep_fn(benefits[:,:,0], init_assignment, lambda_, extra_handover_info)
+        benefit_hat = benefit_fn(benefits[:,:,0], init_assignment, lambda_, benefit_info)
     state_dependent_value += (benefit_hat * assignments[0]).sum()
 
     for k in range(len(assignments)-1):
-        benefit_hat = state_dep_fn(benefits[:,:,k+1], assignments[k], lambda_, extra_handover_info)
+        benefit_hat = benefit_fn(benefits[:,:,k+1], assignments[k], lambda_, benefit_info)
         state_dependent_value += (benefit_hat * assignments[k+1]).sum()
 
     return state_dependent_value

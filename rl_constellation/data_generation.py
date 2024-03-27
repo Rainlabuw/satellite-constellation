@@ -55,7 +55,7 @@ def init_random_constellation(num_planes, num_sats_per_plane, m, T, altitude=550
         task = Task(task_loc, task_benefit)
         const.add_task(task)
 
-    benefits, graphs = const.propagate_orbits(T, calc_fov_benefits)
+    benefits, graphs = const.propagate_orbits(T, calc_fov_based_proximities)
 
     return benefits, graphs
 

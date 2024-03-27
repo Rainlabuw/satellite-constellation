@@ -16,12 +16,12 @@ from haal.solve_w_accelerated_haal import solve_w_accel_haal
 from haal.solve_w_centralized_CBBA import solve_w_centralized_CBBA
 from haal.solve_w_CBBA import solve_w_CBBA
 from haal.solve_greedily import solve_greedily
-from haal.object_track_scenario import timestep_loss_state_dep_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_coverage_matrix_and_graphs_object_tracking_area
+from haal.object_track_scenario import timestep_loss_pen_benefit_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_coverage_matrix_and_graphs_object_tracking_area
 from haal.object_track_utils import calc_pct_objects_tracked, object_tracking_history
-from haal.multi_task_scenario import solve_multitask_w_haal, calc_multiassign_state_dep_fn, get_benefit_matrix_and_graphs_multitask_area
+from haal.multi_task_scenario import solve_multitask_w_haal, calc_multiassign_benefit_fn, get_benefit_matrix_and_graphs_multitask_area
 from haal.plotting_utils import plot_object_track_scenario, plot_multitask_scenario
 
-from constellation_sim.ConstellationSim import get_constellation_bens_and_graphs_random_tasks, get_constellation_bens_and_graphs_coverage, ConstellationSim
+from constellation_sim.ConstellationSim import get_constellation_proxs_and_graphs_coverage, get_constellation_proxs_and_graphs_random_tasks, ConstellationSim
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
 
@@ -175,8 +175,8 @@ def realistic_orbital_simulation():
         num_planes = 36
         num_sats_per_plane = 18
         if n != num_planes*num_sats_per_plane: raise Exception("Make sure n = num planes * num sats per plane")
-        # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes,num_sats_per_plane,m,T, benefit_func=calc_distance_based_benefits)
-        benefits, graphs = get_constellation_bens_and_graphs_coverage(num_planes,num_sats_per_plane,T,70,benefit_func=calc_distance_based_benefits)
+        # benefits, graphs = get_constellation_proxs_and_graphs_random_tasks(num_planes,num_sats_per_plane,m,T, benefit_func=calc_distance_based_proximities)
+        benefits, graphs = get_constellation_proxs_and_graphs_coverage(num_planes,num_sats_per_plane,T,70,benefit_func=calc_distance_based_proximities)
 
         #Ensure all graphs are connected
         for i, graph in enumerate(graphs):
@@ -261,7 +261,7 @@ def epsilon_effect():
 
     num_avgs = 1
     for _ in tqdm(range(num_avgs)):
-        benefits, graphs = get_constellation_bens_and_graphs_random_tasks(10,5,m,T)
+        benefits, graphs = get_constellation_proxs_and_graphs_random_tasks(10,5,m,T)
 
         #Distributed
         print(f"Done generating benefits, solving distributed 0.1...")
@@ -456,9 +456,9 @@ def tasking_history_plot():
     T = 20
     lambda_ = 0.75
 
-    # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits)
+    # benefits, graphs = get_constellation_proxs_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_based_proximities)
 
-    # benefits, graphs = get_constellation_bens_and_graphs_coverage(num_planes,num_sats_per_plane,T,5, altitude=altitude, benefit_func=calc_fov_benefits)
+    # benefits, graphs = get_constellation_proxs_and_graphs_coverage(num_planes,num_sats_per_plane,T,5, altitude=altitude, benefit_func=calc_fov_based_proximities)
 
     # with open('bens.pkl', 'wb') as f:
     #     pickle.dump(benefits, f)
@@ -670,7 +670,7 @@ def cbba_testing():
 def connectivity_testing():
     # def f(isl_dist, nm):
     #     T = 93
-    #     _, graphs = get_constellation_bens_and_graphs_random_tasks(nm, nm, 1, T, isl_dist=isl_dist)
+    #     _, graphs = get_constellation_proxs_and_graphs_random_tasks(nm, nm, 1, T, isl_dist=isl_dist)
 
     #     pct_connected = sum([nx.is_connected(graph) for graph in graphs])/T
     #     return pct_connected
@@ -686,7 +686,7 @@ def connectivity_testing():
 
     # plt.show()
 
-    _, graphs = get_constellation_bens_and_graphs_random_tasks(10, 10, 1, 93, isl_dist=4000)
+    _, graphs = get_constellation_proxs_and_graphs_random_tasks(10, 10, 1, 93, isl_dist=4000)
     pct_connected = sum([nx.is_connected(graph) for graph in graphs])/93
     print("\n",pct_connected)
 
@@ -975,7 +975,7 @@ def test_accelerated():
     m = 100
     n = 100
 
-    benefits, _ = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats, m, 93)
+    benefits, _ = get_constellation_proxs_and_graphs_random_tasks(num_planes, num_sats, m, 93)
 
     st = time.time()
     _, val, _ = solve_w_haal(benefits, None, 0.5, 6)
@@ -1061,7 +1061,7 @@ def generalized_handover_fn_testing():
     benefits = get_benefits_from_task_objects(coverage_benefit, object_benefit, sat_cover_matrix, task_objects)
 
     ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, parallel_approx=False,
-                                                state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
+                                                benefit_fn=timestep_loss_pen_benefit_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
     print(tv)
 
     # object_tracking_history(ass, task_objects, task_trans_state_dep_scaling_mat, sat_cover_matrix)
@@ -1069,14 +1069,14 @@ def generalized_handover_fn_testing():
     # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     # print(pct)
 
-    # ass, tv = solve_w_haal(benefits, None, lambda_, L, state_dep_fn=timestep_loss_state_dep_fn, 
+    # ass, tv = solve_w_haal(benefits, None, lambda_, L, benefit_fn=timestep_loss_pen_benefit_fn, 
     #                        task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
     # print(tv)
     # print(is_assignment_mat_sequence_valid(ass))
     # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     # print(pct)
 
-    ass, tv = solve_wout_handover(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
+    ass, tv = solve_wout_handover(benefits, None, lambda_, timestep_loss_pen_benefit_fn, task_trans_state_dep_scaling_mat)
     print(tv)
     print(is_assignment_mat_sequence_valid(ass))
 
@@ -1084,7 +1084,7 @@ def generalized_handover_fn_testing():
     # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     # print(pct)
 
-    # ass, tv = solve_greedily(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
+    # ass, tv = solve_greedily(benefits, None, lambda_, timestep_loss_pen_benefit_fn, task_trans_state_dep_scaling_mat)
     # print(tv)
     # print(is_assignment_mat_sequence_valid(ass))
     # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
@@ -1133,18 +1133,18 @@ def object_tracking_velocity_test():
         benefits = get_benefits_from_task_objects(coverage_benefit, object_benefit, sat_cover_matrix, task_objects)
 
         # ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, parallel_approx=False,
-        #                                         state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
-        ass, tv = solve_w_haal(benefits, None, lambda_, L, state_dep_fn=timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
+        #                                         benefit_fn=timestep_loss_pen_benefit_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
+        ass, tv = solve_w_haal(benefits, None, lambda_, L, benefit_fn=timestep_loss_pen_benefit_fn, task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
         pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
         haal_vals.append(tv)
         haal_pcts.append(pct)
 
-        ass, tv = solve_wout_handover(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
+        ass, tv = solve_wout_handover(benefits, None, lambda_, timestep_loss_pen_benefit_fn, task_trans_state_dep_scaling_mat)
         pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
         nohand_vals.append(tv)
         nohand_pcts.append(pct)
 
-        ass, tv = solve_greedily(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
+        ass, tv = solve_greedily(benefits, None, lambda_, timestep_loss_pen_benefit_fn, task_trans_state_dep_scaling_mat)
         pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
         greedy_vals.append(tv)
         greedy_pcts.append(pct)
@@ -1201,12 +1201,12 @@ def smaller_area_size_object_tracking():
     task_objects = init_task_objects(num_objects, const, hex_to_task_mapping, T, velocity=10000*u.km/u.hr)
     benefits = get_benefits_from_task_objects(coverage_benefit, object_benefit, sat_cover_matrix, task_objects)
 
-    extra_handover_info = ExtraHandoverPenInfo()
-    ExtraHandoverPenInfo.T_trans = task_trans_state_dep_scaling_mat
+    benefit_info = BenefitInfo()
+    benefit_info.T_trans = task_trans_state_dep_scaling_mat
 
     print("Dynamic HAAL, Centralized")
     ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, parallel=False,
-                                                state_dep_fn=timestep_loss_state_dep_fn, extra_handover_info=extra_handover_info)
+                                                benefit_fn=timestep_loss_pen_benefit_fn, benefit_info=benefit_info)
     print("Value", tv)
     pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     print("pct", pct)
@@ -1215,13 +1215,13 @@ def smaller_area_size_object_tracking():
 
     print("Dynamic HAAL, Distributed")
     ass, tv = solve_object_track_w_dynamic_haal(sat_cover_matrix, task_objects, coverage_benefit, object_benefit, None, lambda_, L, distributed=True, graphs=graphs,
-                                                state_dep_fn=timestep_loss_state_dep_fn, extra_handover_info=extra_handover_info, verbose=True)
+                                                benefit_fn=timestep_loss_pen_benefit_fn, benefit_info=benefit_info, verbose=True)
     print("Value", tv)
     pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
     print("pct", pct)
 
     # print("Normal HAAL")
-    # ass, tv = solve_w_haal(benefits, None, lambda_, L, state_dep_fn=timestep_loss_state_dep_fn, 
+    # ass, tv = solve_w_haal(benefits, None, lambda_, L, benefit_fn=timestep_loss_pen_benefit_fn, 
     #                        task_trans_state_dep_scaling_mat=task_trans_state_dep_scaling_mat)
     # print("Value", tv)
     # print(is_assignment_mat_sequence_valid(ass))
@@ -1229,7 +1229,7 @@ def smaller_area_size_object_tracking():
     # print("Pct",pct)
 
     print("No handover")
-    ass, tv = solve_wout_handover(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
+    ass, tv = solve_wout_handover(benefits, None, lambda_, timestep_loss_pen_benefit_fn, task_trans_state_dep_scaling_mat)
     print("Value", tv)
     print(is_assignment_mat_sequence_valid(ass))
     plot_object_track_scenario(hex_to_task_mapping, sat_cover_matrix, task_objects, ass, task_trans_state_dep_scaling_mat,
@@ -1240,7 +1240,7 @@ def smaller_area_size_object_tracking():
     print("pct",pct)
 
     # print("Greedy")
-    # ass, tv = solve_greedily(benefits, None, lambda_, timestep_loss_state_dep_fn, task_trans_state_dep_scaling_mat)
+    # ass, tv = solve_greedily(benefits, None, lambda_, timestep_loss_pen_benefit_fn, task_trans_state_dep_scaling_mat)
     # print("Value", tv)
     # print(is_assignment_mat_sequence_valid(ass))
     # pct = calc_pct_objects_tracked(ass, task_objects, task_trans_state_dep_scaling_mat)
@@ -1261,7 +1261,7 @@ def paper_experiment1():
     
     lambda_ = 0.5
 
-    # benefits, graphs = get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_benefits, fov=fov, isl_dist=2500)
+    # benefits, graphs = get_constellation_proxs_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_based_proximities, fov=fov, isl_dist=2500)
 
     # with open("haal/haal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
     #     pickle.dump(benefits,f)
@@ -1526,14 +1526,14 @@ def multi_task_test():
     with open('multitask_experiment/sat_to_track.pkl','rb') as f:
         sat_to_track = pickle.load(f)   
 
-    extra_handover_info = ExtraHandoverPenInfo()
-    extra_handover_info.T_trans = T_trans
-    extra_handover_info.A_eqiv = A_eqiv
+    benefit_info = BenefitInfo()
+    benefit_info.T_trans = T_trans
+    benefit_info.A_eqiv = A_eqiv
 
     lambda_ = 0.2
     print("lambda", lambda_)
 
-    ass, tv = solve_multitask_w_haal(full_benefit_matrix_w_synthetic_sats, None, lambda_, 3, distributed=False, verbose=True, extra_handover_info=extra_handover_info)
+    ass, tv = solve_multitask_w_haal(full_benefit_matrix_w_synthetic_sats, None, lambda_, 3, distributed=False, verbose=True, benefit_info=benefit_info)
     print("haal",tv)
 
     plot_multitask_scenario(hex_to_task_mapping, ass, A_eqiv, "haal_multitask.gif", show=False)
@@ -1546,12 +1546,12 @@ def multi_task_test():
     padded_benefits = np.zeros((n,padded_size, T))
     padded_benefits[:,:m,:] = full_benefit_matrix_w_synthetic_sats
 
-    ass, tv = solve_wout_handover(padded_benefits, None, lambda_, state_dep_fn=calc_multiassign_state_dep_fn, extra_handover_info=extra_handover_info)
+    ass, tv = solve_wout_handover(padded_benefits, None, lambda_, benefit_fn=calc_multiassign_benefit_fn, benefit_info=benefit_info)
     print("nha",tv)
 
     plot_multitask_scenario(hex_to_task_mapping, ass, A_eqiv, "nha_multitask.gif", show=False)
 
-    # ass, tv = solve_greedily(padded_benefits, None, lambda_, state_dep_fn=calc_multiassign_state_dep_fn, extra_handover_info=extra_handover_info)
+    # ass, tv = solve_greedily(padded_benefits, None, lambda_, benefit_fn=calc_multiassign_benefit_fn, benefit_info=benefit_info)
     # print("greedy",tv)
 
 def proof_verification_with_full_information():

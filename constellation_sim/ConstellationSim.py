@@ -97,7 +97,7 @@ class ConstellationSim(object):
             for sat in self.sats:
                 sat_orbit = self.orbits_over_time[sat.id][frame]
 
-                curr_ben = self.benefits_over_time[sat.id, :, frame]
+                curr_ben = self.proximity_over_time[sat.id, :, frame]
                 #find tasks for which curr_ben is greater than zero:
                 valid_task_ids = np.where(curr_ben > 0)[0]
                 
@@ -129,29 +129,29 @@ class ConstellationSim(object):
 
         ani.save('constellation.gif', writer='imagemagick', fps=1, dpi=100)
 
-    def propagate_orbits(self,T,benefit_func):
+    def propagate_orbits(self,T,proximity_func):
         """
         Propagate the orbits of all satellites forward in time by T timesteps,
         storing satellite orbits over time a dictionary of the form:
         {sat_id: [orbit_0, orbit_1, ..., orbit_T]}.
 
-        Also compute the benefits and connectivity graphs over time and returns them,
-        given a benefit function which computes a benefit from a sat and a task.
+        Also compute the proximity and connectivity graphs over time and returns them,
+        given a proximity function which computes a proximity from a sat and a task.
         """
         self.orbits_over_time = defaultdict(list)
-        self.benefits_over_time = np.zeros((self.n, self.m, T), dtype=self.dtype)
+        self.proximity_over_time = np.zeros((self.n, self.m, T), dtype=self.dtype)
         self.graphs_over_time = []
         for k in range(T):
-            print(f"Propagating orbits and computing benefits + neighbors, T={k}/{T}...",end='\r')
+            print(f"Propagating orbits and computing proximity + neighbors, T={k}/{T}...",end='\r')
             self.graphs_over_time.append(self.determine_connectivity_graph())
             for sat in self.sats:
                 sat.propagate_orbit(self.dt)
                 self.orbits_over_time[sat.id].append(sat.orbit)
                 for task in self.tasks:
                     #Compute the distance 
-                    self.benefits_over_time[sat.id, task.id, k] = benefit_func(sat, task, k)
+                    self.proximity_over_time[sat.id, task.id, k] = proximity_func(sat, task, k)
 
-        return self.benefits_over_time, self.graphs_over_time
+        return self.proximity_over_time, self.graphs_over_time
 
     def determine_connectivity_graph(self):
         #Build adjacency matrix
@@ -168,7 +168,7 @@ class ConstellationSim(object):
 
         return nx.from_numpy_array(adj)
 
-def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plane, m,T,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
+def get_constellation_proxs_and_graphs_random_tasks(num_planes, num_sats_per_plane, m,T,proximity_func=calc_fov_based_proximities, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
     Generate benefit matrix of size (num_planes*sats_per_plane) x m x T
     from a constellation of satellites, as well as
@@ -202,7 +202,7 @@ def get_constellation_bens_and_graphs_random_tasks(num_planes, num_sats_per_plan
         task = Task(task_loc, task_benefit)
         const.add_task(task)
 
-    benefits, graphs = const.propagate_orbits(T, benefit_func)
+    benefits, graphs = const.propagate_orbits(T, proximity_func)
     return benefits, graphs
 
 def generate_smooth_coverage_hexagons(lat_range, lon_range, res=1):
@@ -223,7 +223,7 @@ def generate_smooth_coverage_hexagons(lat_range, lon_range, res=1):
         
     return list(hexagons) #turn into a list so that you can easily index it later
 
-def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc,benefit_func=calc_fov_benefits, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
+def get_constellation_proxs_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc,proximity_func=calc_fov_based_proximities, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
     Generate benefit matrix of with (num_planes*sats_per_plane)
     satellites covering the entire surface of the earth, with tasks
@@ -265,7 +265,7 @@ def get_constellation_bens_and_graphs_coverage(num_planes, num_sats_per_plane,T,
         task = Task(task_loc, task_benefit)
         const.add_task(task)
 
-    benefits, graphs = const.propagate_orbits(T, benefit_func)
+    benefits, graphs = const.propagate_orbits(T, proximity_func)
     return benefits, graphs
 
 if __name__ == "__main__":

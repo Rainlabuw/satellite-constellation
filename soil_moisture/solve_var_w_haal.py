@@ -102,13 +102,13 @@ def get_science_constellation_satcovers_and_graphs_coverage(num_planes, num_sats
         task = Task(task_loc, np.ones(T))
         const.add_task(task)
 
-    sat_cover_matrix, graphs = const.propagate_orbits(T, calc_fov_benefits)
+    sat_cover_matrix, graphs = const.propagate_orbits(T, calc_fov_based_proximities)
     return sat_cover_matrix, graphs
 
 def solve_science_w_dynamic_haal(sat_coverage_matrix, init_var, base_sensor_var, init_assignment, lambda_, L, 
                                       distributed=False, parallel=False, verbose=False,
                                       eps=0.01, graphs=None, track_iters=False,
-                                      state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None):
+                                      benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
     """
     Aim to solve the problem using the HAAL algorithm, but with the benefit matrix
     changing over time as objects move through the area. We can't precalculate this
@@ -166,16 +166,16 @@ def solve_science_w_dynamic_haal(sat_coverage_matrix, init_var, base_sensor_var,
         if distributed:
             if not nx.is_connected(graphs[k]): print("WARNING: GRAPH NOT CONNECTED")
             haal_d_auction = HAAL_D_Parallel_Auction(benefit_window, curr_assignment, all_time_intervals, all_time_interval_sequences, 
-                                                     eps=eps, graph=graphs[k], lambda_=lambda_, state_dep_fn=state_dep_fn,
-                                                     extra_handover_info=extra_handover_info)
+                                                     eps=eps, graph=graphs[k], lambda_=lambda_, benefit_fn=benefit_fn,
+                                                     benefit_info=benefit_info)
             haal_d_auction.run_auction()
             chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
 
             total_iterations += haal_d_auction.n_iterations
         else:
             chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_window, 
-                                                                      lambda_, parallel_approx=parallel, state_dep_fn=state_dep_fn,
-                                                                      extra_handover_info=extra_handover_info)
+                                                                      lambda_, parallel_approx=parallel, benefit_fn=benefit_fn,
+                                                                      benefit_info=benefit_info)
 
         chosen_assignments.append(chosen_assignment)
         curr_assignment = chosen_assignment
@@ -198,7 +198,7 @@ def solve_science_w_dynamic_haal(sat_coverage_matrix, init_var, base_sensor_var,
 def solve_science_w_nha(sat_coverage_matrix, init_var, base_sensor_var, init_assignment, lambda_, 
                                       distributed=False, parallel=False, verbose=False,
                                       eps=0.01, graphs=None, track_iters=False,
-                                      state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None):
+                                      benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
     """
     Aim to solve the problem using the HAAL algorithm, but with the benefit matrix
     changing over time as objects move through the area. We can't precalculate this

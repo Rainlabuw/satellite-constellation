@@ -18,7 +18,7 @@ class DynamicDataset(Dataset):
     Takes a list of benefits and assignments and generates a dataset of training data for the value and policy networks.
     """
     def __init__(self, benefits_list, assignments_list, M, L, L_max, lambda_=0.5, gamma=0.9, 
-                 state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None, calc_policy_outputs=True, calc_value_outputs=True):
+                 benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None, calc_policy_outputs=True, calc_value_outputs=True):
         self.benefits_list = benefits_list
         self.assignments_list = assignments_list
         self.M = M
@@ -28,8 +28,8 @@ class DynamicDataset(Dataset):
         self.lambda_ = lambda_
         self.gamma = gamma
 
-        self.state_dep_fn = state_dep_fn
-        self.extra_handover_info = extra_handover_info
+        self.benefit_fn = benefit_fn
+        self.benefit_info = benefit_info
 
         self.calc_policy_outputs = calc_policy_outputs
         self.calc_value_outputs = calc_value_outputs
@@ -90,7 +90,7 @@ class DynamicDataset(Dataset):
         agent_prev_assign = np.expand_dims(prev_assign[agent,:],0)
 
         discounted_value = calc_assign_seq_state_dependent_value(agent_prev_assign, agent_assigns, agent_benefits, self.lambda_,
-                                    state_dep_fn=self.state_dep_fn, extra_handover_info=self.extra_handover_info, gamma=self.gamma)
+                                    benefit_fn=self.benefit_fn, benefit_info=self.benefit_info, gamma=self.gamma)
         
         #Add back handover penalty if one occured between the HAAL and the old assignments
         if np.argmax(ass[HAAL_steps-1][agent,:]) != np.argmax(ass[HAAL_steps][agent,:]) and np.argmax(assigns[HAAL_steps-1][agent,:]) == np.argmax(assigns[HAAL_steps][agent,:]):
@@ -116,7 +116,7 @@ class DynamicDataset(Dataset):
 
         #add handover penalty to the benefits
         handover_adjusted_benefits = np.copy(benefits[:,:,:self.L])
-        handover_adjusted_benefits[:,:,0] = self.state_dep_fn(handover_adjusted_benefits[:,:,0], prev_assign, self.lambda_, self.extra_handover_info)
+        handover_adjusted_benefits[:,:,0] = self.benefit_fn(handover_adjusted_benefits[:,:,0], prev_assign, self.lambda_, self.benefit_info)
 
         agent_prev_assign = np.expand_dims(prev_assign[i,:],0)
 
@@ -130,7 +130,7 @@ class DynamicDataset(Dataset):
         #~~~~~~~~~~ CALC VALUE FUNC TRAINING OUTPUT DATA~~~~~~~~~~~
         if self.calc_value_outputs:
             discounted_value = calc_assign_seq_state_dependent_value(agent_prev_assign, agent_assigns, agent_benefits, self.lambda_,
-                                        state_dep_fn=self.state_dep_fn, extra_handover_info=self.extra_handover_info, gamma=self.gamma)
+                                        benefit_fn=self.benefit_fn, benefit_info=self.benefit_info, gamma=self.gamma)
             target_value_output = discounted_value/normalizing_value
         else:
             target_value_output = 0

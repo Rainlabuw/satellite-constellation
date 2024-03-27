@@ -118,37 +118,50 @@ def is_assignment_mat_sequence_valid(assignment_mat_seq):
     return True
 
 #~~~~~~~~~~~~~~~~~~~~GENERIC HANDOVER PENALTY STUFF~~~~~~~~~~~~~~
-class ExtraHandoverPenInfo(object):
+class BenefitInfo(object):
     """
-    Blank class to store extra information about handover penalties.
+    Blank class to store extra information about how to calculate benefits,
+    normally including information on handover penalties and task benefits.
     """
     pass
 
-def generic_handover_state_dep_fn(benefits, prev_assign, lambda_, extra_handover_info=None):
+def generic_handover_pen_benefit_fn(sat_cover_matrix, prev_assign, lambda_, benefit_info=None):
     """
     Adjusts a 3D benefit matrix to account for generic handover penalty (i.e. constant penalty for switching tasks).
 
-    extra_info is an object which can contain extra information about the handover penalty - it should store T_trans.
-    T_trans is a matrix which determines which transitions between TASKS are penalized.
+    benefit_info is an object which can contain extra information about the benefits - it should store:
+     - task_benefits is a m-length array of the baseline benefits associated with each task.
+     - T_trans is a matrix which determines which transitions between TASKS are penalized.
         It is m x m, where entry ij is the state dependence multiplier that should be applied when switching from task i to task j.
         (If it is None, then all transitions between different tasks are scaled by 1.)
     Then, prev_assign @ T_trans is the matrix which entries of the benefit matrix should be adjusted.
     """
-    if prev_assign is None: return benefits
-    m = benefits.shape[1]
+    n = sat_cover_matrix.shape[0]
+    m = sat_cover_matrix.shape[1]
+    L = sat_cover_matrix.shape[2]
+
+    #Generate a matrix which determines the benefits of each task at each timestep.
+    try:
+        task_benefits = benefit_info.task_benefits
+    except AttributeError:
+        task_benefits = np.ones(m)
+    task_benefits = np.tile(task_benefits, (n,1))
+    task_benefits = np.repeat(task_benefits[:,:,np.newaxis], L, axis=2)
+
+    if prev_assign is None: return sat_cover_matrix * task_benefits
 
     try:
-        T_trans = extra_handover_info.T_trans
+        T_trans = benefit_info.T_trans
     except AttributeError:
         T_trans = None
-    
+
     if T_trans is None:
-        T_trans = np.ones((m,m)) - np.eye(m)
+        T_trans = np.ones((m,m)) - np.eye(m) #default to all transitions (except nontransitions) being penalized
 
     state_dep_scaling = prev_assign @ T_trans
 
-    benefits_hat = np.copy(benefits)
-    benefits_hat[:,:,0] = benefits[:,:,0]-lambda_*state_dep_scaling
+    benefits_hat = sat_cover_matrix * task_benefits
+    benefits_hat[:,:,0] = benefits_hat[:,:,0]-lambda_*state_dep_scaling
 
     return benefits_hat
 
@@ -166,16 +179,16 @@ def calc_distance_btwn_solutions(agents1, agents2):
 
 #~~~~~~~~~~~~~~~~~~~~STATE DEPENDENT VALUE STUFF~~~~~~~~~~~~~~
 def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits, lambda_,
-                                          state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None, gamma=1):
+                                          benefit_fn=generic_handover_pen_fn, benefit_info=None, gamma=1):
     state_dependent_value = 0
 
     benefit_hat = np.copy(benefits[:,:,0])
     if init_assignment is not None: #adjust based on init_assignment if it exists
-        benefit_hat = state_dep_fn(np.expand_dims(benefits[:,:,0], axis=2), init_assignment, lambda_, extra_handover_info)
+        benefit_hat = benefit_fn(np.expand_dims(benefits[:,:,0], axis=2), init_assignment, lambda_, benefit_info)
     state_dependent_value += (np.squeeze(benefit_hat) * assignments[0]).sum()
 
     for k in range(len(assignments)-1):
-        benefit_hat = state_dep_fn(np.expand_dims(benefits[:,:,k+1], axis=2), assignments[k], lambda_, extra_handover_info)
+        benefit_hat = benefit_fn(np.expand_dims(benefits[:,:,k+1], axis=2), assignments[k], lambda_, benefit_info)
         state_dependent_value += (np.squeeze(benefit_hat) * assignments[k+1]).sum() * gamma**(k+1)
 
     return state_dependent_value
@@ -329,13 +342,14 @@ def generate_all_time_intervals(L):
     return all_time_intervals
 
 #~~~~~~~~~~~~~~~~~~~~ ORBITAL MECHANICS STUFF ~~~~~~~~~~~~~~
-def calc_distance_based_benefits(sat, task, k):
+def calc_distance_based_proximities(sat, task, k):
     """
-    Given a satellite, a task, and a timestep computes the benefit of the satellite.
+    Given a satellite, a task, and a timestep computes the proximity measure of the satellite.
+    (0 is out of range, 1 is as close as possible.)
 
-    Benefit here is zero if the task is not visible from the satellite,
+    Proximity is zero if the task is not visible from the satellite,
     and is a gaussian centered at the minimum distance away from the task,
-    and dropping to 5% of the max value at the furthest distance away from the task.
+    and dropping to 0.05 at the furthest distance away from the task.
     """
     if task.loc.is_visible(*sat.orbit.r):
         body_rad = np.linalg.norm(sat.orbit._state.attractor.R.to_value(u.km))
@@ -347,20 +361,20 @@ def calc_distance_based_benefits(sat, task, k):
 
         sat_height = np.linalg.norm(sat.orbit.r.to_value(u.km)) - body_rad
         task_dist = np.linalg.norm(task.loc.cartesian_cords.to_value(u.km) - sat.orbit.r.to_value(u.km)) - sat_height
-        task_benefit = gaussian_height*np.exp(-task_dist**2/(2*gaussian_sigma**2))
+        task_proximity = gaussian_height*np.exp(-task_dist**2/(2*gaussian_sigma**2))
     else:
-        task_benefit = 0
+        task_proximity = 0
 
-    return task_benefit
+    return task_proximity
 
-def calc_fov_benefits(sat, task, k):
+def calc_fov_based_proximities(sat, task, k):
     """
-    Given a satellite, a task, and a timestep, computes the benefit of the satellite.
+    Given a satellite, a task, and a timestep, computes the proximity of the satellite.
 
     We calculate the angle between the satellite and the task, and then
-    use a gaussian to determine the benefit, starting at 5% of the benefit
+    use a gaussian to determine the proximity, starting at 0.05
     when the angle between the satellite and the task is the maximum FOV,
-    and rising to the maximum when the satellite is directly overhead.
+    and rising to 1 when the satellite is directly overhead.
     """
     sat_r = sat.orbit.r.to_value(u.km)
     sat_to_task = task.loc.cartesian_cords.to_value(u.km) - sat_r
@@ -369,15 +383,14 @@ def calc_fov_benefits(sat, task, k):
     angle_btwn *= 180/np.pi #convert to degrees
 
     if angle_btwn < sat.fov and task.loc.is_visible(*sat.orbit.r):
-        gaussian_height = task.benefit[k]
-        height_at_max_fov = 0.05*gaussian_height
-        gaussian_sigma = np.sqrt(-sat.fov**2/(2*np.log(height_at_max_fov/gaussian_height)))
+        prox_at_max_fov = 0.05
+        gaussian_sigma = np.sqrt(-sat.fov**2/(2*np.log(prox_at_max_fov)))
 
-        task_benefit = gaussian_height*np.exp(-angle_btwn**2/(2*gaussian_sigma**2))
+        task_proximity = np.exp(-angle_btwn**2/(2*gaussian_sigma**2))
     else:
-        task_benefit = 0
+        task_proximity = 0
     
-    return task_benefit
+    return task_proximity
 
 def generate_max_L(timestep, sat):
     """

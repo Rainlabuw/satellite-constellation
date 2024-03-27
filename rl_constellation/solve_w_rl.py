@@ -6,7 +6,7 @@ from rl_constellation.rl_utils import get_local_and_neighboring_benefits
 from haal.solve_w_haal import choose_time_interval_sequence_centralized
 
 def solve_w_rl(benefits, init_assign, lambda_, policy_network, M, L, verbose=False,
-               state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None):
+               benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
     n = benefits.shape[0]
     m = benefits.shape[1]
     T = benefits.shape[2]
@@ -23,9 +23,9 @@ def solve_w_rl(benefits, init_assign, lambda_, policy_network, M, L, verbose=Fal
         #adjust benefit matrix based on handover
         adj_benefit_mat_window = np.copy(benefit_mat_window)
         if k > 0:
-            adj_benefit_mat_window[:,:,0] = state_dep_fn(adj_benefit_mat_window[:,:,0], chosen_assignments[-1], lambda_, extra_handover_info)
+            adj_benefit_mat_window[:,:,0] = benefit_fn(adj_benefit_mat_window[:,:,0], chosen_assignments[-1], lambda_, benefit_info)
         elif init_assign is not None:
-            adj_benefit_mat_window[:,:,0] = state_dep_fn(adj_benefit_mat_window[:,:,0], init_assign, lambda_, extra_handover_info)
+            adj_benefit_mat_window[:,:,0] = benefit_fn(adj_benefit_mat_window[:,:,0], init_assign, lambda_, benefit_info)
         else: #if it's the first time step and no initial assignment is given, just leave it alone
             pass
 
@@ -37,7 +37,7 @@ def solve_w_rl(benefits, init_assign, lambda_, policy_network, M, L, verbose=Fal
         chosen_assignments.append(chosen_assignment)
 
     total_value = calc_assign_seq_state_dependent_value(init_assign, chosen_assignments, benefits, lambda_, 
-                                                        state_dep_fn=state_dep_fn, extra_handover_info=extra_handover_info)
+                                                        benefit_fn=benefit_fn, benefit_info=benefit_info)
     
     return chosen_assignments, total_value
 

@@ -13,7 +13,7 @@ def gen_perms_of_perms(curr_perm_list, n, T):
             gen_perms_of_perms(curr_perm_list + [perm], n, T)
 
 def solve_optimally(benefits, init_ass, lambda_, 
-                    state_dep_fn=generic_handover_state_dep_fn, extra_handover_info=None):
+                    benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
     """
     Given a benefit matrix and an initial assignment,
     exhaustively search for and find the optimal value
@@ -44,8 +44,8 @@ def solve_optimally(benefits, init_ass, lambda_,
                 ass[i,j] = 1
             assignment_list.append(ass)
 
-        total_value = calc_assign_seq_state_dependent_value(init_ass, assignment_list, benefits, lambda_, state_dep_fn=state_dep_fn,
-                                                            extra_handover_info=extra_handover_info)
+        total_value = calc_assign_seq_state_dependent_value(init_ass, assignment_list, benefits, lambda_, benefit_fn=benefit_fn,
+                                                            benefit_info=benefit_info)
 
         if total_value > best_value:
             best_value = total_value
