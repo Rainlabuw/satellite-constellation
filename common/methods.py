@@ -125,7 +125,7 @@ class BenefitInfo(object):
     """
     pass
 
-def generic_handover_pen_benefit_fn(sat_cover_matrix, prev_assign, lambda_, benefit_info=None):
+def generic_handover_pen_benefit_fn(sat_prox_mat, prev_assign, lambda_, benefit_info=None):
     """
     Adjusts a 3D benefit matrix to account for generic handover penalty (i.e. constant penalty for switching tasks).
 
@@ -136,9 +136,9 @@ def generic_handover_pen_benefit_fn(sat_cover_matrix, prev_assign, lambda_, bene
         (If it is None, then all transitions between different tasks are scaled by 1.)
     Then, prev_assign @ T_trans is the matrix which entries of the benefit matrix should be adjusted.
     """
-    n = sat_cover_matrix.shape[0]
-    m = sat_cover_matrix.shape[1]
-    L = sat_cover_matrix.shape[2]
+    n = sat_prox_mat.shape[0]
+    m = sat_prox_mat.shape[1]
+    L = sat_prox_mat.shape[2]
 
     #Generate a matrix which determines the benefits of each task at each timestep.
     try:
@@ -148,7 +148,7 @@ def generic_handover_pen_benefit_fn(sat_cover_matrix, prev_assign, lambda_, bene
     task_benefits = np.tile(task_benefits, (n,1))
     task_benefits = np.repeat(task_benefits[:,:,np.newaxis], L, axis=2)
 
-    if prev_assign is None: return sat_cover_matrix * task_benefits
+    if prev_assign is None: return sat_prox_mat * task_benefits
 
     try:
         T_trans = benefit_info.T_trans
@@ -160,7 +160,7 @@ def generic_handover_pen_benefit_fn(sat_cover_matrix, prev_assign, lambda_, bene
 
     state_dep_scaling = prev_assign @ T_trans
 
-    benefits_hat = sat_cover_matrix * task_benefits
+    benefits_hat = sat_prox_mat * task_benefits
     benefits_hat[:,:,0] = benefits_hat[:,:,0]-lambda_*state_dep_scaling
 
     return benefits_hat
@@ -178,17 +178,21 @@ def calc_distance_btwn_solutions(agents1, agents2):
     return dist
 
 #~~~~~~~~~~~~~~~~~~~~STATE DEPENDENT VALUE STUFF~~~~~~~~~~~~~~
-def calc_assign_seq_state_dependent_value(init_assignment, assignments, benefits, lambda_,
+def calc_assign_seq_state_dependent_value(init_assignment, assignments, sat_proximities, lambda_,
                                           benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None, gamma=1):
+    """
+    Calculates the state dependent value of a sequence of assignments,
+    based on the provided benefit function.
+
+    gamma is the discount rate when this function is used in RL setups.
+    """
     state_dependent_value = 0
 
-    benefit_hat = np.copy(benefits[:,:,0])
-    if init_assignment is not None: #adjust based on init_assignment if it exists
-        benefit_hat = benefit_fn(np.expand_dims(benefits[:,:,0], axis=2), init_assignment, lambda_, benefit_info)
+    benefit_hat = benefit_fn(np.expand_dims(sat_proximities[:,:,0], axis=2), init_assignment, lambda_, benefit_info)
     state_dependent_value += (np.squeeze(benefit_hat) * assignments[0]).sum()
 
     for k in range(len(assignments)-1):
-        benefit_hat = benefit_fn(np.expand_dims(benefits[:,:,k+1], axis=2), assignments[k], lambda_, benefit_info)
+        benefit_hat = benefit_fn(np.expand_dims(sat_proximities[:,:,k+1], axis=2), assignments[k], lambda_, benefit_info)
         state_dependent_value += (np.squeeze(benefit_hat) * assignments[k+1]).sum() * gamma**(k+1)
 
     return state_dependent_value

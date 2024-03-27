@@ -8,7 +8,7 @@ import h3
 from shapely.geometry import Polygon
 import pickle
 
-from constellation_sim.ConstellationSim import ConstellationSim, generate_smooth_coverage_hexagons
+from constellation_sim.ConstellationSim import get_constellation_proxs_and_graphs_coverage
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
 
@@ -57,67 +57,18 @@ def variance_based_benefit_fn(sat_prox_mat, prev_assign, lambda_, benefit_info=N
                 agent_task_vars[i,j] = new_agent_task_var
 
         #Add variance to all tasks
-        agent_task_vars += var_add
+        agent_task_vars += benefit_info.var_add
 
     return benefit_mat
 
-def get_science_constellation_satproxs_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
-    """
-    Generate benefit mat of with (num_planes*sats_per_plane)
-    satellites covering the entire surface of the earth, with tasks
-    evenly covering the globe at the lowest H3 reslution possible (~10 deg lat/lon).
-
-    Input an inclination for the satellites and the tasks.
-    """
-    const = ConstellationSim(dt=dt, isl_dist=isl_dist)
-    earth = Earth
-
-    #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
-    #10 evenly spaced planes of satellites, each with n/10 satellites per plane
-    a = earth.R.to(u.km) + altitude*u.km
-    ecc = 0*u.one
-    inc = inc*u.deg
-    argp = 0*u.deg
-
-    for plane_num in range(num_planes):
-        raan = plane_num*360/num_planes*u.deg
-        for sat_num in range(num_sats_per_plane):
-            ta = sat_num*360/num_sats_per_plane*u.deg
-            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num, fov=fov)
-            const.add_sat(sat)
-
-    #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    hexagons = generate_smooth_coverage_hexagons((-inc.to_value(u.deg), inc.to_value(u.deg)), (-180, 180))
-    #Add tasks at centroid of all hexagons
-    for hexagon in hexagons:
-        boundary = h3.h3_to_geo_boundary(hexagon, geo_json=True)
-        polygon = Polygon(boundary)
-
-        lat = polygon.centroid.y
-        lon = polygon.centroid.x
-
-        task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
-        
-        #use benefits which are uniformly 1 to get scaling mat
-        task = Task(task_loc, np.ones(T))
-        const.add_task(task)
-
-    sat_prox_mat, graphs = const.propagate_orbits(T, calc_fov_based_proximities)
-    return sat_prox_mat, graphs
-
-def solve_science_w_dynamic_haal(sat_prox_mat, init_var, base_sensor_var, init_assignment, lambda_, L, 
+def solve_science_w_dynamic_haal(sat_prox_mat, init_assignment, lambda_, L, 
                                       distributed=False, parallel=False, verbose=False,
                                       eps=0.01, graphs=None, track_iters=False,
-                                      benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
+                                      benefit_fn=variance_based_benefit_fn, benefit_info=None):
     """
-    Aim to solve the problem using the HAAL algorithm, but with the benefit mat
-    changing over time as objects move through the area. We can't precalculate this
-    because we don't want the algorithm to have prior knowledge of the object movement
-    until it actually appears.
-
     INPUTS:
         sat_prox_mat: n x m x T array, which contains information about what satellites cover which tasks at what time.
-            sat_prox_mat[i,j,k] = the ratio of the benefits from task j that satellite i can collect at time k (i.e. 0 if sat can't see task)
+            sat_prox_mat[i,j,k] scales inversely with the covariance of the measurement of task j by satellite i at time k.
         When parallel_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
             as is done to parallelize auctions in the distributed version of the algorithm.
     """
@@ -138,57 +89,50 @@ def solve_science_w_dynamic_haal(sat_prox_mat, init_var, base_sensor_var, init_a
     
     total_iterations = 0 if distributed else None
     chosen_assignments = []
-    task_vars = init_var * np.ones(m)
 
-    vars = np.zeros((m,T))
+    vars_hist = np.zeros((m,T))
     for k in range(T):
         if verbose: print(f"Solving w HAAL, {k}/{T}", end='\r')
 
         #build benefit mat from task_objects and sat_prox_mat
         tstep_end = min(k+L, T)
-        benefit_window = np.copy(sat_prox_mat[:,:,k:tstep_end])
+        sat_prox_window = np.copy(sat_prox_mat[:,:,k:tstep_end])
 
-        for i in range(n):
-            for j in range(m):
-                if sat_prox_mat[i,j,k] == 0: sensor_var = 1000000
-                else: sensor_var = base_sensor_var / sat_prox_mat[i,j,k]
-                #Benefit is scaled by the change in variance resulting from the measurement
-                benefit_window[i,j,:] *= (task_vars[j] - 1/(1/task_vars[j] + 1/sensor_var))
-
-        task_vars += 0.01
-        vars[:,k] = task_vars
-
-        len_window = benefit_window.shape[-1]
+        len_window = sat_prox_window.shape[-1]
 
         all_time_intervals = generate_all_time_intervals(len_window)
         all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
 
         if distributed:
             if not nx.is_connected(graphs[k]): print("WARNING: GRAPH NOT CONNECTED")
-            haal_d_auction = HAAL_D_Parallel_Auction(benefit_window, curr_assignment, all_time_intervals, all_time_interval_sequences, 
+            haal_d_auction = HAAL_D_Parallel_Auction(sat_prox_window, curr_assignment, all_time_intervals, all_time_interval_sequences, 
                                                      eps=eps, graph=graphs[k], lambda_=lambda_, benefit_fn=benefit_fn,
                                                      benefit_info=benefit_info)
             haal_d_auction.run_auction()
-            chosen_assignment = convert_agents_to_assignment_mat(haal_d_auction.agents)
+            chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
 
             total_iterations += haal_d_auction.n_iterations
         else:
-            chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_window, 
+            chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, sat_prox_window, 
                                                                       lambda_, parallel_approx=parallel, benefit_fn=benefit_fn,
                                                                       benefit_info=benefit_info)
 
-        chosen_assignments.append(chosen_assignment)
         curr_assignment = chosen_assignment
 
         #Update the variance of the task based on the new measurement
         for j in range(m):
             if np.max(curr_assignment[:,j]) == 1:
+                prev_i = np.argmax(chosen_assignments[-1][:,j])
                 i = np.argmax(curr_assignment[:,j])
                 if sat_prox_mat[i,j,k] == 0: sensor_var = 1000000
-                else: sensor_var = base_sensor_var / sat_prox_mat[i,j,k]
-                task_vars[j] = 1/(1/task_vars[j] + 1/sensor_var)
-        task_vars += 0.01
-        vars[:,k] = task_vars
+                else: sensor_var = benefit_info.base_sensor_var / sat_prox_mat[i,j,k]
+
+                if prev_i != i: sensor_var *= lambda_
+                benefit_info.task_vars[j] = 1/(1/benefit_info.task_vars[j] + 1/sensor_var)
+
+        benefit_info.task_vars += benefit_info.var_add
+        chosen_assignments.append(chosen_assignment)
+        vars_hist[:,k] = benefit_info.task_vars
 
     if not track_iters or not distributed:
         return chosen_assignments, vars
@@ -271,7 +215,7 @@ if __name__ == "__main__":
     lambda_ = 0.05
     L = 6
 
-    # sat_prox_mat, graphs = get_science_constellation_satproxs_and_graphs_coverage(num_planes, num_sats_per_plane, T, i)
+    sat_prox_mat, graphs = get_constellation_proxs_and_graphs_coverage(num_planes, num_sats_per_plane, T, i)
     # with open('soil_moisture/soil_data/sat_prox_mat.pkl','wb') as f:
     #     pickle.dump(sat_prox_mat, f)
     # with open('soil_moisture/soil_data/graphs.pkl','wb') as f:
@@ -282,6 +226,10 @@ if __name__ == "__main__":
     with open('soil_moisture/soil_data/graphs.pkl','rb') as f:
         graphs = pickle.load(f)
     
+    n = sat_prox_mat.shape[0]
+    m = sat_prox_mat.shape[1]
+    T = sat_prox_mat.shape[2]
+
     ass, vars = solve_science_w_nha(sat_prox_mat, 1, 0.1, None, lambda_)
     tv = vars.sum()
     nha_vars = np.sum(vars, axis=0)
@@ -295,8 +243,12 @@ if __name__ == "__main__":
     print(f"NHA: value {tv}, nh {nh}")
 
     ##########################################################
+    benefit_info = BenefitInfo()
+    benefit_info.task_vars = 1 * np.ones(m)
+    benefit_info.base_sensor_var = 0.1
+    benefit_info.var_add = 0.01
 
-    ass, vars = solve_science_w_dynamic_haal(sat_prox_mat, 1, 0.1, None, lambda_, L,
+    ass, vars = solve_science_w_dynamic_haal(sat_prox_mat, None, lambda_, L, benefit_info=benefit_info,
                                            verbose=True)
     haal_vars = np.sum(vars, axis=0)
     tv = vars.sum()

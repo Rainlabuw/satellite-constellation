@@ -3,7 +3,7 @@ from common.methods import *
 import networkx as nx
 import time
 
-def solve_w_haal(benefits, init_assignment, lambda_, L, distributed=False, parallel=None, verbose=False,
+def solve_w_haal(sat_proximities, init_assignment, lambda_, L, distributed=False, parallel=None, verbose=False,
                  eps=0.01, graphs=None, track_iters=False, 
                  benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
     """
@@ -15,9 +15,9 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, distributed=False, paral
     if parallel is None: parallel = distributed #If no option is selected, parallel is off for centralized, but on for distributed
     if distributed and not parallel: print("Note: No serialized version of HAAL-D implemented yet. Solving parallelized.")
     
-    n = benefits.shape[0]
-    m = benefits.shape[1]
-    T = benefits.shape[2]
+    n = sat_proximities.shape[0]
+    m = sat_proximities.shape[1]
+    T = sat_proximities.shape[2]
 
     if graphs is None and distributed:
         graphs = [nx.complete_graph(n) for i in range(T)]
@@ -31,16 +31,16 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, distributed=False, paral
         if verbose: print(f"Solving w HAAL, {len(chosen_assignments)}/{T}", end='\r')
         curr_tstep = len(chosen_assignments)
         tstep_end = min(curr_tstep+L, T)
-        benefit_mat_window = benefits[:,:,curr_tstep:tstep_end]
+        prox_mat_window = sat_proximities[:,:,curr_tstep:tstep_end]
 
-        len_window = benefit_mat_window.shape[-1]
+        len_window = prox_mat_window.shape[-1]
 
         all_time_intervals = generate_all_time_intervals(len_window)
         all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
 
         if distributed:
             if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
-            haal_d_auction = HAAL_D_Parallel_Auction(benefit_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, 
+            haal_d_auction = HAAL_D_Parallel_Auction(prox_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, 
                                                      eps=eps, graph=graphs[curr_tstep], lambda_=lambda_, 
                                                      benefit_fn=benefit_fn, benefit_info=benefit_info)
             haal_d_auction.run_auction()
@@ -48,14 +48,14 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, distributed=False, paral
 
             total_iterations += haal_d_auction.n_iterations
         else:
-            chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, benefit_mat_window, 
+            chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, prox_mat_window, 
                                                                       lambda_, parallel_approx=parallel, benefit_fn=benefit_fn,
                                                                       benefit_info=benefit_info)
 
         chosen_assignments.append(chosen_assignment)
         curr_assignment = chosen_assignment
     
-    total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, benefits, lambda_, 
+    total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, sat_proximities, lambda_, 
                                                         benefit_fn=benefit_fn, benefit_info=benefit_info)
     
     if not track_iters or not distributed:
@@ -65,14 +65,14 @@ def solve_w_haal(benefits, init_assignment, lambda_, L, distributed=False, paral
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ CENTRALIZED FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, benefit_mat_window, lambda_, parallel_approx=False, 
+def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, prox_mat_window, lambda_, parallel_approx=False, 
                                               benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
     """
     Chooses the best time interval sequence from a list of time interval sequences,
     and return the corresponding assignment.
     """
-    n = benefit_mat_window.shape[0]
-    m = benefit_mat_window.shape[1]
+    n = prox_mat_window.shape[0]
+    m = prox_mat_window.shape[1]
 
     best_value = -np.inf
     best_assignment = None
@@ -85,17 +85,19 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
 
         for i, time_interval in enumerate(time_interval_sequence):
             #Grab benefit matrices from this time interval
-            combined_benefit_mat = benefit_mat_window[:,:,time_interval[0]:time_interval[1]+1]
-            if combined_benefit_mat.ndim == 2: #make sure combined_benefit_mat is 3D
-                combined_benefit_mat = np.expand_dims(combined_benefit_mat, axis=2) 
+            ti_prox_mats = prox_mat_window[:,:,time_interval[0]:time_interval[1]+1]
+            if ti_prox_mats.ndim == 2: #make sure ti_prox_mats is 3D
+                ti_prox_mats = np.expand_dims(ti_prox_mats, axis=2) 
 
-            #Adjust the benefit matrix to incentivize agents being assigned the same task twice.
-            #Note that if we're not approximating, we incentivize staying close to the previous assignment calculated during this
-            #time interval sequence, not the actual assignment that the agents currently have (i.e. prev_assignment)
-            benefit_hat = np.copy(combined_benefit_mat)
-            if not parallel_approx: benefit_hat = benefit_fn(benefit_hat, tis_assignment_curr, lambda_, benefit_info)
-            else: benefit_hat = benefit_fn(benefit_hat, prev_assignment, lambda_, benefit_info)
-            benefit_hat = benefit_hat.sum(axis=-1)
+            #From proximity info, compute the benefit matrix using benefit_fn.
+            #(By default, this incentivizes agents to be assigned the same task twice.
+            # Note that if we're not approximating, we incentivize staying close to the previous assignment calculated during this
+            # time interval sequence, not the actual assignment that the agents currently have (i.e. prev_assignment) )
+            if not parallel_approx: 
+                benefit_hat = benefit_fn(ti_prox_mats, tis_assignment_curr, lambda_, benefit_info)
+            else: 
+                benefit_hat = benefit_fn(ti_prox_mats, prev_assignment, lambda_, benefit_info)
+            benefit_hat = benefit_hat.sum(axis=-1) #add up the benefits from the entire time window to assign with
 
             #Generate an assignment using a centralized solution.
             central_assignments = solve_centralized(benefit_hat)
@@ -126,13 +128,13 @@ class HAAL_D_Parallel_Auction(object):
     
     The algorithm stores the assigned task for each agent in their .choice attribute.
     """
-    def __init__(self, benefits, curr_assignment, all_time_intervals, all_time_interval_sequences, benefit_fn=generic_handover_pen_benefit_fn,
+    def __init__(self, sat_proximities, curr_assignment, all_time_intervals, all_time_interval_sequences, benefit_fn=generic_handover_pen_benefit_fn,
                  eps=0.01, graph=None, lambda_=1, verbose=False, benefit_info=None):
         # benefit matrix for the next L timesteps
-        self.benefits = benefits
-        self.n = benefits.shape[0]
-        self.m = benefits.shape[1]
-        self.T = benefits.shape[2]
+        self.sat_proximities = sat_proximities
+        self.n = sat_proximities.shape[0]
+        self.m = sat_proximities.shape[1]
+        self.T = sat_proximities.shape[2]
 
         #If no graph is provided, assume the communication graph is complete.
         if graph is None:
@@ -155,9 +157,9 @@ class HAAL_D_Parallel_Auction(object):
         self.max_steps_since_last_update = nx.diameter(self.graph)
 
         #Build the list of agents participating in the auction, providing them only
-        #the benefits they recieve for completing each task and a list of their neighbors.
+        #their proximities to tasks, benefit info, and a list of their neighbors.
         self.agents = [HAAL_D_Parallel_Agent(self, i, all_time_intervals, all_time_interval_sequences, \
-                                    self.benefits[i,:,:], list(self.graph.neighbors(i))) for i in range(self.n)]
+                                    self.sat_proximities[i,:,:], list(self.graph.neighbors(i))) for i in range(self.n)]
 
     def run_auction(self):
         """
@@ -257,7 +259,7 @@ class HAAL_D_Parallel_Auction(object):
 
 
 class HAAL_D_Parallel_Agent(object):
-    def __init__(self, auction, id, all_time_intervals, all_time_interval_sequences, benefits, neighbors):
+    def __init__(self, auction, id, all_time_intervals, all_time_interval_sequences, proximities, neighbors):
         self.id = id
 
         #Grab info from auction
@@ -267,16 +269,17 @@ class HAAL_D_Parallel_Agent(object):
         self.eps = auction.eps
         self.max_steps_since_last_update = auction.max_steps_since_last_update
         self.benefit_fn = auction.benefit_fn
+        #TODO: this benefit info is gonna need to change per individual satellite
         self.benefit_info = auction.benefit_info
 
         self.all_time_intervals = all_time_intervals
         self.all_time_interval_sequences = all_time_interval_sequences
 
         #Benefits and prices are mxL matrices.
-        self.benefits = benefits
+        self.proximities = proximities
 
-        self.m = benefits.shape[0]
-        self.T = benefits.shape[1]
+        self.m = proximities.shape[0]
+        self.T = proximities.shape[1]
 
         #~~~~~~~Attributes which the agent uses to run the auction, and which it publishes to other agents~~~~~~~~
         self.high_bidders = {}
@@ -330,15 +333,15 @@ class HAAL_D_Parallel_Agent(object):
 
         For a single agent, this manifests as returning a m-length vector of benefits for each task.
         """
-        #Grab benefits for this time interval
-        time_interval_benefits = np.copy(self.benefits[:,ti[0]:ti[1]+1])
+        #Grab proximities for this time interval
+        time_interval_proximities = np.copy(self.proximities[:,ti[0]:ti[1]+1])
         #Add dimension for number of agents so we can use our standard state dependent functions
-        time_interval_benefits = np.expand_dims(time_interval_benefits, axis=0)
-        if time_interval_benefits.ndim == 2: #make sure time_interval_benefits is 3D
-            time_interval_benefits = np.expand_dims(time_interval_benefits, axis=2)
+        time_interval_proximities = np.expand_dims(time_interval_proximities, axis=0)
+        if time_interval_proximities.ndim == 2: #make sure time_interval_proximities is 3D
+            time_interval_proximities = np.expand_dims(time_interval_proximities, axis=2)
 
-        time_interval_benefits = self.benefit_fn(time_interval_benefits, prev_assignment, self.lambda_, self.benefit_info)
-        benefit_hat = np.squeeze(time_interval_benefits.sum(axis=-1))
+        benefit_hat = self.benefit_fn(time_interval_proximities, prev_assignment, self.lambda_, self.benefit_info)
+        benefit_hat = np.squeeze(time_interval_proximities.sum(axis=-1))
 
         return benefit_hat
 

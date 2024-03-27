@@ -380,11 +380,11 @@ def spencer_experiment_plots():
     plt.savefig('large_ground_track.pdf')
     plt.show()
 
-def update_object_track(k, ax, earth_image, task_to_hex_map, sat_cover_matrix, task_objects, assignments, task_trans_state_dep_scaling_mat):
+def update_object_track(k, ax, earth_image, task_to_hex_map, sat_prox_mat, task_objects, assignments, task_trans_state_dep_scaling_mat):
     ax.clear()
 
-    m = sat_cover_matrix.shape[1]
-    T = sat_cover_matrix.shape[2]
+    m = sat_prox_mat.shape[1]
+    T = sat_prox_mat.shape[2]
 
     # Display the Earth image background
     ax.imshow(earth_image, extent=[-180, 180, -90, 90], aspect='auto', alpha=0.6)
@@ -407,7 +407,7 @@ def update_object_track(k, ax, earth_image, task_to_hex_map, sat_cover_matrix, t
         else: assigned_sat = None
         #Determine coverage contribution from primary satellite:
         if assigned_sat is not None:
-            coverage += sat_cover_matrix[assigned_sat, task, k]
+            coverage += sat_prox_mat[assigned_sat, task, k]
         
         #if secondary task is assigned, find the satellite that is assigned to it
         if np.max(assignments[k][:,task+m//2] == 1):
@@ -415,7 +415,7 @@ def update_object_track(k, ax, earth_image, task_to_hex_map, sat_cover_matrix, t
         else: sec_assigned_sat = None
         #Determine coverage contribution from secondary satellite:
         if sec_assigned_sat is not None:
-            coverage += sat_cover_matrix[sec_assigned_sat, task+m//2, k]
+            coverage += sat_prox_mat[sec_assigned_sat, task+m//2, k]
 
         #determine if the task is uncaptured this step bc of handover or unassignment
         uncaptured = False
@@ -471,11 +471,11 @@ def update_object_track(k, ax, earth_image, task_to_hex_map, sat_cover_matrix, t
     plt.title(f"Time: +{k*30}/{T*30} sec.")
             
 
-def plot_object_track_scenario(hexagon_to_task_mapping, sat_cover_matrix, task_objects, assignments, task_trans_state_dep_scaling_mat,
+def plot_object_track_scenario(hexagon_to_task_mapping, sat_prox_mat, task_objects, assignments, task_trans_state_dep_scaling_mat,
                                save_loc, show=True):
-    n = sat_cover_matrix.shape[0]
-    m = sat_cover_matrix.shape[1]
-    T = sat_cover_matrix.shape[2]
+    n = sat_prox_mat.shape[0]
+    m = sat_prox_mat.shape[1]
+    T = sat_prox_mat.shape[2]
 
     earth_image = mpimg.imread('scaled_down_highres_earth.jpg')
 
@@ -487,7 +487,7 @@ def plot_object_track_scenario(hexagon_to_task_mapping, sat_cover_matrix, task_o
     for hex, task in hexagon_to_task_mapping.items():
         task_to_hex_mapping[task] = hex
 
-    ani  = FuncAnimation(fig, update_object_track, fargs=(ax, earth_image, task_to_hex_mapping, sat_cover_matrix, task_objects, assignments, task_trans_state_dep_scaling_mat), 
+    ani  = FuncAnimation(fig, update_object_track, fargs=(ax, earth_image, task_to_hex_mapping, sat_prox_mat, task_objects, assignments, task_trans_state_dep_scaling_mat), 
                          frames=T, interval=1000, blit=False)
 
     if show:

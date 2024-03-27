@@ -68,35 +68,35 @@ def get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T, fov=60
             const.add_sat(sat)
 
     #generate satellite coverage matrix with all satellites, even those far away from the area
-    full_sat_cover_matrix, graphs = const.propagate_orbits(T, calc_fov_based_proximities)
+    full_sat_prox_matrix, graphs = const.propagate_orbits(T, calc_fov_based_proximities)
 
     #Remove satellites which never cover any tasks in the entire T window
-    truncated_sat_cover_matrix = np.zeros_like(full_sat_cover_matrix)
+    truncated_sat_prox_matrix = np.zeros_like(full_sat_prox_matrix)
     old_to_new_sat_mapping = {}
     active_sats = []
     for i in range(const.n):
-        total_sat_scaling = np.sum(full_sat_cover_matrix[i,:,:])
+        total_sat_scaling = np.sum(full_sat_prox_matrix[i,:,:])
         if total_sat_scaling > 0: #it has nonzero scaling on at least one task at one timestep
             curr_sat = const.sats[i]
             curr_sat.id = len(active_sats)
 
-            truncated_sat_cover_matrix[curr_sat.id,:,:] = full_sat_cover_matrix[i,:,:]
+            truncated_sat_prox_matrix[curr_sat.id,:,:] = full_sat_prox_matrix[i,:,:]
 
             old_to_new_sat_mapping[i] = curr_sat.id
             active_sats.append(curr_sat)
     
     const.sats = active_sats
     sats_to_track = [deepcopy(sat) for sat in active_sats]
-    truncated_sat_cover_matrix = truncated_sat_cover_matrix[:len(const.sats),:,:] #truncate unused satellites
+    truncated_sat_prox_matrix = truncated_sat_prox_matrix[:len(const.sats),:,:] #truncate unused satellites
 
     # #Pick a satellite that starts out of view to track as it traverses the area
     # sat_to_track = None
     # most_timesteps_in_view = 0
     # for sat in const.sats:
-    #     if np.sum(truncated_sat_cover_matrix[sat.id,:,0]) == 0 and sat.id != 25 and sat.id != 26:
+    #     if np.sum(truncated_sat_prox_matrix[sat.id,:,0]) == 0 and sat.id != 25 and sat.id != 26:
     #         in_view_timesteps = 0
     #         for k in range(T):
-    #             if np.sum(truncated_sat_cover_matrix[sat.id,:,k]) > 0:
+    #             if np.sum(truncated_sat_prox_matrix[sat.id,:,k]) > 0:
     #                 in_view_timesteps += 1
             
     #         if in_view_timesteps > most_timesteps_in_view:
@@ -124,17 +124,17 @@ def get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T, fov=60
     num_original_tasks = len(hexagons)
     
     print(f"Num synthetic sats: {num_synthetic_sats}")
-    full_sat_cover_matrix_w_synthetic_sats = np.zeros((num_synthetic_sats, num_original_tasks, T))
-    print(f"Full sat cover matrix shape: {full_sat_cover_matrix.shape}, truncated shape: {truncated_sat_cover_matrix.shape}, synthetic shape: {full_sat_cover_matrix_w_synthetic_sats.shape}")
+    full_sat_prox_matrix_w_synthetic_sats = np.zeros((num_synthetic_sats, num_original_tasks, T))
+    print(f"Full sat cover matrix shape: {full_sat_prox_matrix.shape}, truncated shape: {truncated_sat_prox_matrix.shape}, synthetic shape: {full_sat_prox_matrix_w_synthetic_sats.shape}")
 
     # #add dummy tasks to sat cover matrix, if necessary
     # base_synthetic_benefit_matrix = np.zeros((num_real_sats, num_tasks_after_synthetic_sats, T))
-    # base_synthetic_benefit_matrix[:,:len(hexagons),:] = truncated_sat_cover_matrix
+    # base_synthetic_benefit_matrix[:,:len(hexagons),:] = truncated_sat_prox_matrix
     # print(f"Base synthetic sat cover matrix shape: {base_synthetic_benefit_matrix.shape}")
 
     for task_num in range(num_tasks_per_sat):
         #Adjust sat cover matrix to reflect the synthetic satellites and tasks
-        full_sat_cover_matrix_w_synthetic_sats[task_num*num_real_sats:(task_num+1)*num_real_sats,:num_original_tasks,:] = truncated_sat_cover_matrix*(0.9**task_num)
+        full_sat_prox_matrix_w_synthetic_sats[task_num*num_real_sats:(task_num+1)*num_real_sats,:num_original_tasks,:] = truncated_sat_prox_matrix*(0.9**task_num)
 
         #Add appropriate graph connections for the synthetic satellites
         if task_num > 0: #only add for non-original tasks
@@ -147,8 +147,8 @@ def get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T, fov=60
                     for neigh in grph.neighbors(real_sat_num):
                         grph.add_edge(neigh, synthetic_sat_num)
 
-    n = full_sat_cover_matrix_w_synthetic_sats.shape[0]
-    m = full_sat_cover_matrix_w_synthetic_sats.shape[1]
+    n = full_sat_prox_matrix_w_synthetic_sats.shape[0]
+    m = full_sat_prox_matrix_w_synthetic_sats.shape[1]
     
     #Create matrix which indicates that synthetic agents representing the same real agent
     A_eqiv = np.zeros((n,n))
@@ -174,8 +174,8 @@ def get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T, fov=60
     #             T_trans[j,hex_to_task_mapping[neighbor_hex]] = 0
     #             T_trans[hex_to_task_mapping[neighbor_hex],j] = 0
 
-    with open('multitask_experiment/sat_cover_matrix.pkl','wb') as f:
-        pickle.dump(full_sat_cover_matrix_w_synthetic_sats, f)
+    with open('multitask_experiment/sat_prox_matrix.pkl','wb') as f:
+        pickle.dump(full_sat_prox_matrix_w_synthetic_sats, f)
     with open('multitask_experiment/graphs.pkl','wb') as f:
         pickle.dump(graphs, f)
     with open('multitask_experiment/T_trans.pkl','wb') as f:
@@ -189,7 +189,7 @@ def get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T, fov=60
     with open('multitask_experiment/sats_to_track.pkl','wb') as f:
         pickle.dump(sats_to_track, f)
     
-    return full_sat_cover_matrix_w_synthetic_sats, graphs, T_trans, A_eqiv, \
+    return full_sat_prox_matrix_w_synthetic_sats, graphs, T_trans, A_eqiv, \
         hex_to_task_mapping, const, sats_to_track
 
 def calc_multiassign_benefit_fn(benefits, prev_assign, lambda_, benefit_info=None):
@@ -386,11 +386,11 @@ if __name__ == "__main__":
     lat_range = (20, 50)
     lon_range = (73, 135)
     T = 10
-    full_sat_cover_matrix_w_synthetic_sats, graphs, T_trans, A_eqiv, \
+    full_sat_prox_matrix_w_synthetic_sats, graphs, T_trans, A_eqiv, \
         hex_to_task_mapping, const, sat_to_track = get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T)
 
     # with open('multitask_experiment/benefit_matrix.pkl','rb') as f:
-    #     full_sat_cover_matrix_w_synthetic_sats = pickle.load(f)
+    #     full_sat_prox_matrix_w_synthetic_sats = pickle.load(f)
     # with open('multitask_experiment/graphs.pkl','rb') as f:
     #     graphs = pickle.load(f)
     # with open('multitask_experiment/hex_task_map.pkl','rb') as f:
@@ -406,5 +406,5 @@ if __name__ == "__main__":
     benefit_info.T_trans = T_trans
     benefit_info.A_eqiv = A_eqiv
     
-    ass, tv = solve_multitask_w_haal(full_sat_cover_matrix_w_synthetic_sats, None, 0.5, 3, distributed=False, verbose=True, benefit_info=benefit_info)
+    ass, tv = solve_multitask_w_haal(full_sat_prox_matrix_w_synthetic_sats, None, 0.5, 3, distributed=False, verbose=True, benefit_info=benefit_info)
     # print(tv)

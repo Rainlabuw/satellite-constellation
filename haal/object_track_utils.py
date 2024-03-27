@@ -35,7 +35,7 @@ def calc_pct_objects_tracked(assignments, task_objects, task_trans_state_dep_sca
 
     return num_tracked/num_tracking_opportunities
 
-def object_tracking_history(assignments, task_objects, task_trans_state_dep_scaling_mat, sat_cover_matrix):
+def object_tracking_history(assignments, task_objects, task_trans_state_dep_scaling_mat, sat_prox_mat):
     T = len(assignments)
     n = assignments[0].shape[0]
     m = assignments[0].shape[1]
@@ -53,22 +53,22 @@ def object_tracking_history(assignments, task_objects, task_trans_state_dep_scal
                 #associated sat
                 if np.max(assignments[k][:,obj_task]) == 1:
                     prim_sat = np.argmax(assignments[k][:,obj_task])
-                    print(f"\tPrim task: sat {prim_sat} task {obj_task} for {sat_cover_matrix[prim_sat, obj_task, k]} scaling")
+                    print(f"\tPrim task: sat {prim_sat} task {obj_task} for {sat_prox_mat[prim_sat, obj_task, k]} scaling")
                 else:
                     prim_sat = None
                     print(f"\tPrim task not completed")
                 if prim_sat is not None:
-                    print(f"\tPrim sat: prev task {assignments[k-1][prim_sat,:].nonzero()[0]} for {sat_cover_matrix[prim_sat, obj_task, k-1]} scaling")
+                    print(f"\tPrim sat: prev task {assignments[k-1][prim_sat,:].nonzero()[0]} for {sat_prox_mat[prim_sat, obj_task, k-1]} scaling")
 
                 #associated sec sat
                 if np.max(assignments[k][:,obj_sec_task]) == 1:
                     sec_sat = np.argmax(assignments[k][:,obj_sec_task])
-                    print(f"\tSec task: sat {sec_sat} task {obj_sec_task} for {sat_cover_matrix[sec_sat, obj_sec_task, k]} scaling")
+                    print(f"\tSec task: sat {sec_sat} task {obj_sec_task} for {sat_prox_mat[sec_sat, obj_sec_task, k]} scaling")
                 else:
                     sec_sat = None
                     print(f"\tSec task not completed")
                 if sec_sat is not None:
-                    print(f"\tSec sat: prev task {assignments[k-1][sec_sat,:].nonzero()[0]} for {sat_cover_matrix[sec_sat, obj_sec_task, k-1]} scaling")
+                    print(f"\tSec sat: prev task {assignments[k-1][sec_sat,:].nonzero()[0]} for {sat_prox_mat[sec_sat, obj_sec_task, k-1]} scaling")
 
 if __name__ == "__main__":
     pass
