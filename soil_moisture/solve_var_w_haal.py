@@ -15,34 +15,34 @@ from constellation_sim.Task import Task
 from haal.solve_w_haal import HAAL_D_Parallel_Auction, choose_time_interval_sequence_centralized
 from common.methods import *
 
-def generate_benefits_from_satcover_and_var(sat_cover_matrix, prev_assign, lambda_,
-                                            task_vars, base_sensor_var, var_add):
+def variance_based_benefit_fn(sat_prox_mat, prev_assign, lambda_, benefit_info=None):
     """
-    Create a benefit matrix based on the previous assignment and the variances of each area.
+    Create a benefit mat based on the previous assignment and the variances of each area.
     As a handover penalty, the sensor variance of the first measurement of a given task is much higher.
 
     INPUTS:
-     - a 3D (n x m x T) matrix of the satellite coverage matrix, as well as previous assignments.
+     - a 3D (n x m x T) mat of the satellite coverage mat, as well as previous assignments.
      - lambda_ is in this case the amount the sensor covariance is multiplied for the first measurement.
-     - task_vars is the m variances of the tasks at the current state.
-     - base_sensor_var is the baseline sensor variance
-     - var_add is how much variance is added at each time step.
+     - benefit_info should be a structure containing the following info:
+        - task_vars is the m variances of the tasks at the current state.
+        - base_sensor_var is the baseline sensor variance
+        - var_add is how much variance is added at each time step.
     """
-    n = sat_cover_matrix.shape[0]
-    m = sat_cover_matrix.shape[1]
-    T = sat_cover_matrix.shape[2]
+    n = sat_prox_mat.shape[0]
+    m = sat_prox_mat.shape[1]
+    T = sat_prox_mat.shape[2]
 
-    benefit_matrix = np.zeros_like(sat_cover_matrix)
+    benefit_mat = np.zeros_like(sat_prox_mat)
 
     #Transform curr_var (m,) to (n,m) by repeating the value across the agent axis (axis 0).
     #This array will track the variance of each task j, assuming that it was done by satellite i.
-    agent_task_vars = np.tile(task_vars, (n, 1))
+    agent_task_vars = np.tile(benefit_info.task_vars, (n, 1))
     for k in range(T):
         for i in range(n):
             for j in range(m):
                 #Calculate the sensor variance for sat i measuring task j at time k
-                if sat_cover_matrix[i,j,k] == 0: sensor_var = 1000000
-                else: sensor_var = base_sensor_var / sat_cover_matrix[i,j,k]
+                if sat_prox_mat[i,j,k] == 0: sensor_var = 1000000
+                else: sensor_var = benefit_info.base_sensor_var / sat_prox_mat[i,j,k]
 
                 #if the task was not previously assigned, multiply the sensor variance by lambda_ (>1)
                 if prev_assign[i,j] != 1 and k == 0:
@@ -51,7 +51,7 @@ def generate_benefits_from_satcover_and_var(sat_cover_matrix, prev_assign, lambd
                 #Calculate the new variance for the task after taking the observation.
                 #The reduction in variance is the benefit for the agent-task pair.
                 new_agent_task_var = 1/(1/agent_task_vars[i,j] + 1/sensor_var)
-                benefit_matrix[i,j,k] = agent_task_vars[i,j] - new_agent_task_var
+                benefit_mat[i,j,k] = agent_task_vars[i,j] - new_agent_task_var
 
                 #Update the variance of the task based on the new measurement
                 agent_task_vars[i,j] = new_agent_task_var
@@ -59,11 +59,11 @@ def generate_benefits_from_satcover_and_var(sat_cover_matrix, prev_assign, lambd
         #Add variance to all tasks
         agent_task_vars += var_add
 
-    return benefit_matrix
+    return benefit_mat
 
-def get_science_constellation_satcovers_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
+def get_science_constellation_satproxs_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
-    Generate benefit matrix of with (num_planes*sats_per_plane)
+    Generate benefit mat of with (num_planes*sats_per_plane)
     satellites covering the entire surface of the earth, with tasks
     evenly covering the globe at the lowest H3 reslution possible (~10 deg lat/lon).
 
@@ -98,35 +98,35 @@ def get_science_constellation_satcovers_and_graphs_coverage(num_planes, num_sats
 
         task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
-        #use benefits which are uniformly 1 to get scaling matrix
+        #use benefits which are uniformly 1 to get scaling mat
         task = Task(task_loc, np.ones(T))
         const.add_task(task)
 
-    sat_cover_matrix, graphs = const.propagate_orbits(T, calc_fov_based_proximities)
-    return sat_cover_matrix, graphs
+    sat_prox_mat, graphs = const.propagate_orbits(T, calc_fov_based_proximities)
+    return sat_prox_mat, graphs
 
-def solve_science_w_dynamic_haal(sat_coverage_matrix, init_var, base_sensor_var, init_assignment, lambda_, L, 
+def solve_science_w_dynamic_haal(sat_prox_mat, init_var, base_sensor_var, init_assignment, lambda_, L, 
                                       distributed=False, parallel=False, verbose=False,
                                       eps=0.01, graphs=None, track_iters=False,
                                       benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
     """
-    Aim to solve the problem using the HAAL algorithm, but with the benefit matrix
+    Aim to solve the problem using the HAAL algorithm, but with the benefit mat
     changing over time as objects move through the area. We can't precalculate this
     because we don't want the algorithm to have prior knowledge of the object movement
     until it actually appears.
 
     INPUTS:
-        sat_coverage_matrix: n x m x T array, which contains information about what satellites cover which tasks at what time.
-            sat_coverage_matrix[i,j,k] = the ratio of the benefits from task j that satellite i can collect at time k (i.e. 0 if sat can't see task)
+        sat_prox_mat: n x m x T array, which contains information about what satellites cover which tasks at what time.
+            sat_prox_mat[i,j,k] = the ratio of the benefits from task j that satellite i can collect at time k (i.e. 0 if sat can't see task)
         When parallel_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
             as is done to parallelize auctions in the distributed version of the algorithm.
     """
     if parallel is None: parallel = distributed #If no option is selected, parallel is off for centralized, but on for distributed
     if distributed and not parallel: print("Note: No serialized version of HAAL-D implemented yet. Solving parallelized.")
 
-    n = sat_coverage_matrix.shape[0]
-    m = sat_coverage_matrix.shape[1]
-    T = sat_coverage_matrix.shape[2]
+    n = sat_prox_mat.shape[0]
+    m = sat_prox_mat.shape[1]
+    T = sat_prox_mat.shape[2]
 
     if graphs is None:
         if distributed:
@@ -144,14 +144,14 @@ def solve_science_w_dynamic_haal(sat_coverage_matrix, init_var, base_sensor_var,
     for k in range(T):
         if verbose: print(f"Solving w HAAL, {k}/{T}", end='\r')
 
-        #build benefit matrix from task_objects and sat_cover_matrix
+        #build benefit mat from task_objects and sat_prox_mat
         tstep_end = min(k+L, T)
-        benefit_window = np.copy(sat_coverage_matrix[:,:,k:tstep_end])
+        benefit_window = np.copy(sat_prox_mat[:,:,k:tstep_end])
 
         for i in range(n):
             for j in range(m):
-                if sat_coverage_matrix[i,j,k] == 0: sensor_var = 1000000
-                else: sensor_var = base_sensor_var / sat_coverage_matrix[i,j,k]
+                if sat_prox_mat[i,j,k] == 0: sensor_var = 1000000
+                else: sensor_var = base_sensor_var / sat_prox_mat[i,j,k]
                 #Benefit is scaled by the change in variance resulting from the measurement
                 benefit_window[i,j,:] *= (task_vars[j] - 1/(1/task_vars[j] + 1/sensor_var))
 
@@ -169,7 +169,7 @@ def solve_science_w_dynamic_haal(sat_coverage_matrix, init_var, base_sensor_var,
                                                      eps=eps, graph=graphs[k], lambda_=lambda_, benefit_fn=benefit_fn,
                                                      benefit_info=benefit_info)
             haal_d_auction.run_auction()
-            chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
+            chosen_assignment = convert_agents_to_assignment_mat(haal_d_auction.agents)
 
             total_iterations += haal_d_auction.n_iterations
         else:
@@ -184,8 +184,8 @@ def solve_science_w_dynamic_haal(sat_coverage_matrix, init_var, base_sensor_var,
         for j in range(m):
             if np.max(curr_assignment[:,j]) == 1:
                 i = np.argmax(curr_assignment[:,j])
-                if sat_coverage_matrix[i,j,k] == 0: sensor_var = 1000000
-                else: sensor_var = base_sensor_var / sat_coverage_matrix[i,j,k]
+                if sat_prox_mat[i,j,k] == 0: sensor_var = 1000000
+                else: sensor_var = base_sensor_var / sat_prox_mat[i,j,k]
                 task_vars[j] = 1/(1/task_vars[j] + 1/sensor_var)
         task_vars += 0.01
         vars[:,k] = task_vars
@@ -195,28 +195,28 @@ def solve_science_w_dynamic_haal(sat_coverage_matrix, init_var, base_sensor_var,
     else:
         return chosen_assignments, vars, total_iterations/T
 
-def solve_science_w_nha(sat_coverage_matrix, init_var, base_sensor_var, init_assignment, lambda_, 
+def solve_science_w_nha(sat_prox_mat, init_var, base_sensor_var, init_assignment, lambda_, 
                                       distributed=False, parallel=False, verbose=False,
                                       eps=0.01, graphs=None, track_iters=False,
                                       benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
     """
-    Aim to solve the problem using the HAAL algorithm, but with the benefit matrix
+    Aim to solve the problem using the HAAL algorithm, but with the benefit mat
     changing over time as objects move through the area. We can't precalculate this
     because we don't want the algorithm to have prior knowledge of the object movement
     until it actually appears.
 
     INPUTS:
-        sat_coverage_matrix: n x m x T array, which contains information about what satellites cover which tasks at what time.
-            sat_coverage_matrix[i,j,k] = the ratio of the benefits from task j that satellite i can collect at time k (i.e. 0 if sat can't see task)
+        sat_prox_mat: n x m x T array, which contains information about what satellites cover which tasks at what time.
+            sat_prox_mat[i,j,k] = the ratio of the benefits from task j that satellite i can collect at time k (i.e. 0 if sat can't see task)
         When parallel_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
             as is done to parallelize auctions in the distributed version of the algorithm.
     """
     if parallel is None: parallel = distributed #If no option is selected, parallel is off for centralized, but on for distributed
     if distributed and not parallel: print("Note: No serialized version of HAAL-D implemented yet. Solving parallelized.")
 
-    n = sat_coverage_matrix.shape[0]
-    m = sat_coverage_matrix.shape[1]
-    T = sat_coverage_matrix.shape[2]
+    n = sat_prox_mat.shape[0]
+    m = sat_prox_mat.shape[1]
+    T = sat_prox_mat.shape[2]
 
     if graphs is None:
         if distributed:
@@ -234,12 +234,12 @@ def solve_science_w_nha(sat_coverage_matrix, init_var, base_sensor_var, init_ass
     for k in range(T):
         if verbose: print(f"Solving w HAAL, {k}/{T}", end='\r')
 
-        #build benefit matrix from task_objects and sat_cover_matrix
-        benefit_window = np.copy(sat_coverage_matrix[:,:,k])
+        #build benefit mat from task_objects and sat_prox_mat
+        benefit_window = np.copy(sat_prox_mat[:,:,k])
         for i in range(n):
             for j in range(m):
-                if sat_coverage_matrix[i,j,k] == 0: sensor_var = 1000000
-                else: sensor_var = base_sensor_var / sat_coverage_matrix[i,j,k]
+                if sat_prox_mat[i,j,k] == 0: sensor_var = 1000000
+                else: sensor_var = base_sensor_var / sat_prox_mat[i,j,k]
                 #Benefit is scaled by the change in variance resulting from the measurement
                 benefit_window[i,j] *= (task_vars[j] - 1/(1/task_vars[j] + 1/sensor_var))
 
@@ -252,8 +252,8 @@ def solve_science_w_nha(sat_coverage_matrix, init_var, base_sensor_var, init_ass
         for j in range(m):
             if np.max(curr_assignment[:,j]) == 1:
                 i = np.argmax(curr_assignment[:,j])
-                if sat_coverage_matrix[i,j,k] == 0: sensor_var = 1000000
-                else: sensor_var = base_sensor_var / sat_coverage_matrix[i,j,k]
+                if sat_prox_mat[i,j,k] == 0: sensor_var = 1000000
+                else: sensor_var = base_sensor_var / sat_prox_mat[i,j,k]
                 task_vars[j] = 1/(1/task_vars[j] + 1/sensor_var)
         task_vars += 0.01
         vars[:,k] = task_vars
@@ -271,21 +271,21 @@ if __name__ == "__main__":
     lambda_ = 0.05
     L = 6
 
-    # sat_cover_matrix, graphs = get_science_constellation_satcovers_and_graphs_coverage(num_planes, num_sats_per_plane, T, i)
-    # with open('soil_moisture/soil_data/sat_cover_matrix.pkl','wb') as f:
-    #     pickle.dump(sat_cover_matrix, f)
+    # sat_prox_mat, graphs = get_science_constellation_satproxs_and_graphs_coverage(num_planes, num_sats_per_plane, T, i)
+    # with open('soil_moisture/soil_data/sat_prox_mat.pkl','wb') as f:
+    #     pickle.dump(sat_prox_mat, f)
     # with open('soil_moisture/soil_data/graphs.pkl','wb') as f:
     #     pickle.dump(graphs, f)
 
-    with open('soil_moisture/soil_data/sat_cover_matrix.pkl','rb') as f:
-        sat_cover_matrix = pickle.load(f)
+    with open('soil_moisture/soil_data/sat_prox_mat.pkl','rb') as f:
+        sat_prox_mat = pickle.load(f)
     with open('soil_moisture/soil_data/graphs.pkl','rb') as f:
         graphs = pickle.load(f)
     
-    ass, vars = solve_science_w_nha(sat_cover_matrix, 1, 0.1, None, lambda_)
+    ass, vars = solve_science_w_nha(sat_prox_mat, 1, 0.1, None, lambda_)
     tv = vars.sum()
     nha_vars = np.sum(vars, axis=0)
-    _, nh = calc_value_and_num_handovers(ass, np.zeros_like(sat_cover_matrix), None, lambda_)
+    _, nh = calc_value_and_num_handovers(ass, np.zeros_like(sat_prox_mat), None, lambda_)
 
     with open('soil_moisture/soil_data/nha_vars.pkl', 'wb') as f:
         pickle.dump(vars, f)
@@ -296,11 +296,11 @@ if __name__ == "__main__":
 
     ##########################################################
 
-    ass, vars = solve_science_w_dynamic_haal(sat_cover_matrix, 1, 0.1, None, lambda_, L,
+    ass, vars = solve_science_w_dynamic_haal(sat_prox_mat, 1, 0.1, None, lambda_, L,
                                            verbose=True)
     haal_vars = np.sum(vars, axis=0)
     tv = vars.sum()
-    _, nh = calc_value_and_num_handovers(ass, np.zeros_like(sat_cover_matrix), None, lambda_)
+    _, nh = calc_value_and_num_handovers(ass, np.zeros_like(sat_prox_mat), None, lambda_)
 
     with open('soil_moisture/soil_data/haal_vars.pkl', 'wb') as f:
         pickle.dump(vars, f)
