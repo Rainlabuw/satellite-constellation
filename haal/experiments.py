@@ -8,6 +8,7 @@ import pickle
 from collections import defaultdict
 
 from common.methods import *
+from common.plotting_utils import plot_object_track_scenario, plot_multitask_scenario
 
 from haal.solve_optimally import solve_optimally
 from haal.solve_wout_handover import solve_wout_handover
@@ -19,7 +20,8 @@ from haal.solve_greedily import solve_greedily
 from haal.object_track_scenario import timestep_loss_pen_benefit_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_prox_mat_and_graphs_object_tracking_area
 from haal.object_track_utils import calc_pct_objects_tracked, object_tracking_history
 from haal.multi_task_scenario import solve_multitask_w_haal, calc_multiassign_benefit_fn, get_benefit_matrix_and_graphs_multitask_area
-from common.plotting_utils import plot_object_track_scenario, plot_multitask_scenario
+
+from envs.simple_assign_env import SimpleAssignEnv
 
 from constellation_sim.ConstellationSim import get_constellation_proxs_and_graphs_coverage, get_constellation_proxs_and_graphs_random_tasks, ConstellationSim
 from constellation_sim.Satellite import Satellite
@@ -1273,12 +1275,15 @@ def paper_experiment1():
     with open("haal/haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
         graphs = pickle.load(f)
 
-    _, no_handover_val = solve_wout_handover(benefits, None, lambda_)
+    env = SimpleAssignEnv(benefits, None, lambda_)
+    _, no_handover_val = solve_wout_handover(env)
+    print(no_handover_val)
 
     # _, cbba_val = solve_w_centralized_CBBA(benefits, None, lambda_, max_L, verbose=True)
     cbba_val = 0
 
-    _, greedy_val = solve_greedily(benefits, None, lambda_)
+    env.reset()
+    _, greedy_val = solve_greedily(env)
     print(greedy_val)
     itersd_by_lookahead = []
     valued_by_lookahead = []
@@ -1293,12 +1298,15 @@ def paper_experiment1():
         # iterscbba_by_lookahead.append(avg_iters)
         # valuecbba_by_lookahead.append(cbba_val)
         
-        _, d_val, avg_iters = solve_w_haal(benefits, None, lambda_, L, graphs=graphs, verbose=True, track_iters=True, distributed=True)
+        env.reset()
+        _, d_val, avg_iters = solve_w_haal(env, L, graphs=graphs, verbose=True, track_iters=True, distributed=True)
         print(d_val, avg_iters)
         itersd_by_lookahead.append(avg_iters)
         valued_by_lookahead.append(d_val)
 
-        _, c_val = solve_w_haal(benefits, None, lambda_, L, distributed=False, verbose=True)
+        env.reset()
+        _, c_val = solve_w_haal(env, L, distributed=False, verbose=True)
+        print(c_val)
         valuec_by_lookahead.append(c_val)
 
     # #Values from 1/31, before scaling experiments

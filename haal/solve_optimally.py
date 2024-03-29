@@ -12,8 +12,7 @@ def gen_perms_of_perms(curr_perm_list, n, T):
         for perm in itertools.permutations(range(n)):
             gen_perms_of_perms(curr_perm_list + [perm], n, T)
 
-def solve_optimally(benefits, init_ass, lambda_, 
-                    benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
+def solve_optimally(benefits, init_ass, lambda_, benefit_fn, benefit_info=None):
     """
     Given a benefit matrix and an initial assignment,
     exhaustively search for and find the optimal value
