@@ -337,7 +337,7 @@ class HAAL_D_Parallel_Agent(object):
         time_interval_proximities = np.expand_dims(time_interval_proximities, axis=0)
 
         benefit_hat = self.benefit_fn(time_interval_proximities, prev_assignment, self.lambda_, self.benefit_info)
-        benefit_hat = np.squeeze(time_interval_proximities.sum(axis=-1))
+        benefit_hat = np.squeeze(benefit_hat.sum(axis=-1))
 
         return benefit_hat
 
@@ -447,7 +447,7 @@ class HAAL_D_Parallel_Agent(object):
 
 if __name__ == "__main__":
     np.random.seed(48)
-    benefits = 2*np.random.random((10, 10, 10))
+    benefits = 2*np.random.random((50, 50, 10))
 
     env = SimpleAssignEnv(benefits, None, 0.5)
 

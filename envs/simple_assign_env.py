@@ -85,6 +85,7 @@ def simple_handover_pen_benefit_fn(sat_prox_mat, prev_assign, lambda_, benefit_i
         (If it is None, then all transitions between different tasks are scaled by 1.)
     Then, prev_assign @ T_trans is the matrix which entries of the benefit matrix should be adjusted.
     """
+    if lambda_ is None: lambda_ = 0 #if lambda_ is not provided, then add no penalty so lambda_=0
     init_dim = sat_prox_mat.ndim
     if init_dim == 2: sat_prox_mat = np.expand_dims(sat_prox_mat, axis=2)
     n = sat_prox_mat.shape[0]
