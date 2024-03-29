@@ -1,7 +1,7 @@
 import pickle
 import numpy as np
 
-from soil_moisture.solve_var_w_haal import solve_science_w_dynamic_haal, variance_based_benefit_fn
+from soil_moisture.solve_var_w_haal import solve_var_w_dynamic_haal, variance_based_benefit_fn
 
 from common.methods import *
 
@@ -40,7 +40,7 @@ def create_basic_data():
     # nha_vars = np.sum(vars, axis=0)
     # _, nh = calc_value_and_num_handovers(ass, np.zeros_like(sat_prox_mat), None, lambda_)
     print(f"L = 1")
-    ass, tv, vars = solve_science_w_dynamic_haal(sat_prox_mat, None, lambda_, 1, verbose=True, benefit_info=benefit_info)
+    ass, tv, vars = solve_var_w_dynamic_haal(sat_prox_mat, None, lambda_, 1, verbose=True, benefit_info=benefit_info)
     haa_total_var = vars.sum()
     haa_vars = np.sum(vars, axis=0)
     haa_nh = calc_handovers_generically(ass)
@@ -59,7 +59,7 @@ def create_basic_data():
     benefit_info.var_add = 0.01
 
     print(f"L = {L}")
-    ass, tv, vars = solve_science_w_dynamic_haal(sat_prox_mat, None, lambda_, L, benefit_info=benefit_info,
+    ass, tv, vars = solve_var_w_dynamic_haal(sat_prox_mat, None, lambda_, L, benefit_info=benefit_info,
                                            verbose=True)
     haal_vars = np.sum(vars, axis=0)
     haal_total_var = vars.sum()
@@ -148,7 +148,7 @@ def experiment1():
     # benefit_info.base_sensor_var = 0.1
     # benefit_info.var_add = 0.01
 
-    # nha_ass, nha_tv, nha_vars = solve_science_w_dynamic_haal(sat_prox_mat, None, 1, 1, verbose=True, benefit_info=benefit_info)
+    # nha_ass, nha_tv, nha_vars = solve_var_w_dynamic_haal(sat_prox_mat, None, 1, 1, verbose=True, benefit_info=benefit_info)
     # nha_total_var = nha_vars.sum()
     # nha_vars_over_time = np.sum(nha_vars, axis=0)
     # print(nha_vars_over_time.shape)
@@ -167,7 +167,7 @@ def experiment1():
     # for l in range(1,L+1):
     #     benefit_info.task_vars = 1 * np.ones(m) #reset benefit info
     #     print(f"L={l}")
-    #     ass, tv, vars = solve_science_w_dynamic_haal(sat_prox_mat, None, lambda_, l, verbose=True, benefit_info=benefit_info)
+    #     ass, tv, vars = solve_var_w_dynamic_haal(sat_prox_mat, None, lambda_, l, verbose=True, benefit_info=benefit_info)
     #     haal_total_var = vars.sum()
     #     haal_vars_over_time = np.sum(vars, axis=0)
     #     haal_nh = calc_handovers_generically(ass)

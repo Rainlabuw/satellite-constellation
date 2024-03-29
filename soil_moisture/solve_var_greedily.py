@@ -1,70 +1,6 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from astropy import units as u
-from poliastro.bodies import Earth
-from poliastro.twobody import Orbit
-from poliastro.spheroid_location import SpheroidLocation
-import h3
-from shapely.geometry import Polygon
-import pickle
+from soil_moisture.solve_var_w_haal import *
 
-from constellation_sim.ConstellationSim import get_constellation_proxs_and_graphs_coverage
-from constellation_sim.Satellite import Satellite
-from constellation_sim.Task import Task
-
-from haal.solve_w_haal import HAAL_D_Parallel_Auction, choose_time_interval_sequence_centralized
-from common.methods import *
-
-def variance_based_benefit_fn(sat_prox_mat, prev_assign, lambda_, benefit_info=None):
-    """
-    Create a benefit mat based on the previous assignment and the variances of each area.
-    As a handover penalty, the sensor variance of the first measurement of a given task is much higher.
-
-    INPUTS:
-     - a 3D (n x m x T) mat of the satellite coverage mat, as well as previous assignments.
-     - lambda_ is in this case the amount the sensor covariance is multiplied for the first measurement.
-     - benefit_info should be a structure containing the following info:
-        - task_vars is the m variances of the tasks at the current state.
-        - base_sensor_var is the baseline sensor variance
-        - var_add is how much variance is added at each time step.
-    """
-    init_dim = sat_prox_mat.ndim
-    if init_dim == 2: sat_prox_mat = np.expand_dims(sat_prox_mat, axis=2)
-    n = sat_prox_mat.shape[0]
-    m = sat_prox_mat.shape[1]
-    T = sat_prox_mat.shape[2]
-
-    benefit_mat = np.zeros_like(sat_prox_mat)
-
-    #Transform curr_var (m,) to (n,m) by repeating the value across the agent axis (axis 0).
-    #This array will track the variance of each task j, assuming that it was done by satellite i.
-    agent_task_vars = np.tile(benefit_info.task_vars, (n, 1))
-    for k in range(T):
-        for i in range(n):
-            for j in range(m):
-                #Calculate the sensor variance for sat i measuring task j at time k
-                if sat_prox_mat[i,j,k] == 0: sensor_var = 1000000
-                else: sensor_var = benefit_info.base_sensor_var / sat_prox_mat[i,j,k]
-
-                #if the task was not previously assigned, multiply the sensor variance by lambda_ (>1)
-                if prev_assign is not None and prev_assign[i,j] != 1 and k == 0:
-                    sensor_var *= lambda_
-
-                #Calculate the new variance for the task after taking the observation.
-                #The reduction in variance is the benefit for the agent-task pair.
-                new_agent_task_var = 1/(1/agent_task_vars[i,j] + 1/sensor_var)
-                benefit_mat[i,j,k] = agent_task_vars[i,j] - new_agent_task_var
-
-                #Update the variance of the task based on the new measurement
-                agent_task_vars[i,j] = new_agent_task_var
-
-        #Add variance to all tasks
-        agent_task_vars += benefit_info.var_add
-
-    if init_dim == 2: benefit_mat = np.squeeze(benefit_mat, axis=2)
-    return benefit_mat
-
-def solve_var_w_dynamic_haal(sat_prox_mat, init_assignment, lambda_, L, 
+def solve_var_greedily(sat_prox_mat, init_assignment, lambda_, L, 
                                       distributed=False, parallel=False, verbose=False,
                                       eps=0.01, graphs=None, track_iters=False,
                                       benefit_fn=variance_based_benefit_fn, benefit_info=None):
@@ -148,6 +84,3 @@ def solve_var_w_dynamic_haal(sat_prox_mat, init_assignment, lambda_, L,
         return chosen_assignments, total_value, vars_hist
     else:
         return chosen_assignments, total_value, vars_hist, total_iterations/T
-
-if __name__ == "__main__":
-    pass
