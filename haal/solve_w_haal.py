@@ -335,8 +335,6 @@ class HAAL_D_Parallel_Agent(object):
         time_interval_proximities = np.copy(self.proximities[:,ti[0]:ti[1]+1])
         #Add dimension for number of agents so we can use our standard state dependent functions
         time_interval_proximities = np.expand_dims(time_interval_proximities, axis=0)
-        if time_interval_proximities.ndim == 2: #make sure time_interval_proximities is 3D
-            time_interval_proximities = np.expand_dims(time_interval_proximities, axis=2)
 
         benefit_hat = self.benefit_fn(time_interval_proximities, prev_assignment, self.lambda_, self.benefit_info)
         benefit_hat = np.squeeze(time_interval_proximities.sum(axis=-1))
@@ -448,13 +446,17 @@ class HAAL_D_Parallel_Agent(object):
 
 
 if __name__ == "__main__":
-    np.random.seed(49)
-    benefits = 2*np.random.random((50, 50, 10))
+    np.random.seed(48)
+    benefits = 2*np.random.random((10, 10, 10))
+
+    env = SimpleAssignEnv(benefits, None, 0.5)
+
     s = time.time()
-    chosen_assignments, val= solve_w_haal(benefits, None, 0.5, 4, distributed=False, verbose=False)
+    chosen_assignments, val= solve_w_haal(env, 4, distributed=False, verbose=False)
     print(val,time.time()-s)
 
-    # s = time.time()
-    # chosen_assignments, val= solve_w_haal(benefits, None, 0.5, 4, distributed=True, verbose=False)
-    # print("Distributed, old")
-    # print(val,time.time()-s)
+    env.reset()
+
+    s = time.time()
+    chosen_assignments, val= solve_w_haal(env, 4, distributed=True, verbose=False)
+    print(val,time.time()-s)
