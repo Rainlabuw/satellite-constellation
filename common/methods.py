@@ -97,7 +97,7 @@ def convert_agents_to_assignment_matrix(agents):
     Convert list of agents as returned by auction to assignment matrix.
     (grab the choice in each Agent's .choice attribute and put it into a matrix.)
     """
-    assignment_matrix = np.zeros((len(agents), len(agents[0].benefits)), dtype="bool")
+    assignment_matrix = np.zeros((len(agents), len(agents[0].proximities)), dtype="bool")
     for i, agent in enumerate(agents):
         assignment_matrix[i, agent.choice] = 1
     return assignment_matrix
@@ -125,46 +125,6 @@ class BenefitInfo(object):
     """
     pass
 
-def generic_handover_pen_benefit_fn(sat_prox_mat, prev_assign, lambda_, benefit_info=None):
-    """
-    Adjusts a 3D benefit matrix to account for generic handover penalty (i.e. constant penalty for switching tasks).
-
-    benefit_info is an object which can contain extra information about the benefits - it should store:
-     - task_benefits is a m-length array of the baseline benefits associated with each task.
-     - T_trans is a matrix which determines which transitions between TASKS are penalized.
-        It is m x m, where entry ij is the state dependence multiplier that should be applied when switching from task i to task j.
-        (If it is None, then all transitions between different tasks are scaled by 1.)
-    Then, prev_assign @ T_trans is the matrix which entries of the benefit matrix should be adjusted.
-    """
-    n = sat_prox_mat.shape[0]
-    m = sat_prox_mat.shape[1]
-    L = sat_prox_mat.shape[2]
-
-    #Generate a matrix which determines the benefits of each task at each timestep.
-    try:
-        task_benefits = benefit_info.task_benefits
-    except AttributeError:
-        task_benefits = np.ones(m)
-    task_benefits = np.tile(task_benefits, (n,1))
-    task_benefits = np.repeat(task_benefits[:,:,np.newaxis], L, axis=2)
-
-    if prev_assign is None: return sat_prox_mat * task_benefits
-
-    try:
-        T_trans = benefit_info.T_trans
-    except AttributeError:
-        T_trans = None
-
-    if T_trans is None:
-        T_trans = np.ones((m,m)) - np.eye(m) #default to all transitions (except nontransitions) being penalized
-
-    state_dep_scaling = prev_assign @ T_trans
-
-    benefits_hat = sat_prox_mat * task_benefits
-    benefits_hat[:,:,0] = benefits_hat[:,:,0]-lambda_*state_dep_scaling
-
-    return benefits_hat
-
 def calc_distance_btwn_solutions(agents1, agents2):
     """
     Calc how many switches were made between two assignments,
@@ -179,7 +139,7 @@ def calc_distance_btwn_solutions(agents1, agents2):
 
 #~~~~~~~~~~~~~~~~~~~~STATE DEPENDENT VALUE STUFF~~~~~~~~~~~~~~
 def calc_assign_seq_state_dependent_value(init_assignment, assignments, sat_proximities, lambda_,
-                                          benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None, gamma=1):
+                                          benefit_fn, benefit_info=None, gamma=1):
     """
     Calculates the state dependent value of a sequence of assignments,
     based on the provided benefit function.

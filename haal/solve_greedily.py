@@ -79,7 +79,7 @@ def gen_greedy_assigns(benefits, prev_benefits, prev_assignment_mat):
 
     return curr_assignment_mat
 
-def solve_greedily(benefits, init_assignment, lambda_, benefit_fn=generic_handover_pen_benefit_fn,
+def solve_greedily(benefits, init_assignment, lambda_, benefit_fn=simple_handover_pen_benefit_fn,
                    benefit_info=None):
     """
     Solve with greedy handover strategy - start with optimal assignments,

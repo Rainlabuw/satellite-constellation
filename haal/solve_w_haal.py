@@ -2,12 +2,12 @@ import numpy as np
 from common.methods import *
 import networkx as nx
 import time
+from envs.simple_assign_env import SimpleAssignEnv
 
-def solve_w_haal(sat_proximities, init_assignment, lambda_, L, distributed=False, parallel=None, verbose=False,
-                 eps=0.01, graphs=None, track_iters=False, 
-                 benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
+def solve_w_haal(env, L, distributed=False, parallel=None, verbose=False, 
+                     eps=0.01, graphs=None, track_iters=False):
     """
-    Sequentially solves the problem using the HAAL algorithm.
+    Sequentially solves the problem given by the environment using the HAAL algorithm.
 
     When parallel_appox = True, computes the solution centrally, but by constraining each assignment to the current assignment,
         as is done to parallelize auctions in the distributed version of the algorithm.
@@ -15,23 +15,22 @@ def solve_w_haal(sat_proximities, init_assignment, lambda_, L, distributed=False
     if parallel is None: parallel = distributed #If no option is selected, parallel is off for centralized, but on for distributed
     if distributed and not parallel: print("Note: No serialized version of HAAL-D implemented yet. Solving parallelized.")
     
-    n = sat_proximities.shape[0]
-    m = sat_proximities.shape[1]
-    T = sat_proximities.shape[2]
+    n = env.sat_prox_mat.shape[0]
+    m = env.sat_prox_mat.shape[1]
+    T = env.sat_prox_mat.shape[2]
 
     if graphs is None and distributed:
         graphs = [nx.complete_graph(n) for i in range(T)]
-
-    curr_assignment = init_assignment
     
     total_iterations = 0 if distributed else None
+    total_value = 0
     chosen_assignments = []
-    ass_lens = []
-    while len(chosen_assignments) < T:
+    done = False
+    while not done:
         if verbose: print(f"Solving w HAAL, {len(chosen_assignments)}/{T}", end='\r')
-        curr_tstep = len(chosen_assignments)
+        curr_tstep = env.k
         tstep_end = min(curr_tstep+L, T)
-        prox_mat_window = sat_proximities[:,:,curr_tstep:tstep_end]
+        prox_mat_window = env.sat_prox_mat[:,:,curr_tstep:tstep_end]
 
         len_window = prox_mat_window.shape[-1]
 
@@ -40,23 +39,22 @@ def solve_w_haal(sat_proximities, init_assignment, lambda_, L, distributed=False
 
         if distributed:
             if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
-            haal_d_auction = HAAL_D_Parallel_Auction(prox_mat_window, curr_assignment, all_time_intervals, all_time_interval_sequences, 
-                                                     eps=eps, graph=graphs[curr_tstep], lambda_=lambda_, 
-                                                     benefit_fn=benefit_fn, benefit_info=benefit_info)
+            haal_d_auction = HAAL_D_Parallel_Auction(prox_mat_window, env.curr_assignment, all_time_intervals, all_time_interval_sequences, 
+                                                     eps=eps, graph=graphs[curr_tstep], lambda_=env.lambda_, 
+                                                     benefit_fn=env.benefit_fn, benefit_info=env.benefit_info)
             haal_d_auction.run_auction()
             chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)
 
             total_iterations += haal_d_auction.n_iterations
         else:
-            chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, curr_assignment, prox_mat_window, 
-                                                                      lambda_, parallel_approx=parallel, benefit_fn=benefit_fn,
-                                                                      benefit_info=benefit_info)
+            chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, env.curr_assignment, prox_mat_window, 
+                                                                      env.lambda_, parallel_approx=parallel, benefit_fn=env.benefit_fn,
+                                                                      benefit_info=env.benefit_info)
 
         chosen_assignments.append(chosen_assignment)
-        curr_assignment = chosen_assignment
-    
-    total_value = calc_assign_seq_state_dependent_value(init_assignment, chosen_assignments, sat_proximities, lambda_, 
-                                                        benefit_fn=benefit_fn, benefit_info=benefit_info)
+        
+        _, value, done = env.step(chosen_assignment)
+        total_value += value
     
     if not track_iters or not distributed:
         return chosen_assignments, total_value
@@ -66,7 +64,7 @@ def solve_w_haal(sat_proximities, init_assignment, lambda_, L, distributed=False
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ CENTRALIZED FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, prox_mat_window, lambda_, parallel_approx=False, 
-                                              benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
+                                              benefit_fn=simple_handover_pen_benefit_fn, benefit_info=None):
     """
     Chooses the best time interval sequence from a list of time interval sequences,
     and return the corresponding assignment.
@@ -128,7 +126,7 @@ class HAAL_D_Parallel_Auction(object):
     
     The algorithm stores the assigned task for each agent in their .choice attribute.
     """
-    def __init__(self, sat_proximities, curr_assignment, all_time_intervals, all_time_interval_sequences, benefit_fn=generic_handover_pen_benefit_fn,
+    def __init__(self, sat_proximities, curr_assignment, all_time_intervals, all_time_interval_sequences, benefit_fn=simple_handover_pen_benefit_fn,
                  eps=0.01, graph=None, lambda_=1, verbose=False, benefit_info=None):
         # benefit matrix for the next L timesteps
         self.sat_proximities = sat_proximities
@@ -450,9 +448,13 @@ class HAAL_D_Parallel_Agent(object):
 
 
 if __name__ == "__main__":
-    np.random.seed(48)
+    np.random.seed(49)
     benefits = 2*np.random.random((50, 50, 10))
     s = time.time()
-    chosen_assignments, val, _ = solve_w_haal(benefits, None, 0.5, 4, distributed=True, verbose=False)
+    chosen_assignments, val= solve_w_haal(benefits, None, 0.5, 4, distributed=False, verbose=False)
     print(val,time.time()-s)
-    # print(calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 1))
+
+    # s = time.time()
+    # chosen_assignments, val= solve_w_haal(benefits, None, 0.5, 4, distributed=True, verbose=False)
+    # print("Distributed, old")
+    # print(val,time.time()-s)
