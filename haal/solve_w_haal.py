@@ -48,7 +48,7 @@ def solve_w_haal(env, L, distributed=False, parallel=None, verbose=False,
             total_iterations += haal_d_auction.n_iterations
         else:
             chosen_assignment = choose_time_interval_sequence_centralized(all_time_interval_sequences, env.curr_assignment, prox_mat_window, 
-                                                                      env.lambda_, parallel_approx=parallel, benefit_fn=env.benefit_fn,
+                                                                      env.lambda_, env.benefit_fn, parallel_approx=parallel,
                                                                       benefit_info=env.benefit_info)
 
         chosen_assignments.append(chosen_assignment)
@@ -63,8 +63,8 @@ def solve_w_haal(env, L, distributed=False, parallel=None, verbose=False,
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ CENTRALIZED FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, prox_mat_window, lambda_, parallel_approx=False, 
-                                              benefit_fn=simple_handover_pen_benefit_fn, benefit_info=None):
+def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assignment, prox_mat_window, lambda_, benefit_fn,
+                                              parallel_approx=False, benefit_info=None):
     """
     Chooses the best time interval sequence from a list of time interval sequences,
     and return the corresponding assignment.
@@ -126,7 +126,7 @@ class HAAL_D_Parallel_Auction(object):
     
     The algorithm stores the assigned task for each agent in their .choice attribute.
     """
-    def __init__(self, sat_proximities, curr_assignment, all_time_intervals, all_time_interval_sequences, benefit_fn=simple_handover_pen_benefit_fn,
+    def __init__(self, sat_proximities, curr_assignment, all_time_intervals, all_time_interval_sequences, benefit_fn,
                  eps=0.01, graph=None, lambda_=1, verbose=False, benefit_info=None):
         # benefit matrix for the next L timesteps
         self.sat_proximities = sat_proximities
