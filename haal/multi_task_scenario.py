@@ -347,7 +347,7 @@ def solve_multitask_w_haal(benefits, init_assignment, lambda_, L, distributed=Fa
         filtered_benefit_mat_window, filtered_graph, filtered_A_eqiv, filtered_T_trans, \
             filtered_assignment, new_to_old_sat_mapping = get_filtered_benefits_and_graphs(benefit_mat_window, graphs[curr_tstep], curr_assignment, 
                                                                                            benefit_info.T_trans, benefit_info.A_eqiv)
-        filtered_benefit_info = ExtraHandoverPenInfo()
+        filtered_benefit_info = BenefitInfo()
         filtered_benefit_info.T_trans = filtered_T_trans
         filtered_benefit_info.A_eqiv = filtered_A_eqiv
 
@@ -402,7 +402,7 @@ if __name__ == "__main__":
     # with open('multitask_experiment/A_eqiv.pkl','rb') as f:
     #     A_eqiv = pickle.load(f)
     
-    benefit_info = ExtraHandoverPenInfo()
+    benefit_info = BenefitInfo()
     benefit_info.T_trans = T_trans
     benefit_info.A_eqiv = A_eqiv
     

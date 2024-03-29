@@ -399,7 +399,7 @@ def solve_object_track_w_dynamic_haal(sat_prox_mat, task_objects, coverage_benef
         #Thus, we filter the benefit matrices so that we only run auctions with the satellites which can see tasks.
         filtered_benefit_window, filtered_graph, filtered_T_trans, \
             filtered_assignment, new_to_old_sat_mapping = get_filtered_benefits_and_graphs(benefit_window, graphs[k], curr_assignment, benefit_info.T_trans)
-        filtered_benefit_info = ExtraHandoverPenInfo()
+        filtered_benefit_info = BenefitInfo()
         filtered_benefit_info.T_trans = filtered_T_trans
 
         len_window = filtered_benefit_window.shape[-1]
@@ -460,7 +460,7 @@ if __name__ == "__main__":
     task_objects = init_task_objects(60, const, hex_to_task_mapping, T)
     benefits = get_benefits_from_task_objects(1, 10, sat_prox_mat, task_objects)
 
-    benefit_info = ExtraHandoverPenInfo()
+    benefit_info = BenefitInfo()
     benefit_info.T_trans = T_trans
 
     ass, tv = solve_object_track_w_dynamic_haal(sat_prox_mat, task_objects, 1, 10, None, 0.5, 3, parallel=True, distributed=False, graphs=graphs,
