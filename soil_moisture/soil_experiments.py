@@ -2,6 +2,8 @@ import pickle
 import numpy as np
 
 from soil_moisture.solve_var_w_haal import solve_var_w_dynamic_haal, variance_based_benefit_fn
+from envs.variance_min_env import VarianceMinEnv
+from haal.solve_w_haal import solve_w_haal
 
 from common.methods import *
 
@@ -51,6 +53,14 @@ def create_basic_data():
         pickle.dump(ass, f)
 
     print(f"HAA: total value {tv}, total variance {haa_total_var}, nh {haa_nh}")
+
+    env = VarianceMinEnv(sat_prox_mat, None, lambda_)
+    _, tv = solve_w_haal(env, 1)
+    vars = env.task_var_hist
+    haa_total_var = vars.sum()
+    haa_vars = np.sum(vars, axis=0)
+    haa_nh = calc_handovers_generically(ass)
+    print(f"HAA env: total value {tv}, total variance {haa_total_var}, nh {haa_nh}")
 
     ##########################################################
     benefit_info = BenefitInfo()
@@ -241,4 +251,4 @@ def experiment1():
     # plt.show()
 
 if __name__ == "__main__":
-    experiment1()
+    create_basic_data()

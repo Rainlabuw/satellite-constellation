@@ -11,6 +11,7 @@ All assignment environments should recieve the following inputs, at least:
 
 The environment should have the following methods:
     - step: after recieving an assignment, advance the environment by one timestep.
+        This includes updating the benefit info.
     - reset: reset the environment to its initial state.
     - get_state: get a state representation of the environment for use in RL.
     - update_benefit_info: update the benefit info for the environment.
@@ -42,14 +43,6 @@ class SimpleAssignEnv(object):
         self.benefit_fn = simple_handover_pen_benefit_fn
 
         self.k = 0
-        
-
-    def update_benefit_info(self):
-        """
-        Update the benefit info for the environment. In this case,
-        the benefit info stays constant
-        """
-        pass 
 
     def step(self, assignment):
         """
