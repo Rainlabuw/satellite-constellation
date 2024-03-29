@@ -28,6 +28,8 @@ def variance_based_benefit_fn(sat_prox_mat, prev_assign, lambda_, benefit_info=N
         - base_sensor_var is the baseline sensor variance
         - var_add is how much variance is added at each time step.
     """
+    init_dim = sat_prox_mat.ndim
+    if init_dim == 2: sat_prox_mat = np.expand_dims(sat_prox_mat, axis=2)
     n = sat_prox_mat.shape[0]
     m = sat_prox_mat.shape[1]
     T = sat_prox_mat.shape[2]
@@ -45,7 +47,7 @@ def variance_based_benefit_fn(sat_prox_mat, prev_assign, lambda_, benefit_info=N
                 else: sensor_var = benefit_info.base_sensor_var / sat_prox_mat[i,j,k]
 
                 #if the task was not previously assigned, multiply the sensor variance by lambda_ (>1)
-                if prev_assign[i,j] != 1 and k == 0:
+                if prev_assign is not None and prev_assign[i,j] != 1 and k == 0:
                     sensor_var *= lambda_
 
                 #Calculate the new variance for the task after taking the observation.
@@ -59,6 +61,7 @@ def variance_based_benefit_fn(sat_prox_mat, prev_assign, lambda_, benefit_info=N
         #Add variance to all tasks
         agent_task_vars += benefit_info.var_add
 
+    if init_dim == 2: benefit_mat = np.squeeze(benefit_mat, axis=2)
     return benefit_mat
 
 def solve_science_w_dynamic_haal(sat_prox_mat, init_assignment, lambda_, L, 
@@ -91,6 +94,7 @@ def solve_science_w_dynamic_haal(sat_prox_mat, init_assignment, lambda_, L,
     chosen_assignments = []
 
     vars_hist = np.zeros((m,T))
+    total_value = 0
     for k in range(T):
         if verbose: print(f"Solving w HAAL, {k}/{T}", end='\r')
 
@@ -117,27 +121,33 @@ def solve_science_w_dynamic_haal(sat_prox_mat, init_assignment, lambda_, L,
                                                                       lambda_, parallel_approx=parallel, benefit_fn=benefit_fn,
                                                                       benefit_info=benefit_info)
 
-        curr_assignment = chosen_assignment
+        #Calculate the value yielded by this assignment
+        benefit_hat = benefit_fn(sat_prox_window, curr_assignment, lambda_, benefit_info)
+        total_value += (benefit_hat[:,:,0]*chosen_assignment).sum()
 
         #Update the variance of the task based on the new measurement
         for j in range(m):
-            if np.max(curr_assignment[:,j]) == 1:
-                prev_i = np.argmax(chosen_assignments[-1][:,j])
-                i = np.argmax(curr_assignment[:,j])
+            if np.max(chosen_assignment[:,j]) == 1:
+                i = np.argmax(chosen_assignment[:,j])
                 if sat_prox_mat[i,j,k] == 0: sensor_var = 1000000
                 else: sensor_var = benefit_info.base_sensor_var / sat_prox_mat[i,j,k]
 
-                if prev_i != i: sensor_var *= lambda_
+                if curr_assignment is not None:
+                    prev_i = np.argmax(curr_assignment[:,j])
+                    if prev_i != i: sensor_var *= lambda_
+                
                 benefit_info.task_vars[j] = 1/(1/benefit_info.task_vars[j] + 1/sensor_var)
 
         benefit_info.task_vars += benefit_info.var_add
+
+        curr_assignment = chosen_assignment
         chosen_assignments.append(chosen_assignment)
         vars_hist[:,k] = benefit_info.task_vars
 
     if not track_iters or not distributed:
-        return chosen_assignments, vars
+        return chosen_assignments, total_value, vars_hist
     else:
-        return chosen_assignments, vars, total_iterations/T
+        return chosen_assignments, total_value, vars_hist, total_iterations/T
 
 def solve_science_w_nha(sat_prox_mat, init_var, base_sensor_var, init_assignment, lambda_, 
                                       distributed=False, parallel=False, verbose=False,
@@ -208,60 +218,4 @@ def solve_science_w_nha(sat_prox_mat, init_var, base_sensor_var, init_assignment
         return chosen_assignments, vars, total_iterations/T
 
 if __name__ == "__main__":
-    num_planes = 25
-    num_sats_per_plane = 25
-    i = 70
-    T = 93
-    lambda_ = 0.05
-    L = 6
-
-    sat_prox_mat, graphs = get_constellation_proxs_and_graphs_coverage(num_planes, num_sats_per_plane, T, i)
-    # with open('soil_moisture/soil_data/sat_prox_mat.pkl','wb') as f:
-    #     pickle.dump(sat_prox_mat, f)
-    # with open('soil_moisture/soil_data/graphs.pkl','wb') as f:
-    #     pickle.dump(graphs, f)
-
-    with open('soil_moisture/soil_data/sat_prox_mat.pkl','rb') as f:
-        sat_prox_mat = pickle.load(f)
-    with open('soil_moisture/soil_data/graphs.pkl','rb') as f:
-        graphs = pickle.load(f)
-    
-    n = sat_prox_mat.shape[0]
-    m = sat_prox_mat.shape[1]
-    T = sat_prox_mat.shape[2]
-
-    ass, vars = solve_science_w_nha(sat_prox_mat, 1, 0.1, None, lambda_)
-    tv = vars.sum()
-    nha_vars = np.sum(vars, axis=0)
-    _, nh = calc_value_and_num_handovers(ass, np.zeros_like(sat_prox_mat), None, lambda_)
-
-    with open('soil_moisture/soil_data/nha_vars.pkl', 'wb') as f:
-        pickle.dump(vars, f)
-    with open('soil_moisture/soil_data/nha_ass.pkl', 'wb') as f:
-        pickle.dump(ass, f)
-
-    print(f"NHA: value {tv}, nh {nh}")
-
-    ##########################################################
-    benefit_info = BenefitInfo()
-    benefit_info.task_vars = 1 * np.ones(m)
-    benefit_info.base_sensor_var = 0.1
-    benefit_info.var_add = 0.01
-
-    ass, vars = solve_science_w_dynamic_haal(sat_prox_mat, None, lambda_, L, benefit_info=benefit_info,
-                                           verbose=True)
-    haal_vars = np.sum(vars, axis=0)
-    tv = vars.sum()
-    _, nh = calc_value_and_num_handovers(ass, np.zeros_like(sat_prox_mat), None, lambda_)
-
-    with open('soil_moisture/soil_data/haal_vars.pkl', 'wb') as f:
-        pickle.dump(vars, f)
-    with open('soil_moisture/soil_data/haal_ass.pkl', 'wb') as f:
-        pickle.dump(ass, f)
-
-    print(f"HAAL: value {tv}, nh {nh}")
-
-    plt.plot(nha_vars, label='NHA')
-    plt.plot(haal_vars, label='HAAL')
-    plt.legend()
-    plt.show()
+    pass

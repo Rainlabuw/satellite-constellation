@@ -133,7 +133,7 @@ def get_sat_lat_lon(sat):
     return lat, lon
 
 def haal_experiment_plots():
-    earth_image = mpimg.imread('earth.jpg')
+    earth_image = mpimg.imread('common/earth.jpg')
 
     # Plotting
     fig, ax = plt.subplots(1, 1, figsize=(15, 10))
@@ -248,8 +248,82 @@ def haal_experiment_plots():
     plt.savefig('ground_track.pdf')
     plt.show()
     
+def soil_experiment_plots():
+    earth_image = mpimg.imread('common/earth.jpg')
+
+    # Plotting
+    fig, ax = plt.subplots(1, 1, figsize=(15, 10))
+
+    # Display the Earth image
+    ax.imshow(earth_image, extent=[-180, 180, -90, 90], aspect='auto')
+
+    earth = Earth
+
+    altitude=550
+    fov=60
+
+    a = earth.R.to(u.km) + altitude*u.km
+    ecc = 0*u.one
+    argp = 0*u.deg
+    #~~~~~~~~~~~~~~~~~ EXPERIMENT 2~~~~~~~~~~~~~~~~~~~~~~
+    hexagons = generate_global_hexagons(1, 70)
+    hexagon_polygons, centroids = hexagons_to_geometries(hexagons)
+    gdf = gpd.GeoDataFrame(geometry=hexagon_polygons)
+
+    centroid_xs = [c.x for c in centroids]
+    centroid_ys = [c.y for c in centroids]
+
+    # Create a GeoDataFrame
+    gdf = gpd.GeoDataFrame(geometry=hexagon_polygons)
+
+    const = ConstellationSim(dt=1*u.min)
+    num_sats_per_plane = 25
+    num_planes = 25
+    inc = 70*u.deg
+    raan = ((num_planes//2)/num_planes)*360*u.deg
+    for sat_num in range(num_sats_per_plane):
+        ta = sat_num*360/num_sats_per_plane*u.deg
+        sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], fov=fov)
+        const.add_sat(sat)
+    raan = ((num_planes//2 + 1)/num_planes)*360*u.deg
+    for sat_num in range(num_sats_per_plane):
+        ta = sat_num*360/num_sats_per_plane*u.deg
+        sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], fov=fov)
+        const.add_sat(sat)
+
+    for sat in const.sats:
+        center_lat, center_lon = get_sat_lat_lon(sat)
+        rad = get_radius_of_fov(sat)
+
+        # Generate circle points
+        circle_points = generate_circle_points(center_lon, center_lat, rad)
+
+        # Create a circle polygon
+        circle = Polygon(circle_points)
+
+        # Create a GeoDataFrame for the circle
+        circle_gdf = gpd.GeoDataFrame(geometry=[circle])
+
+        # Add the circle to the plot
+        circle_gdf.plot(ax=ax, edgecolor='red', facecolor="none", linewidth=2)
+
+    # Overlay the hexagon grid
+    gdf.boundary.plot(ax=ax, color='red', alpha=0.25)
+    # plt.scatter(centroid_xs, centroid_ys, color='red', s=3, label="Large constellation task locations")
+    #phantom dot for legend entry
+    plt.scatter(200, 200, color='red', facecolors='none', label=f"Large constellation sat FOV footprints, planes {num_planes//2} and {num_planes//2 + 1}")
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    
+    plt.rc('legend', fontsize=14)    # legend fontsize
+    plt.legend(loc='lower left')
+    plt.xlim(-180, 180)
+    plt.ylim(-90, 90)
+    plt.tight_layout()
+    plt.savefig('soil_moisture/ground_track.pdf')
+    plt.show()
+
 def spencer_experiment_plots():
-    earth_image = mpimg.imread('earth.jpg')
+    earth_image = mpimg.imread('common/earth.jpg')
 
     # Plotting
     fig, ax = plt.subplots(1, 1, figsize=(15, 10))
@@ -664,4 +738,4 @@ def plot_multitask_scenario(hexagon_to_task_mapping, assignments, A_eqiv, save_l
 #     ani.save(save_loc, writer='pillow', fps=2, dpi=100)
 
 if __name__ == "__main__":
-    spencer_experiment_plots()
+    soil_experiment_plots()

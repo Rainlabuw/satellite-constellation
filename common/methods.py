@@ -254,6 +254,39 @@ def calc_value_and_num_handovers(chosen_assignments, benefits, init_assignment, 
 
     return total_benefit, num_handovers
 
+def calc_handovers_generically(assignments, init_assign=None, benefit_info=None):
+    """
+    Calculate the number of handovers generically, without assuming that the handover penalty
+    is the generic handover penalty, as opposed to calc_value_num_handovers above.
+    """
+    n = assignments[0].shape[0]
+    m = assignments[0].shape[1]
+    T = len(assignments)
+
+    #If T_trans is provided, then use it, otherwise just set it to 
+    try:
+        T_trans = benefit_info.T_trans
+    except AttributeError:
+        T_trans = np.ones((m,m)) - np.eye(m)
+
+    num_handovers = 0
+    prev_assign = init_assign
+    for k in range(T):
+        if prev_assign is not None:
+            new_assign = assignments[k]
+
+            #iterate through agents
+            for i in range(n):
+                new_task_assigned = np.argmax(new_assign[i,:])
+                prev_task_assigned = np.argmax(prev_assign[i,:])
+
+                if prev_assign[i,new_task_assigned] == 0 and T_trans[prev_task_assigned,new_task_assigned] == 1:
+                    num_handovers += 1
+        
+        prev_assign = assignments[k]
+
+    return num_handovers
+
 #~~~~~~~~~~~~~~~~~~~~BENEFIT MATRIX UTILITIES~~~~~~~~~~~~~~
 def generate_benefits_over_time(n, m, T, width_min, width_max, scale_min=0.25, scale_max=2):
     """
