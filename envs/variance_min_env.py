@@ -58,7 +58,7 @@ class VarianceMinEnv(object):
         """
         Returns state, value, and whether the environment is done.
         """
-        benefit_hat = self.benefit_fn(self.sat_prox_mat[:,:,self.k], self.curr_assignment, self.lambda_)
+        benefit_hat = self.benefit_fn(self.sat_prox_mat[:,:,self.k], self.curr_assignment, self.lambda_, self.benefit_info)
         value = np.sum(benefit_hat * assignment)
 
         #Update the variance of the task based on the new measurement
