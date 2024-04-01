@@ -28,7 +28,13 @@ class SimpleAssignEnv(object):
     """
     def __init__(self, sat_prox_mat, init_assignment, lambda_,
                  T_trans=None, task_benefits=None):
+        #Pad benefit matrix to ensure that the number of tasks is at least as large as the number of agents
+        if sat_prox_mat.shape[1] < sat_prox_mat.shape[0]:
+            padded_sat_prox_mat = np.zeros((sat_prox_mat.shape[0], sat_prox_mat.shape[0], sat_prox_mat.shape[2]))
+            padded_sat_prox_mat[:sat_prox_mat.shape[0],:sat_prox_mat.shape[1],:] = sat_prox_mat
+            sat_prox_mat = padded_sat_prox_mat
         self.sat_prox_mat = sat_prox_mat
+        
         self.init_assignment = init_assignment
         self.curr_assignment = init_assignment
         self.lambda_ = lambda_

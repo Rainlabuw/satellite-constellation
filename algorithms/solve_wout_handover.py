@@ -1,7 +1,7 @@
 import numpy as np
 from common.methods import *
 
-def solve_wout_handover(env):
+def solve_wout_handover(env, verbose=False):
     """
     Solves problem without regard to handover minimization.
     (NHA in the paper.)
@@ -16,6 +16,7 @@ def solve_wout_handover(env):
     total_val = 0
     done = False
     while not done:
+        if verbose: print(f"Solving w/out handover, {env.k}/{T}", end='\r')
         #Solving in most naive fashion, so don't add a handover penalty or anything
         benefits = env.benefit_fn(env.sat_prox_mat[:,:,env.k], None, None, env.benefit_info)
         csol = solve_centralized(benefits)

@@ -1,5 +1,6 @@
 from common.methods import *
 import numpy as np
+from copy import deepcopy
 
 def gen_greedy_assigns(benefits, prev_benefits, curr_assignment_mat):
     """
@@ -18,7 +19,6 @@ def gen_greedy_assigns(benefits, prev_benefits, curr_assignment_mat):
     avail_tasks = [j for j in range(m)]
     for i in range(n):
         agent_prev_choice = np.argmax(curr_assignment_mat[i,:])
-
         #Unless the task has been providing benefit for last timestep and this timestep,
         #it is available for greedy reassignment
         if prev_benefits[i,agent_prev_choice] > 0 and benefits[i,agent_prev_choice] > 0:
@@ -79,7 +79,7 @@ def gen_greedy_assigns(benefits, prev_benefits, curr_assignment_mat):
 
     return next_assignment_mat
 
-def solve_greedily(env):
+def solve_greedily(env, verbose=False):
     """
     Solve with greedy handover strategy - start with optimal assignments,
     and when a handover is needed (a satellite moved too far away from task)
@@ -96,6 +96,9 @@ def solve_greedily(env):
 
     total_value = 0
 
+    prev_benefit_info = deepcopy(env.benefit_info)
+    prev_assignment = env.init_assignment
+
     benefits = env.benefit_fn(env.sat_prox_mat[:,:,0], env.init_assignment, env.lambda_, env.benefit_info)
 
     csol = solve_centralized(benefits)
@@ -106,14 +109,15 @@ def solve_greedily(env):
 
     assignment_mats = [assignment_mat]
 
-    prev_assignment = env.init_assignment
     while not done:
+        if verbose: print(f"Solving greedily, {env.k}/{T}", end='\r')
         #Calculate the previous and current benefits
-        prev_benefits = env.benefit_fn(env.sat_prox_mat[:,:,env.k-1], prev_assignment, env.lambda_, env.benefit_info)
+        prev_benefits = env.benefit_fn(env.sat_prox_mat[:,:,env.k-1], prev_assignment, env.lambda_, prev_benefit_info)
         benefits = env.benefit_fn(env.sat_prox_mat[:,:,env.k], env.curr_assignment, env.lambda_, env.benefit_info)
 
         curr_assignment_mat = gen_greedy_assigns(benefits, prev_benefits, env.curr_assignment)
         prev_assignment = env.curr_assignment
+        prev_benefit_info = deepcopy(env.benefit_info)
         
         _, val, done = env.step(curr_assignment_mat)
         total_value += val

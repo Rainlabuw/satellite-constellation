@@ -26,7 +26,14 @@ class VarianceMinEnv(object):
     lambda handover penalty, a benefit function based on the variance of the task.
     """
     def __init__(self, sat_prox_mat, init_assignment, lambda_,
-                 init_task_vars=None, var_add=0.01, base_sensor_var=0.1):
+                 init_task_vars=None, var_add=None, base_sensor_var=0.1):
+        #Pad benefit matrix to ensure that the number of tasks is at least as large as the number of agents
+        self.unpadded_m = sat_prox_mat.shape[1]
+        if sat_prox_mat.shape[1] < sat_prox_mat.shape[0]:
+            padded_sat_prox_mat = np.zeros((sat_prox_mat.shape[0], sat_prox_mat.shape[0], sat_prox_mat.shape[2]))
+            padded_sat_prox_mat[:sat_prox_mat.shape[0],:sat_prox_mat.shape[1],:] = sat_prox_mat
+            sat_prox_mat = padded_sat_prox_mat
+
         self.sat_prox_mat = sat_prox_mat
         self.n = sat_prox_mat.shape[0]
         self.m = sat_prox_mat.shape[1]
@@ -40,9 +47,13 @@ class VarianceMinEnv(object):
 
         #Build benefit_info
         if init_task_vars is None: 
-            self.init_task_vars = np.ones(self.m)
+            self.init_task_vars = np.zeros(self.m, dtype=np.float64)
+            self.init_task_vars[:self.unpadded_m] = np.ones(self.unpadded_m)
         else:
             self.init_task_vars = init_task_vars
+        if var_add is None:
+            var_add = np.zeros(self.m)
+            var_add[:self.unpadded_m] = 0.01*np.ones(self.unpadded_m)
         self.task_var_hist = np.zeros((self.m, self.T))
         
         self.benefit_info = BenefitInfo()
@@ -62,7 +73,7 @@ class VarianceMinEnv(object):
         value = np.sum(benefit_hat * assignment)
 
         #Update the variance of the task based on the new measurement
-        for j in range(self.m):
+        for j in range(self.unpadded_m):
             if np.max(assignment[:,j]) == 1:
                 i = np.argmax(assignment[:,j])
                 if self.sat_prox_mat[i,j,self.k] == 0: sensor_var = 1000000 #If the task is not reachable, set the variance to a high value
@@ -125,21 +136,23 @@ def variance_based_benefit_fn(sat_prox_mat, prev_assign, lambda_, benefit_info=N
     for k in range(T):
         for i in range(n):
             for j in range(m):
-                #Calculate the sensor variance for sat i measuring task j at time k
-                if sat_prox_mat[i,j,k] == 0: sensor_var = 1000000
-                else: sensor_var = benefit_info.base_sensor_var / sat_prox_mat[i,j,k]
+                if agent_task_vars[i,j] == 0 or sat_prox_mat[i,j,k] == 0: #if variance is zero or the sat cant see the task, that means there's no benefit from further measuring it
+                    benefit_mat[i,j,k] = 0
+                else:
+                    #Calculate the sensor variance for sat i measuring task j at time k
+                    sensor_var = benefit_info.base_sensor_var / sat_prox_mat[i,j,k]
 
-                #if the task was not previously assigned, multiply the sensor variance by lambda_ (>1)
-                if prev_assign is not None and prev_assign[i,j] != 1 and k == 0:
-                    sensor_var *= lambda_
+                    #if the task was not previously assigned, multiply the sensor variance by lambda_ (>1)
+                    if prev_assign is not None and prev_assign[i,j] != 1 and k == 0:
+                        sensor_var *= lambda_
 
-                #Calculate the new variance for the task after taking the observation.
-                #The reduction in variance is the benefit for the agent-task pair.
-                new_agent_task_var = 1/(1/agent_task_vars[i,j] + 1/sensor_var)
-                benefit_mat[i,j,k] = agent_task_vars[i,j] - new_agent_task_var
+                    #Calculate the new variance for the task after taking the observation.
+                    #The reduction in variance is the benefit for the agent-task pair.
+                    new_agent_task_var = 1/(1/agent_task_vars[i,j] + 1/sensor_var)
+                    benefit_mat[i,j,k] = agent_task_vars[i,j] - new_agent_task_var
 
-                #Update the variance of the task based on the new measurement
-                agent_task_vars[i,j] = new_agent_task_var
+                    #Update the variance of the task based on the new measurement
+                    agent_task_vars[i,j] = new_agent_task_var
 
         #Add variance to all tasks
         agent_task_vars += benefit_info.var_add

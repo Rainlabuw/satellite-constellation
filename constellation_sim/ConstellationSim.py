@@ -4,17 +4,12 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from shapely.geometry import Polygon
 import time
 
 from collections import defaultdict
 
-from poliastro.bodies import Earth
-from poliastro.twobody import Orbit
 from poliastro.plotting import StaticOrbitPlotter
-from poliastro.spheroid_location import SpheroidLocation
 from poliastro.core.events import line_of_sight
-import h3
 
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
@@ -167,106 +162,6 @@ class ConstellationSim(object):
                     adj[j,i] = 1
 
         return nx.from_numpy_array(adj)
-
-def get_constellation_proxs_and_graphs_random_tasks(num_planes, num_sats_per_plane, m,T,proximity_func=calc_fov_based_proximities, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
-    """
-    Generate benefit matrix of size (num_planes*sats_per_plane) x m x T
-    from a constellation of satellites, as well as
-    a list of the T connectivity graphs for each timestep.
-    """
-    const = ConstellationSim(dt=dt, isl_dist=isl_dist)
-    earth = Earth
-
-    #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
-    #10 evenly spaced planes of satellites, each with n/10 satellites per plane
-    a = earth.R.to(u.km) + altitude*u.km
-    ecc = 0*u.one
-    inc = 58*u.deg
-    argp = 0*u.deg
-
-    for plane_num in range(num_planes):
-        raan = plane_num*360/num_planes*u.deg
-        for sat_num in range(num_sats_per_plane):
-            ta = sat_num*360/num_sats_per_plane*u.deg
-            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num, fov=fov)
-            const.add_sat(sat)
-
-    #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    num_tasks = m
-    for _ in range(num_tasks):
-        lon = np.random.uniform(-180, 180)
-        lat = np.random.uniform(-55, 55)
-        task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
-        
-        task_benefit = np.random.uniform(1, 2, size=T)
-        task = Task(task_loc, task_benefit)
-        const.add_task(task)
-
-    benefits, graphs = const.propagate_orbits(T, proximity_func)
-    return benefits, graphs
-
-def generate_smooth_coverage_hexagons(lat_range, lon_range, res=1):
-    # Initialize an empty set to store unique H3 indexes
-    hexagons = set()
-
-    # Step through the defined ranges and discretize the globe
-    lat_steps, lon_steps = 0.2/res, 0.2/res
-    lat = lat_range[0]
-    while lat <= lat_range[1]:
-        lon = lon_range[0]
-        while lon <= lon_range[1]:
-            # Find the hexagon containing this lat/lon
-            hexagon = h3.geo_to_h3(lat, lon, res)
-            hexagons.add(hexagon)
-            lon += lon_steps
-        lat += lat_steps
-        
-    return list(hexagons) #turn into a list so that you can easily index it later
-
-def get_constellation_proxs_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc,proximity_func=calc_fov_based_proximities, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
-    """
-    Generate benefit matrix of with (num_planes*sats_per_plane)
-    satellites covering the entire surface of the earth, with tasks
-    evenly covering the globe at the lowest H3 reslution possible (~10 deg lat/lon).
-
-    Input an inclination for the satellites and the tasks.
-    """
-    const = ConstellationSim(dt=dt, isl_dist=isl_dist)
-    earth = Earth
-
-    #~~~~~~~~~Generate a constellation of satellites at 400 km.~~~~~~~~~~~~~
-    #10 evenly spaced planes of satellites, each with n/10 satellites per plane
-    a = earth.R.to(u.km) + altitude*u.km
-    ecc = 0*u.one
-    inc = inc*u.deg
-    argp = 0*u.deg
-
-    for plane_num in range(num_planes):
-        raan = plane_num*360/num_planes*u.deg
-        for sat_num in range(num_sats_per_plane):
-            ta = sat_num*360/num_sats_per_plane*u.deg
-            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num, fov=fov)
-            const.add_sat(sat)
-
-    #~~~~~~~~~Generate m random tasks on the surface of earth~~~~~~~~~~~~~
-    hexagons = generate_smooth_coverage_hexagons((-inc.to_value(u.deg), inc.to_value(u.deg)), (-180, 180))
-    
-    #Add tasks at centroid of all hexagons
-    for hexagon in hexagons:
-        boundary = h3.h3_to_geo_boundary(hexagon, geo_json=True)
-        polygon = Polygon(boundary)
-
-        lat = polygon.centroid.y
-        lon = polygon.centroid.x
-
-        task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
-        
-        task_benefit = np.random.uniform(1, 2, size=T)
-        task = Task(task_loc, task_benefit)
-        const.add_task(task)
-
-    benefits, graphs = const.propagate_orbits(T, proximity_func)
-    return benefits, graphs
 
 if __name__ == "__main__":
     lat_range = (20, 50)
