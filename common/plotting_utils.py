@@ -55,6 +55,7 @@ def crosses_dateline(polygon):
     return False
 
 def hexagons_to_geometries(hexagons):
+    new_hexagons = [] #Need to return hexagons as well so we double them for hexagons which cross the dateline
     polygons = []
     centroids = []
     for hexagon in hexagons:
@@ -84,10 +85,13 @@ def hexagons_to_geometries(hexagons):
             polygons.append(pos_poly)
             centroids.append(neg_poly.centroid)
             centroids.append(pos_poly.centroid)
+            new_hexagons.append(hexagon)
+            new_hexagons.append(hexagon)
         else:
             polygons.append(polygon)
             centroids.append(polygon.centroid)
-    return polygons, centroids
+            new_hexagons.append(hexagon)
+    return polygons, centroids, new_hexagons
 
 def generate_circle_points(center_lon, center_lat, radius_km, num_points=100):
     """
@@ -194,7 +198,7 @@ def haal_experiment_plots():
     #~~~~~~~~~~~~~~~~~ EXPERIMENT 2~~~~~~~~~~~~~~~~~~~~~~
     hexagons = generate_global_hexagons(1, 70)
     print(len(hexagons))
-    hexagon_polygons, centroids = hexagons_to_geometries(hexagons)
+    hexagon_polygons, centroids, _ = hexagons_to_geometries(hexagons)
     gdf = gpd.GeoDataFrame(geometry=hexagon_polygons)
 
     centroid_xs = [c.x for c in centroids]
@@ -274,7 +278,7 @@ def soil_experiment_plots():
     argp = 0*u.deg
     #~~~~~~~~~~~~~~~~~ EXPERIMENT 2~~~~~~~~~~~~~~~~~~~~~~
     hexagons = generate_global_hexagons(2, 70)
-    hexagon_polygons, centroids = hexagons_to_geometries(hexagons)
+    hexagon_polygons, centroids, _ = hexagons_to_geometries(hexagons)
     # gdf = gpd.GeoDataFrame(geometry=hexagon_polygons)
 
     centroid_xs = [c.x for c in centroids]
@@ -461,7 +465,7 @@ def update_object_track(k, ax, earth_image, task_to_hex_map, sat_prox_mat, task_
         uncaptured_by_task[task] = uncaptured
         handover_by_task[task] = handover
 
-        hexagon_polygons, _ = hexagons_to_geometries([hex])
+        hexagon_polygons, _, _ = hexagons_to_geometries([hex])
         gdf = gpd.GeoDataFrame(geometry=hexagon_polygons)
         gdf.boundary.plot(ax=ax, color='black', alpha=0.2)
 
@@ -555,7 +559,7 @@ def update_multitask(k, ax, task_to_hex_map, assignments, A_eqiv):
         real_sat_task_counts[real_assigned_sat] += 1
 
         color = prism_cmap((real_assigned_sat % 20)/(20-1))
-        hexagon_polygons, hexagon_centroids = hexagons_to_geometries([hex])
+        hexagon_polygons, hexagon_centroids, _ = hexagons_to_geometries([hex])
         gdf = gpd.GeoDataFrame(geometry=hexagon_polygons)
         gdf.boundary.plot(ax=ax, color='black', alpha=1)
 
@@ -598,6 +602,80 @@ def plot_multitask_scenario(hexagon_to_task_mapping, assignments, A_eqiv, save_l
         plt.show()
 
     ani.save(save_loc, writer='pillow', fps=2, dpi=100)
+
+def update_variance(k, ax, task_to_hex_map, assignments, sat_prox_mat, task_vars):
+    print(k)
+    ax.clear()
+
+    n = assignments[k].shape[0]
+    m = assignments[k].shape[1]
+    T = len(assignments)
+
+    # Display the Earth image background
+    #Approximately America
+    lat_range = (22, 52)
+    lon_range = (-124.47, -66.87)
+    earth_image = mpimg.imread('experiments/figures/scaled_down_highres_earth.jpg')
+    ax.imshow(earth_image, extent=[-180, 180, -90, 90], aspect='auto')
+    ax.set_xlim(lon_range)
+    ax.set_ylim(lat_range)
+
+    #red to green colormap
+    cmap = plt.get_cmap('RdYlGn')
+
+    #Display the region hexagons
+    for task, hex in task_to_hex_map.items():
+        assigned_sat = np.argmax(assignments[k][:,task])
+
+        task_var = min(task_vars[task, k], 1) #normalize to [0,1]
+        color = cmap(1-task_var) #invert the color map
+        hexagon_polygons, hexagon_centroids, _ = hexagons_to_geometries([hex])
+
+        if sat_prox_mat[assigned_sat, task, k] > 0:
+            #Determine how many steps in a row it has been assigned to the same satellite
+            in_a_row = 1
+            k_lookback = k-1
+            while k_lookback >= 0 and np.argmax(assignments[k_lookback][:,task]) == assigned_sat:
+                in_a_row += 1
+                k_lookback -= 1
+        else:
+            in_a_row = 0
+
+        if in_a_row == 1: hatch = '/'
+        else: hatch = ''
+
+        text_x = hexagon_centroids[0].x
+        text_y = hexagon_centroids[0].y
+        ax.text(text_x, text_y, f"{in_a_row}", ha='center', va='center', color='black')
+        
+        gdf = gpd.GeoDataFrame(geometry=hexagon_polygons)
+        gdf.boundary.plot(ax=ax, color="black")
+        gdf.plot(ax=ax, color=color, alpha=0.5, hatch=hatch)
+
+    ax.set_title(f"Time: +{k*30}/{T*30} sec.")
+
+def plot_soil_scenario(hexagon_to_task_mapping, assignments, sat_prox_mat, task_vars, save_loc, show=True):
+    T = len(assignments)
+    print(T)
+    n = assignments[0].shape[0]
+    m = assignments[0].shape[1]
+
+    # Plotting
+    fig, ax = plt.subplots(1, 1, figsize=(15, 10))
+
+    # Reverse hex to task mapping:
+    task_to_hex_mapping = {}
+    for hex, task in hexagon_to_task_mapping.items():
+        task_to_hex_mapping[task] = hex
+
+    ani  = FuncAnimation(fig, update_variance, fargs=(ax, task_to_hex_mapping, assignments, sat_prox_mat, task_vars), 
+                         frames=T, interval=500, blit=False)
+
+    if show:
+        plt.show()
+
+    ani.save(save_loc, writer='pillow', fps=2, dpi=100)
+
 
 if __name__ == "__main__":
     soil_experiment_plots()

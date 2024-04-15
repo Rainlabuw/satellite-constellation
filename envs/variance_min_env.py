@@ -46,24 +46,28 @@ class VarianceMinEnv(object):
         self.k = 0
 
         #Build benefit_info
+        self.benefit_info = BenefitInfo()
+
         if init_task_vars is None: 
             self.init_task_vars = np.zeros(self.m, dtype=np.float64)
             self.init_task_vars[:self.unpadded_m] = np.ones(self.unpadded_m)
         else:
-            self.init_task_vars = init_task_vars
+            self.init_task_vars = np.zeros(self.m, dtype=np.float64)
+            self.init_task_vars[:self.unpadded_m] = init_task_vars
         if var_add is None:
-            var_add = np.zeros(self.m)
-            var_add[:self.unpadded_m] = 0.01*np.ones(self.unpadded_m)
-        self.task_var_hist = np.zeros((self.m, self.T))
-        
-        self.benefit_info = BenefitInfo()
+            self.benefit_info.var_add = np.zeros(self.m)
+            self.benefit_infovar_add[:self.unpadded_m] = 0.01*np.ones(self.unpadded_m)
+        else:
+            self.benefit_info.var_add = np.zeros(self.m)
+            self.benefit_info.var_add[:self.unpadded_m] = var_add
         self.benefit_info.task_vars = np.copy(self.init_task_vars)
-        self.benefit_info.var_add = var_add
         self.benefit_info.base_sensor_var = base_sensor_var
 
         self.benefit_fn = variance_based_benefit_fn
 
         self.k = 0
+
+        self.task_var_hist = np.zeros((self.m, self.T))
 
     def step(self, assignment):
         """

@@ -4,7 +4,8 @@ from shapely.geometry import Polygon
 import pickle
 from copy import deepcopy
 
-from constellation_sim.ConstellationSim import ConstellationSim, generate_smooth_coverage_hexagons
+from constellation_sim.ConstellationSim import ConstellationSim
+from constellation_sim.constellation_generators import generate_smooth_coverage_hexagons
 from constellation_sim.Task import Task
 from constellation_sim.Satellite import Satellite
 from constellation_sim.TaskObject import TaskObject
@@ -17,7 +18,7 @@ import h3
 import time
 
 from common.methods import *
-from haal.solve_w_haal import choose_time_interval_sequence_centralized, HAAL_D_Parallel_Auction
+from algorithms.solve_w_haal import choose_time_interval_sequence_centralized, HAAL_D_Parallel_Auction
 
 def get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T, fov=60, isl_dist=2500, dt=30*u.second):
     """

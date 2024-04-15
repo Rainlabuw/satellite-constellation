@@ -10,27 +10,28 @@ from collections import defaultdict
 from common.methods import *
 from common.plotting_utils import plot_object_track_scenario, plot_multitask_scenario
 
-from haal.solve_optimally import solve_optimally
-from haal.solve_wout_handover import solve_wout_handover
-from haal.solve_w_haal import solve_w_haal
-from haal.solve_w_accelerated_haal import solve_w_accel_haal
-from haal.solve_w_centralized_CBBA import solve_w_centralized_CBBA
-from haal.solve_w_CBBA import solve_w_CBBA
-from haal.solve_greedily import solve_greedily
-from haal.object_track_scenario import timestep_loss_pen_benefit_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_prox_mat_and_graphs_object_tracking_area
-from haal.object_track_utils import calc_pct_objects_tracked, object_tracking_history
-from haal.multi_task_scenario import solve_multitask_w_haal, calc_multiassign_benefit_fn, get_benefit_matrix_and_graphs_multitask_area
+from algorithms.solve_optimally import solve_optimally
+from algorithms.solve_wout_handover import solve_wout_handover
+from algorithms.solve_w_haal import solve_w_haal
+from algorithms.solve_w_accelerated_haal import solve_w_accel_haal
+from algorithms.solve_w_centralized_CBBA import solve_w_centralized_CBBA
+from algorithms.solve_w_CBBA import solve_w_CBBA
+from algorithms.solve_greedily import solve_greedily
+from algorithms.solve_qap import solve_w_qap_heuristic
+
+from envs.object_track_scenario import timestep_loss_pen_benefit_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_prox_mat_and_graphs_object_tracking_area
+from envs.object_track_utils import calc_pct_objects_tracked, object_tracking_history
+from envs.multi_task_scenario import solve_multitask_w_haal, calc_multiassign_benefit_fn, get_benefit_matrix_and_graphs_multitask_area
 
 from envs.simple_assign_env import SimpleAssignEnv
 
-from constellation_sim.ConstellationSim import get_constellation_proxs_and_graphs_coverage, get_constellation_proxs_and_graphs_random_tasks, ConstellationSim
+from constellation_sim.ConstellationSim import ConstellationSim
+from constellation_sim.constellation_generators import get_constellation_proxs_and_graphs_coverage, get_constellation_proxs_and_graphs_random_tasks
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
 
 from poliastro.bodies import Earth
 from poliastro.twobody import Orbit
-from poliastro.plotting import StaticOrbitPlotter
-from poliastro.spheroid_location import SpheroidLocation
 from astropy import units as u
 
 import h3
@@ -39,7 +40,6 @@ from shapely.geometry import Polygon, MultiPolygon, LineString
 from shapely.ops import split
 from shapely.geometry import box
 import matplotlib.image as mpimg
-from math import radians, cos, sin, asin, sqrt, atan2, degrees
 
 def optimal_baseline_plot():
     """
@@ -723,15 +723,20 @@ def paper_experiment2_compute_assigns():
         f.write(f"MHL Centralized handovers: {mha_nh}\n")
 
 def paper_experiment2_tasking_history():
-    with open('haal_experiment2/paper_exp2_greedy_assigns.pkl', 'rb') as f:
+    with open('experiments/haal_experiment2/paper_exp2_greedy_assigns.pkl', 'rb') as f:
         greedy_assigns = pickle.load(f)
-    with open('haal_experiment2/paper_exp2_haalc_assigns.pkl', 'rb') as f:
+    with open('experiments/haal_experiment2/paper_exp2_haalc_assigns.pkl', 'rb') as f:
         haalc_assigns = pickle.load(f)
-    with open('haal_experiment2/paper_exp2_nohand_assigns.pkl', 'rb') as f:
+    with open('experiments/haal_experiment2/paper_exp2_nohand_assigns.pkl', 'rb') as f:
         nohand_assigns = pickle.load(f)
 
-    with open("haal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
+    with open("experiments/haal_experiment2/paper_exp2_bens.pkl", 'rb') as f:
         benefits = pickle.load(f)
+
+    qap_assigns, _ = solve_w_qap_heuristic(benefits, 0.5, verbose=False)
+
+    with open("experiments/haal_experiment2/paper_exp2_qap_assigns.pkl", 'wb') as f:
+        pickle.dump(qap_assigns, f)
 
     # greedy_assigns, _, _ = solve_greedily(benefits, None, 0.5)
 
@@ -748,6 +753,7 @@ def paper_experiment2_tasking_history():
     nohand_val, nohand_nh = calc_value_and_num_handovers(nohand_assigns, benefits, init_assign, lambda_)
     greedy_val, greedy_nh = calc_value_and_num_handovers(greedy_assigns, benefits, init_assign, lambda_)
     haalc_val, haalc_nh = calc_value_and_num_handovers(haalc_assigns, benefits, init_assign, lambda_)
+    qap_val, qap_nh = calc_value_and_num_handovers(qap_assigns, benefits, init_assign, lambda_)
 
     # haal_coverages = []
     # greedy_coverages = []
@@ -904,9 +910,9 @@ def paper_experiment2_tasking_history():
     #~~~~~~~~~Plot bar charts~~~~~~~~~~~~~~
     #plot value over time
     fig, axes = plt.subplots(2,1)
-    labels = ("NHA", "GA", "HAAL-D")
-    val_vals = (nohand_val, greedy_val, haalc_val)
-    nh_vals = (nohand_nh, greedy_nh, haalc_nh)
+    labels = ("NHA", "GA", "HAAL-D", "QAP Heuristic")
+    val_vals = (nohand_val, greedy_val, haalc_val, qap_val)
+    nh_vals = (nohand_nh, greedy_nh, haalc_nh, qap_nh)
 
     val_bars = axes[0].bar(labels, val_vals)
     axes[0].set_ylabel("Total Value")
@@ -1265,14 +1271,14 @@ def paper_experiment1():
 
     # benefits, graphs = get_constellation_proxs_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_based_proximities, fov=fov, isl_dist=2500)
 
-    # with open("haal/haal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
+    # with open("experiments/haal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
     #     pickle.dump(benefits,f)
-    # with open("haal/haal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
+    # with open("experiments/haal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
     #     pickle.dump(graphs,f)
 
-    with open("haal/haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+    with open("experiments/haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
         benefits = pickle.load(f)
-    with open("haal/haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+    with open("experiments/haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
         graphs = pickle.load(f)
 
     env = SimpleAssignEnv(benefits, None, lambda_)
@@ -1284,7 +1290,9 @@ def paper_experiment1():
 
     env.reset()
     _, greedy_val = solve_greedily(env)
-    print(greedy_val)
+
+    # _, qap_val = solve_w_qap_heuristic(benefits, lambda_)
+
     itersd_by_lookahead = []
     valued_by_lookahead = []
 
@@ -1292,31 +1300,32 @@ def paper_experiment1():
     valuecbba_by_lookahead = []
 
     valuec_by_lookahead = []
-    for L in range(1,max_L+1):
-        print(f"lookahead {L}")
-        # _, cbba_val, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
-        # iterscbba_by_lookahead.append(avg_iters)
-        # valuecbba_by_lookahead.append(cbba_val)
+    # for L in range(1,max_L+1):
+    #     print(f"lookahead {L}")
+    #     # _, cbba_val, avg_iters = solve_w_CBBA_track_iters(benefits, None, lambda_, L, graphs=graphs, verbose=True)
+    #     # iterscbba_by_lookahead.append(avg_iters)
+    #     # valuecbba_by_lookahead.append(cbba_val)
         
-        env.reset()
-        _, d_val, avg_iters = solve_w_haal(env, L, graphs=graphs, verbose=True, track_iters=True, distributed=True)
-        print(d_val, avg_iters)
-        itersd_by_lookahead.append(avg_iters)
-        valued_by_lookahead.append(d_val)
+    #     env.reset()
+    #     _, d_val, avg_iters = solve_w_haal(env, L, graphs=graphs, verbose=True, track_iters=True, distributed=True)
+    #     print(d_val, avg_iters)
+    #     itersd_by_lookahead.append(avg_iters)
+    #     valued_by_lookahead.append(d_val)
 
-        env.reset()
-        _, c_val = solve_w_haal(env, L, distributed=False, verbose=True)
-        print(c_val)
-        valuec_by_lookahead.append(c_val)
+    #     env.reset()
+    #     _, c_val = solve_w_haal(env, L, distributed=False, verbose=True)
+    #     print(c_val)
+    #     valuec_by_lookahead.append(c_val)
 
     # #Values from 1/31, before scaling experiments
     valuecbba_by_lookahead = [4208.38020192484, 4412.873727755446, 4657.90330919782, 4717.85859678172, 4710.212483240204, 4726.329218229788]
-    # valuec_by_lookahead = [6002.840671517548, 7636.731195199751, 7581.29374466441, 7435.882168254755, 7511.4534257400755, 7591.261917337481]
-    # itersd_by_lookahead = [54.89247311827957, 61.17204301075269, 68.46236559139786, 72.64516129032258, 79.10752688172043, 80.02150537634408]
+    valuec_by_lookahead = [6002.840671517548, 7636.731195199751, 7581.29374466441, 7435.882168254755, 7511.4534257400755, 7591.261917337481]
+    itersd_by_lookahead = [54.89247311827957, 61.17204301075269, 68.46236559139786, 72.64516129032258, 79.10752688172043, 80.02150537634408]
     iterscbba_by_lookahead = [18.50537634408602, 26.0, 29.193548387096776, 33.11827956989247, 34.806451612903224, 37.29032258064516]
-    # valued_by_lookahead = [6021.705454081699, 7622.246684035546, 7585.4110847804, 7294.093230272816, 7437.211996201664, 7559.402984912062]
+    valued_by_lookahead = [6021.705454081699, 7622.246684035546, 7585.4110847804, 7294.093230272816, 7437.211996201664, 7559.402984912062]
     greedy_val = 3650.418056196203
     no_handover_val = 4078.018608711949
+    qap_val = 2071.2151663174172
 
     SMALL_SIZE = 8
     MEDIUM_SIZE = 12
@@ -1339,6 +1348,7 @@ def paper_experiment1():
     axes[0].plot(range(1,max_L+1), valuecbba_by_lookahead, 'b', label="CBBA")
     axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r', label="NHA")
     axes[0].plot(range(1,max_L+1), [greedy_val]*max_L, 'k', label="GA")
+    axes[0].plot(range(1,max_L+1), [qap_val]*max_L, 'm', label="QAP Heuristic")
     axes[0].set_ylabel("Total Value")
     axes[0].set_xticks(range(1,max_L+1))
     axes[0].set_ylim((0, 1.1*max(valuec_by_lookahead)))
@@ -1362,11 +1372,12 @@ def paper_experiment1():
     axes[0].set_xlim(1,6)
     axes[1].set_xlim(1,6)
 
-    with open("haal_experiment1/results.txt", 'w') as f:
+    with open("experiments/haal_experiment1/results.txt", 'w') as f:
         f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {m}, T: {T}, altitude: {altitude}, fov: {fov}, timestep: {timestep}, max_L: {max_L}, lambda: {lambda_}\n")
         f.write(f"~~~~~~~~~~~~~~~~~~~~~\n")
         f.write(f"No Handover Value: {no_handover_val}\n")
         f.write(f"Greedy Value: {greedy_val}\n")
+        f.write(f"QAP Heuristic Value: {qap_val}\n")
         f.write(f"CBBA Values by lookahead:\n{valuecbba_by_lookahead}\n")
         f.write(f"HAAL Values by lookahead:\n{valuec_by_lookahead}\n")
         f.write(f"HAAL-D Values by lookahead:\n{valued_by_lookahead}\n")
@@ -1377,7 +1388,7 @@ def paper_experiment1():
     fig.set_figwidth(6)
     fig.set_figheight(6)
     fig.tight_layout()
-    plt.savefig("haal_experiment1/paper_exp1.pdf")
+    plt.savefig("experiments/haal_experiment1/paper_exp1.pdf")
     plt.show()
 
 def scaling_experiment():
@@ -1605,6 +1616,27 @@ def num_tasks_per_satellite():
         total_tasks += np.sum(available_tasks)
     
     print(total_tasks/n)
+
+def compare_qap_heuristic():
+    np.random.seed(42)
+    benefits = np.random.rand(50, 50, 10)
+    n = benefits.shape[0]
+    m = benefits.shape[1]
+    T = benefits.shape[2]
+    lambda_ = 0.5
+
+    env = SimpleAssignEnv(benefits, None, lambda_)
+
+    assigns, tv = solve_w_haal(env, 3)
+    print(f"HAAL {tv}")
+
+    qap_assigns = np.zeros((n*T, m*T))
+    for k in range(T):
+        qap_assigns[k*n:(k+1)*n, k*m:(k+1)*m] = assigns[k]
+
+    tv = solve_w_qap_heuristic(benefits, lambda_)
+    print(f"QAP {tv}")
+    #Way worse!
 
 if __name__ == "__main__":
     paper_experiment1()

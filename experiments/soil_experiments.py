@@ -13,6 +13,7 @@ from algorithms.solve_wout_handover import solve_wout_handover
 from algorithms.solve_greedily import solve_greedily
 
 from common.methods import *
+from common.plotting_utils import plot_soil_scenario
 
 def generate_sat_prox_mats():
     num_planes = 40
@@ -22,13 +23,15 @@ def generate_sat_prox_mats():
     lat_range = (22, 52)
     lon_range = (-124.47, -66.87)
 
-    sat_prox_mat, graphs = get_prox_mat_and_graphs_soil_moisture(num_planes, num_sats_per_plane, T,
+    sat_prox_mat, graphs, hex_to_task_mapping, const = get_prox_mat_and_graphs_soil_moisture(num_planes, num_sats_per_plane, T,
                                                                  lat_range, lon_range, dt=30*u.second)
 
     with open('experiments/soil_data/sat_prox_mat_usa.pkl','wb') as f:
         pickle.dump(sat_prox_mat, f)
     with open('experiments/soil_data/graphs_usa.pkl','wb') as f:
         pickle.dump(graphs, f)
+    with open('experiments/soil_data/hex_to_task_mapping_usa.pkl','wb') as f:
+        pickle.dump(hex_to_task_mapping, f)
 
 def experiment1():
     num_planes = 40
@@ -41,23 +44,23 @@ def experiment1():
         sat_prox_mat = pickle.load(f)
     with open('experiments/soil_data/graphs_usa.pkl','rb') as f:
         graphs = pickle.load(f)
+    with open('experiments/soil_data/hex_to_task_mapping_usa.pkl','rb') as f:
+        hex_to_task_mapping = pickle.load(f)
 
     n = sat_prox_mat.shape[0]
     m = sat_prox_mat.shape[1]
     T = sat_prox_mat.shape[2]
 
-    print(sat_prox_mat.shape)
-
     init_ass = None
     lambda_ = 5
 
-    env = VarianceMinEnv(sat_prox_mat, init_ass, lambda_)
+    env = VarianceMinEnv(sat_prox_mat, init_ass, lambda_, var_add=0.05)
 
-    # # NHA
-    # env.reset()
-    # nha_ass, nha_tv = solve_wout_handover(env, verbose=True)
-    # nha_vars = env.task_var_hist
-    # print(f"NHA: value {nha_tv}, total variance {nha_vars.sum()}")
+    # NHA
+    env.reset()
+    nha_ass, nha_tv = solve_wout_handover(env, verbose=True)
+    nha_vars = env.task_var_hist
+    print(f"NHA: value {nha_tv}, total variance {nha_vars.sum()}")
 
     # # Greedy
     # env.reset()
@@ -65,16 +68,17 @@ def experiment1():
     # greedy_vars = env.task_var_hist
     # print(f"Greedy: value {greedy_tv}, total variance {greedy_vars.sum()}")
 
-    # # HAAL
-    # haal_vars_list = []
-    # haal_asses = []
-    # haal_tvs = []
+    # HAAL
+    haal_vars_list = []
+    haal_asses = []
+    haal_tvs = []
     # for l in range(1,L+1):
-    #     env.reset()
-    #     haal_ass, haal_tv = solve_w_haal(env, l, verbose=True)
-    #     haal_vars = env.task_var_hist
-    #     haal_vars_list.append(haal_vars)
-    #     haal_asses.append(haal_ass)
+    for l in [3]:
+        env.reset()
+        haal_ass, haal_tv = solve_w_haal(env, l, verbose=True)
+        haal_vars = env.task_var_hist
+        haal_vars_list.append(haal_vars)
+        haal_asses.append(haal_ass)
 
     #     print(f"HAAL (L={l}): value {haal_tv}, total variance {haal_vars.sum()}")
     
@@ -92,19 +96,19 @@ def experiment1():
     # with open('experiments/soil_data/haal_vars_usa.pkl', 'wb') as f:
     #     pickle.dump(haal_vars_list, f)
 
-    with open('experiments/soil_data/nha_ass_usa.pkl', 'rb') as f:
-        nha_ass = pickle.load(f)
+    # with open('experiments/soil_data/nha_ass_usa.pkl', 'rb') as f:
+    #     nha_ass = pickle.load(f)
     with open('experiments/soil_data/greedy_ass_usa.pkl', 'rb') as f:
         greedy_ass = pickle.load(f)
-    with open('experiments/soil_data/haal_asses_usa.pkl', 'rb') as f:
-        haal_asses = pickle.load(f)
+    # with open('experiments/soil_data/haal_asses_usa.pkl', 'rb') as f:
+    #     haal_asses = pickle.load(f)
     
-    with open('experiments/soil_data/nha_var_usa.pkl', 'rb') as f:
-        nha_vars = pickle.load(f)
+    # with open('experiments/soil_data/nha_var_usa.pkl', 'rb') as f:
+    #     nha_vars = pickle.load(f)
     with open('experiments/soil_data/greedy_var_usa.pkl', 'rb') as f:
         greedy_vars = pickle.load(f)
-    with open('experiments/soil_data/haal_vars_usa.pkl', 'rb') as f:
-        haal_vars_list = pickle.load(f)
+    # with open('experiments/soil_data/haal_vars_usa.pkl', 'rb') as f:
+    #     haal_vars_list = pickle.load(f)
 
     # for i in range(n):
     #     hist = []
@@ -122,26 +126,30 @@ def experiment1():
     #     _, _, haal_ass_len = calc_pass_statistics(sat_prox_mat, haal_asses[l])
     #     print(f"HAAL (L={l+1}) ass len {haal_ass_len}")
     minutes = [0.5*k for k in range(T)]
-    plt.plot(minutes,np.sum(haal_vars_list[2], axis=0), color='green', label=f"HAAL, L={2+1} (ours)")
-    plt.plot(minutes,np.sum(greedy_vars, axis=0), color='red', label="Greedy")
-    plt.plot(minutes,np.sum(nha_vars, axis=0), color='blue', label="Naively Optimal")
-    plt.xlabel("Time (min)")
-    plt.ylabel("Total Variance")
-    plt.title("Total Variance over Time")
-    plt.legend()
-    plt.show()
+    # plt.plot(minutes,np.sum(haal_vars_list[2], axis=0), color='green', label=f"HAAL, L={2+1} (ours)")
+    # plt.plot(minutes,np.sum(greedy_vars, axis=0), color='red', label="Greedy")
+    # plt.plot(minutes,np.sum(nha_vars, axis=0), color='blue', label="Naively Optimal")
+    # plt.xlabel("Time (min)")
+    # plt.ylabel("Total Variance")
+    # plt.title("Total Variance over Time")
+    # plt.legend()
+    # plt.show()
 
     nha_nh = calc_handovers_generically(nha_ass, None, env.benefit_info)
     greedy_nh = calc_handovers_generically(greedy_ass, None, env.benefit_info)
-    haal_nh = calc_handovers_generically(haal_asses[2], None, env.benefit_info)
+    haal_nh = calc_handovers_generically(haal_asses[0], None, env.benefit_info)
+    print(nha_nh, haal_nh)
 
-    labels = ['Naively Optimal', 'Greedy', 'HAAL']
-    values = [nha_nh, greedy_nh, haal_nh]
+    labels = ['HAAL', 'Greedy','Naively Optimal']
+    values = [haal_nh, greedy_nh, nha_nh]
 
-    plt.bar(labels, values)
-    plt.ylabel('Number of Handovers')
-    plt.title('Handovers Comparison')
-    plt.show()
+    # plt.bar(labels, values)
+    # plt.ylabel('Number of Handovers')
+    # plt.title('Handovers Comparison')
+    # plt.show()
+
+    plot_soil_scenario(hex_to_task_mapping, haal_asses[0], sat_prox_mat, haal_vars_list[0], 'experiments/figures/haal_soil_animation.gif', show=False)
+    plot_soil_scenario(hex_to_task_mapping, nha_ass, sat_prox_mat, nha_vars, 'experiments/figures/nha_soil_animation.gif', show=False)
 
 if __name__ == "__main__":
     # generate_sat_prox_mats()

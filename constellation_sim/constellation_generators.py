@@ -303,32 +303,34 @@ def get_prox_mat_and_graphs_soil_moisture(num_planes, num_sats_per_plane, T, lat
     ax.imshow(earth_image, extent=[-180, 180, -90, 90], aspect='auto')
 
     hexagons = generate_global_hexagons(2, 70)
-    hexagon_polygons, centroids = hexagons_to_geometries(hexagons)
+    hexagon_polygons, centroids, hexagons = hexagons_to_geometries(hexagons)
 
     centroid_xs = [c.x for c in centroids]
     centroid_ys = [c.y for c in centroids]
     ground_centroid_xs = []
     ground_centroid_ys = []
-    ground_hexagon_polygons = []
+    ground_hexagons = []
 
-    for (centroid_x, centroid_y, hexagon_polygon) in zip(centroid_xs, centroid_ys, hexagon_polygons):
+    for (centroid_x, centroid_y, hexagon) in zip(centroid_xs, centroid_ys, hexagons):
         #if pixel in earth_image at centroid_x, centroid_y is not blue, add to the list of hexagons corresponding to ground
-
         if centroid_x < lon_range[1] and centroid_x > lon_range[0] and centroid_y < lat_range[1] and centroid_y > lat_range[0]:
             classic_blue = np.array([11, 10, 50])
             curr_color = np.array(earth_image[int((-centroid_y+90)/180*earth_image.shape[0]), int((centroid_x+180)/360*earth_image.shape[1]), :])
             if np.linalg.norm(classic_blue-curr_color) > 5:
                 ground_centroid_xs.append(centroid_x)
                 ground_centroid_ys.append(centroid_y)
-                ground_hexagon_polygons.append(hexagon_polygon)
+                ground_hexagons.append(hexagon)
 
     #Add tasks at centroid of all hexagons
-    for lon, lat in zip(ground_centroid_xs, ground_centroid_ys):
+    hex_to_task_mapping = {}
+    for lon, lat, hex in zip(ground_centroid_xs, ground_centroid_ys, ground_hexagons):
         task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
         
         task_benefit = np.random.uniform(1, 2, size=T)
         task = Task(task_loc, task_benefit)
         const.add_task(task)
+
+        hex_to_task_mapping[hex] = len(const.tasks)-1
 
     altitude=550
     a = earth.R.to(u.km) + altitude*u.km
@@ -372,4 +374,4 @@ def get_prox_mat_and_graphs_soil_moisture(num_planes, num_sats_per_plane, T, lat
 
     print(f"Num tasks: {len(const.tasks)}")
     print("\nNum active sats", len(const.sats))
-    return truncated_sat_prox_matrix, graphs
+    return truncated_sat_prox_matrix, graphs, hex_to_task_mapping, const

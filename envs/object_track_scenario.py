@@ -3,7 +3,8 @@ from collections import defaultdict
 from shapely.geometry import Polygon
 import pickle
 
-from constellation_sim.ConstellationSim import ConstellationSim, generate_smooth_coverage_hexagons
+from constellation_sim.ConstellationSim import ConstellationSim
+from constellation_sim.constellation_generators import generate_smooth_coverage_hexagons
 from constellation_sim.Task import Task
 from constellation_sim.Satellite import Satellite
 from constellation_sim.TaskObject import TaskObject
