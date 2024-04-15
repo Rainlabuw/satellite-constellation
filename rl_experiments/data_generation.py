@@ -16,7 +16,7 @@ from constellation_sim.ConstellationSim import ConstellationSim
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
 
-from haal.solve_w_haal import solve_w_haal
+from algorithms.solve_w_haal import solve_w_haal
 
 def init_random_constellation(num_planes, num_sats_per_plane, m, T, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """

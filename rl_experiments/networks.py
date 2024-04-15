@@ -104,18 +104,6 @@ class PolicyNetwork(nn.Module):
         
         return x
 
-
-class MultiAgentFCNetwork_SharedParameters(nn.Module):
-    def __init__(self,L, n, m, M, num_filters, hidden_units):
-        self.network = PolicyNetwork(L, n, m, M, num_filters, hidden_units)
-
-    def forward(self, inputs):
-        # A forward pass of the same network in parallel
-        futures = [torch.jit.fork(self.network, inp) for inp in inputs]
-
-        results = [torch.jit.wait(fut) for fut in futures]
-        return results
-
 if __name__ == "__main__":
     # Test the value network
     L = 10

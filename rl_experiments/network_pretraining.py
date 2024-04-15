@@ -11,7 +11,7 @@ from common.methods import *
 from rl_constellation.rl_utils import get_local_and_neighboring_benefits
 from rl_constellation.networks import ValueNetwork, PolicyNetwork
 
-from haal.solve_w_haal import solve_w_haal
+from algorithms.solve_w_haal import solve_w_haal
 
 class DynamicDataset(Dataset):
     """

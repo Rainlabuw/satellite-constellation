@@ -2,7 +2,6 @@ import numpy as np
 from common.methods import *
 import networkx as nx
 import time
-from envs.simple_assign_env import SimpleAssignEnv
 
 def solve_w_haal(env, L, distributed=False, parallel=None, verbose=False, 
                      eps=0.01, graphs=None, track_iters=False):
@@ -443,20 +442,3 @@ class HAAL_D_Parallel_Agent(object):
             #Select the choice associated with the best time interval sequence
             self.choice = self.choice_by_ti[best_tis[0]]
         else: self.tis_values_converged = False
-
-
-if __name__ == "__main__":
-    np.random.seed(48)
-    benefits = 2*np.random.random((50, 50, 10))
-
-    env = SimpleAssignEnv(benefits, None, 0.5)
-
-    s = time.time()
-    chosen_assignments, val= solve_w_haal(env, 4, distributed=False, verbose=False)
-    print(val,time.time()-s)
-
-    env.reset()
-
-    s = time.time()
-    chosen_assignments, val= solve_w_haal(env, 4, distributed=True, verbose=False)
-    print(val,time.time()-s)

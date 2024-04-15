@@ -1,9 +1,8 @@
 from common.methods import *
 
-import torch
 from rl_constellation.rl_utils import get_local_and_neighboring_benefits
 
-from haal.solve_w_haal import choose_time_interval_sequence_centralized
+from algorithms.solve_w_haal import choose_time_interval_sequence_centralized
 
 def solve_w_rl(benefits, init_assign, lambda_, policy_network, M, L, verbose=False,
                benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):

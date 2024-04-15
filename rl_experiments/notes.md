@@ -8,7 +8,7 @@ Saved as data/benefits_list.pkl, etc.
 
 HAAL experiment 1 has an average task in view of 8.67, and experiment 2 has avg. 14.4. Thus, I think M=10 for a constellation of 10x10 should be fine.
 
-Generated value function and policy pairs for just a sungle of the 10 sims, and it was already 40 Gb, so 10x that would be far too much.
+Generated value function and policy pairs for just a single of the 10 sims, and it was already 40 Gb, so 10x that would be far too much.
 For that reason, switching to on the fly sampling and training - pick random numbers corresponding to datasets and timesteps, generate the pairs right then,
 and then train on that minibatch.
 

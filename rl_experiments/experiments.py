@@ -7,8 +7,8 @@ import time
 
 from common.methods import *
 
-from haal.solve_w_haal import solve_w_haal
-from haal.solve_wout_handover import solve_wout_handover
+from algorithms.solve_w_haal import solve_w_haal
+from algorithms.solve_wout_handover import solve_wout_handover
 
 from rl_constellation.data_generation import init_random_constellation
 from rl_constellation.networks import PolicyNetwork
