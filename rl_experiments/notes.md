@@ -49,3 +49,10 @@ Perhaps one issue is that satellites were bidding for far too many tasks? with M
 In any case, generated artificial benefits with this distribution:
 
 ![artificial_tasks](plots/task_in_view_dist_artificial.png)
+
+#### 4/15/24
+Revisiting after taking a significant break for finals, submitting the actual paper, soil moisture analysis, and then writing up existing work into thesis.
+
+Read up on mechanism design, and on Michael Chang's paper on mechanism design for RL. However, the more I think about this, the more I'm unsure that this is actually relevant to our scenario. It seems to me that rather than having a value and a policy network which act separately, we should instead just have a value network, whose output is directly fed into an auction.
+
+Although it seems like thats what I already did, so I'm not sure what the path forward is.
