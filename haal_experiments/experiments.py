@@ -19,11 +19,12 @@ from algorithms.solve_w_CBBA import solve_w_CBBA
 from algorithms.solve_greedily import solve_greedily
 from algorithms.solve_qap import solve_w_qap_heuristic
 
-from envs.object_track_scenario import timestep_loss_pen_benefit_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_prox_mat_and_graphs_object_tracking_area
-from envs.object_track_utils import calc_pct_objects_tracked, object_tracking_history
-from envs.multi_task_scenario import solve_multitask_w_haal, calc_multiassign_benefit_fn, get_benefit_matrix_and_graphs_multitask_area
+from tracking_experiments.object_track_scenario import timestep_loss_pen_benefit_fn, init_task_objects, get_benefits_from_task_objects, solve_object_track_w_dynamic_haal, get_sat_prox_mat_and_graphs_object_tracking_area
+from tracking_experiments.object_track_utils import calc_pct_objects_tracked, object_tracking_history
 
-from envs.simple_assign_env import SimpleAssignEnv
+from multitask_experiments.multi_task_scenario import calc_multiassign_benefit_fn
+
+from haal_experiments.simple_assign_env import SimpleAssignEnv
 
 from constellation_sim.ConstellationSim import ConstellationSim
 from constellation_sim.constellation_generators import get_constellation_proxs_and_graphs_coverage, get_constellation_proxs_and_graphs_random_tasks
@@ -1276,9 +1277,9 @@ def paper_experiment1():
     # with open("experiments/haal_experiment1/paper_exp1_graphs.pkl", 'wb') as f:
     #     pickle.dump(graphs,f)
 
-    with open("experiments/haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
+    with open("haal_experiments/haal_experiment1/paper_exp1_bens.pkl", 'rb') as f:
         benefits = pickle.load(f)
-    with open("experiments/haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
+    with open("haal_experiments/haal_experiment1/paper_exp1_graphs.pkl", 'rb') as f:
         graphs = pickle.load(f)
 
     env = SimpleAssignEnv(benefits, None, lambda_)
@@ -1348,7 +1349,7 @@ def paper_experiment1():
     axes[0].plot(range(1,max_L+1), valuecbba_by_lookahead, 'b', label="CBBA")
     axes[0].plot(range(1,max_L+1), [no_handover_val]*max_L, 'r', label="NHA")
     axes[0].plot(range(1,max_L+1), [greedy_val]*max_L, 'k', label="GA")
-    axes[0].plot(range(1,max_L+1), [qap_val]*max_L, 'm', label="QAP Heuristic")
+    axes[0].plot(range(1,max_L+1), [qap_val]*max_L, 'm', label="QAPH")
     axes[0].set_ylabel("Total Value")
     axes[0].set_xticks(range(1,max_L+1))
     axes[0].set_ylim((0, 1.1*max(valuec_by_lookahead)))
@@ -1360,7 +1361,7 @@ def paper_experiment1():
     for handle, label in zip(*axes[0].get_legend_handles_labels()):
         handles.append(handle)
         labels.append(label)
-    fig.legend(handles, labels, loc='upper left', bbox_to_anchor=(0.15, 0.7))
+    fig.legend(handles, labels, loc='upper left', bbox_to_anchor=(0.1, 0.67))
     # fig.legend(handles, labels, loc='upper left', bbox_to_anchor=(0.7, 0.3))
 
     axes[1].plot(range(1,max_L+1), itersd_by_lookahead, 'g--', label="HAAL-D")
@@ -1372,7 +1373,7 @@ def paper_experiment1():
     axes[0].set_xlim(1,6)
     axes[1].set_xlim(1,6)
 
-    with open("experiments/haal_experiment1/results.txt", 'w') as f:
+    with open("haal_experiments/haal_experiment1/results.txt", 'w') as f:
         f.write(f"num_planes: {num_planes}, num_sats_per_plane: {num_sats_per_plane}, m: {m}, T: {T}, altitude: {altitude}, fov: {fov}, timestep: {timestep}, max_L: {max_L}, lambda: {lambda_}\n")
         f.write(f"~~~~~~~~~~~~~~~~~~~~~\n")
         f.write(f"No Handover Value: {no_handover_val}\n")
@@ -1385,10 +1386,10 @@ def paper_experiment1():
         f.write(f"CBBA Iters by lookahead:\n{iterscbba_by_lookahead}\n")
         f.write(f"HAAL Iters by lookahead:\n{itersd_by_lookahead}\n")
 
-    fig.set_figwidth(6)
+    fig.set_figwidth(10)
     fig.set_figheight(6)
     fig.tight_layout()
-    plt.savefig("experiments/haal_experiment1/paper_exp1.pdf")
+    plt.savefig("haal_experiments/haal_experiment1/paper_exp1.pdf")
     plt.show()
 
 def scaling_experiment():
