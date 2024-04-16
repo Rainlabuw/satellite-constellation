@@ -56,3 +56,14 @@ Revisiting after taking a significant break for finals, submitting the actual pa
 Read up on mechanism design, and on Michael Chang's paper on mechanism design for RL. However, the more I think about this, the more I'm unsure that this is actually relevant to our scenario. It seems to me that rather than having a value and a policy network which act separately, we should instead just have a value network, whose output is directly fed into an auction.
 
 Although it seems like thats what I already did, so I'm not sure what the path forward is.
+
+#### 4/16/24
+Toying with the idea of "accelerated auctions." Both via agents associated with the same satellite colluding to reduce iteration time, and by seeding the auction with prices.
+
+I'm not actually sure how to set up the colluding thing, but perhaps that might help slightly. My intuition is that it won't do much, though.
+
+With regards to prices, as auctions get bigger it seems that prices being initialized to good values speeds convergence significantly.
+
+i.e. at auctions of size 10 x 10, there is a minor speedup, but at 20 x 20 if prices are initialized with noise N(0, 0.01) while prices are nominally around 0.1, then there is a 2x speedup. However, if the noise on the prices becomes large, then you can potentially hurt convergence.
+
+The other element of this is benefit. When n=m, this price initialization occurs without any penalty on the benefit of the auction. However, when n < m, then there can be significant cost impacts.
