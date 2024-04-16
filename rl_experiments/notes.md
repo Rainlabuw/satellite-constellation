@@ -66,4 +66,4 @@ With regards to prices, as auctions get bigger it seems that prices being initia
 
 i.e. at auctions of size 10 x 10, there is a minor speedup, but at 20 x 20 if prices are initialized with noise N(0, 0.01) while prices are nominally around 0.1, then there is a 2x speedup. However, if the noise on the prices becomes large, then you can potentially hurt convergence.
 
-The other element of this is benefit. When n=m, this price initialization occurs without any penalty on the benefit of the auction. However, when n < m, then there can be significant cost impacts.
+The other element of this is benefit. When n=m, this price initialization occurs without any penalty on the benefit of the auction. However, when n < m, then the benefit is significantly reduced because it will potentially overlook some tasks which have been intialized to overly high prices. This is, I believe, due to the error in the Zavlanos paper.
