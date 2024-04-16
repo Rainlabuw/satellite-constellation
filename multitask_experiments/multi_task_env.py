@@ -26,19 +26,53 @@ class MultiTaskAssignEnv(object):
     Assignment environment corresponding to a generic assignment problem with agents who can
     complete multiple tasks each.
 
+    We handle the fact that each agent can accomplish multiple tasks at once by creating synthetic agents.
+    i.e. there is an agent for the first task that agent 1 can do, another agent for the second task agent 1 can do, etc.
+
+    These are ordered in matrices and graphs as follows:
+    - The first n synthetic agents are the agents that can complete the first task.
+    - The next n synthetic agents are second tasks of each of the first n agents (i.e. synth agent n corresponds to agent 0's second task).
+    - etc.
+
+    INPUTS:
     tasks_per_agent is a scalar which determines how many tasks each agent can complete. (i.e. how many beams are on each satellite.)
     pct_benefit_for_each_further_task_per_agent is a scalar which determines how much benefit is gained for each 
         additional task completed by an agent. (i.e. using more beams has decreasing benefits)
+    We expect the sat_prox_mat and graphs to be provided with information only on REAL agents, not synthetic ones.
+        (i.e. size n, not size n*tasks_per_agent.)
     """
     def __init__(self, sat_prox_mat, init_assignment, lambda_, tasks_per_agent, 
-                 pct_benefit_for_each_further_task_per_agent, task_benefits=None):
+                 pct_benefit_for_each_further_task_per_agent, graphs=None, task_benefits=None):
         #Note that we are not padding the sat_prox_mat, because when extra
         #beams are added, the padding will be different.
         self.sat_prox_mat = sat_prox_mat
+
+        self.n = sat_prox_mat.shape[0]
+        self.total_n = self.n * tasks_per_agent
+        self.m = sat_prox_mat.shape[1]
+        self.T = sat_prox_mat.shape[2]
         
         self.init_assignment = init_assignment
         self.curr_assignment = init_assignment
         self.lambda_ = lambda_
+
+        #Adjust the graph to account for synthetic agents
+        if graphs is None:
+            graphs = [nx.complete_graph(self.total_n) for _ in range(self.T)]
+        else:
+            if graphs[0].number_of_nodes() == self.total_n:
+                self.graphs = graphs
+            #add connections to graph to account for synthetic agents if not already done
+            else:
+                for _ in range(1, tasks_per_agent): #only add for non-original tasks
+                    for k in range(self.T):
+                        grph = graphs[k]
+                        for real_sat_num in range(self.n):
+                            synthetic_sat_num = grph.number_of_nodes()
+                            grph.add_node(synthetic_sat_num)
+                            grph.add_edge(real_sat_num, synthetic_sat_num)
+                            for neigh in grph.neighbors(real_sat_num):
+                                grph.add_edge(neigh, synthetic_sat_num)
 
         self.k = 0
 
@@ -62,7 +96,7 @@ class MultiTaskAssignEnv(object):
         self.k += 1
         self.curr_assignment = assignment
 
-        return self.get_state(), value, self.k>=self.sat_prox_mat.shape[2]
+        return self.get_state(), value, self.k>=self.T
 
     def reset(self):
         self.curr_assignment = self.init_assignment
