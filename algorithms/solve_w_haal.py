@@ -68,9 +68,6 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
     Chooses the best time interval sequence from a list of time interval sequences,
     and return the corresponding assignment.
     """
-    n = prox_mat_window.shape[0]
-    m = prox_mat_window.shape[1]
-
     best_value = -np.inf
     best_assignment = None
     best_time_interval = None
@@ -98,7 +95,7 @@ def choose_time_interval_sequence_centralized(time_interval_sequences, prev_assi
 
             #Generate an assignment using a centralized solution.
             central_assignments = solve_centralized(benefit_hat)
-            tis_assignment = convert_central_sol_to_assignment_mat(n, m, central_assignments)
+            tis_assignment = convert_central_sol_to_assignment_mat(benefit_hat.shape[0], benefit_hat.shape[1], central_assignments)
 
             #Calculate the value from this time interval sequence
             total_tis_value += (benefit_hat*tis_assignment).sum()

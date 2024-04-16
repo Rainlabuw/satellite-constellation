@@ -80,7 +80,7 @@ class MultiTaskAssignEnv(object):
         self.benefit_info = BenefitInfo()
         self.benefit_info.task_benefits = task_benefits
         self.benefit_info.tasks_per_agent = tasks_per_agent
-        self.benefit_info.pct_benefit_for_each_task = pct_benefit_for_each_further_task_per_agent
+        self.benefit_info.pct_benefit_for_each_further_task_per_agent = pct_benefit_for_each_further_task_per_agent
 
         self.benefit_fn = simple_handover_pen_multitask_benefit_fn
 
@@ -90,7 +90,7 @@ class MultiTaskAssignEnv(object):
         """
         Returns state, value, and whether the environment is done.
         """
-        benefit_hat = self.benefit_fn(self.sat_prox_mat[:,:,self.k], self.curr_assignment, self.lambda_)
+        benefit_hat = self.benefit_fn(self.sat_prox_mat[:,:,self.k], self.curr_assignment, self.lambda_, self.benefit_info)
         value = np.sum(benefit_hat * assignment)
 
         self.k += 1
@@ -129,7 +129,7 @@ def simple_handover_pen_multitask_benefit_fn(sat_prox_mat, prev_assign, lambda_,
     L = sat_prox_mat.shape[2]
 
     #Create a matrix which has <tasks_per_agent> entries in the benefit matrix for each agent.
-    padded_m = min(n*benefit_info.tasks_per_agent, m)
+    padded_m = max(n*benefit_info.tasks_per_agent, m)
     benefits_hat = np.zeros((n*benefit_info.tasks_per_agent,padded_m,L))
 
     #Generate a matrix which determines the benefits of each task at each timestep.
@@ -152,10 +152,11 @@ def simple_handover_pen_multitask_benefit_fn(sat_prox_mat, prev_assign, lambda_,
             T_trans = None
 
         if T_trans is None:
-            T_trans = np.ones((m,m)) - np.eye(m) #default to all transitions (except nontransitions) being penalized
+            T_trans = np.zeros((padded_m, padded_m))
+            T_trans[:m, :m] = np.ones((m,m)) - np.eye(m) #default to all transitions (except nontransitions) being penalized
 
         state_dep_scaling = prev_assign @ T_trans
-        benefits_hat[:,:m,0] -= lambda_*state_dep_scaling
+        benefits_hat[:,:,0] -= lambda_*state_dep_scaling
 
     if init_dim == 2: 
         benefits_hat = np.squeeze(benefits_hat, axis=2)

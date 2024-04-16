@@ -116,10 +116,171 @@ def get_constellation_proxs_and_graphs_coverage(num_planes, num_sats_per_plane,T
     benefits, graphs = const.propagate_orbits(T, proximity_func)
     return benefits, graphs
 
+def get_prox_mat_and_graphs_area(num_planes, num_sats_per_plane, T, lat_range, lon_range, inc=70*u.deg, fov=60, isl_dist=2500, dt=1*u.min):
+    """
+    Generate tasks only in locations that are green in an image
+    """
+    const = ConstellationSim(dt=dt, isl_dist=isl_dist)
+    earth = Earth
+
+    hexagons = generate_global_hexagons(2, 70)
+    hexagon_polygons, centroids, hexagons = hexagons_to_geometries(hexagons)
+
+    centroid_xs = [c.x for c in centroids]
+    centroid_ys = [c.y for c in centroids]
+
+    #Add tasks at centroid of all hexagons
+    hex_to_task_mapping = {}
+    for lon, lat, hex in zip(centroid_xs, centroid_ys, hexagons):
+        if lon < lon_range[1] and lon > lon_range[0] and lat < lat_range[1] and lat > lat_range[0]:
+            task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
+            
+            task_benefit = np.random.uniform(1, 2, size=T)
+            task = Task(task_loc, task_benefit)
+            const.add_task(task)
+
+            hex_to_task_mapping[hex] = len(const.tasks)-1
+
+    altitude=550
+    a = earth.R.to(u.km) + altitude*u.km
+    ecc = 0*u.one
+    argp = 0*u.deg
+
+    #BUILD CONSTELLATION OF SATELLITES
+    for plane_num in range(num_planes):
+        raan = plane_num*360/num_planes*u.deg
+        for sat_num in range(num_sats_per_plane):
+            ta = sat_num*360/num_sats_per_plane*u.deg
+            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num, fov=fov)
+            const.add_sat(sat)
+
+    #generate satellite coverage matrix with all satellites, even those far away from the area
+    full_sat_prox_matrix, graphs = const.propagate_orbits(T, calc_fov_based_proximities)
+
+    #Remove satellites which never cover any tasks in the entire T window
+    truncated_sat_prox_matrix = np.zeros_like(full_sat_prox_matrix)
+    old_to_new_sat_mapping = {}
+    active_sats = []
+    for i in range(const.n):
+        total_sat_scaling = np.sum(full_sat_prox_matrix[i,:,:])
+        if total_sat_scaling > 0: #it has nonzero scaling on at least one task at one timestep
+            curr_sat = const.sats[i]
+            curr_sat.id = len(active_sats)
+
+            truncated_sat_prox_matrix[curr_sat.id,:,:] = full_sat_prox_matrix[i,:,:]
+
+            old_to_new_sat_mapping[i] = curr_sat.id
+            active_sats.append(curr_sat)
+    
+    const.sats = active_sats
+    truncated_sat_prox_matrix = truncated_sat_prox_matrix[:len(const.sats),:,:] #truncate unused satellites
+    
+    #update graphs to reflect new satellite numbering after removing useless sats
+    for k in range(T):
+        nodes_to_remove = [n for n in graphs[k].nodes() if n not in old_to_new_sat_mapping.keys()]
+        graphs[k].remove_nodes_from(nodes_to_remove)
+        graphs[k] = nx.relabel_nodes(graphs[k], old_to_new_sat_mapping)
+
+    print(f"Num tasks: {len(const.tasks)}")
+    print("\nNum active sats", len(const.sats))
+    return truncated_sat_prox_matrix, graphs, hex_to_task_mapping, const
+
+def get_prox_mat_and_graphs_soil_moisture(num_planes, num_sats_per_plane, T, lat_range, lon_range, inc=70*u.deg, fov=60, isl_dist=2500, dt=1*u.min):
+    """
+    Generate tasks only in locations that are green in an image
+    """
+    const = ConstellationSim(dt=dt, isl_dist=isl_dist)
+    earth = Earth
+
+    #~~~~~~~~~~~~~~~Get tasks only over land:~~~~~~~~~~~~~~~~~~~~~~
+    earth_image = mpimg.imread('common/scaled_down_highres_earth.jpg')
+
+    # Plotting
+    fig, ax = plt.subplots(1, 1, figsize=(15, 10))
+
+    # Display the Earth image
+    ax.imshow(earth_image, extent=[-180, 180, -90, 90], aspect='auto')
+
+    hexagons = generate_global_hexagons(2, 70)
+    hexagon_polygons, centroids, hexagons = hexagons_to_geometries(hexagons)
+
+    centroid_xs = [c.x for c in centroids]
+    centroid_ys = [c.y for c in centroids]
+    ground_centroid_xs = []
+    ground_centroid_ys = []
+    ground_hexagons = []
+
+    for (centroid_x, centroid_y, hexagon) in zip(centroid_xs, centroid_ys, hexagons):
+        #if pixel in earth_image at centroid_x, centroid_y is not blue, add to the list of hexagons corresponding to ground
+        if centroid_x < lon_range[1] and centroid_x > lon_range[0] and centroid_y < lat_range[1] and centroid_y > lat_range[0]:
+            classic_blue = np.array([11, 10, 50])
+            curr_color = np.array(earth_image[int((-centroid_y+90)/180*earth_image.shape[0]), int((centroid_x+180)/360*earth_image.shape[1]), :])
+            if np.linalg.norm(classic_blue-curr_color) > 5:
+                ground_centroid_xs.append(centroid_x)
+                ground_centroid_ys.append(centroid_y)
+                ground_hexagons.append(hexagon)
+
+    #Add tasks at centroid of all hexagons
+    hex_to_task_mapping = {}
+    for lon, lat, hex in zip(ground_centroid_xs, ground_centroid_ys, ground_hexagons):
+        task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
+        
+        task_benefit = np.random.uniform(1, 2, size=T)
+        task = Task(task_loc, task_benefit)
+        const.add_task(task)
+
+        hex_to_task_mapping[hex] = len(const.tasks)-1
+
+    altitude=550
+    a = earth.R.to(u.km) + altitude*u.km
+    ecc = 0*u.one
+    argp = 0*u.deg
+
+    #BUILD CONSTELLATION OF SATELLITES
+    for plane_num in range(num_planes):
+        raan = plane_num*360/num_planes*u.deg
+        for sat_num in range(num_sats_per_plane):
+            ta = sat_num*360/num_sats_per_plane*u.deg
+            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num, fov=fov)
+            const.add_sat(sat)
+
+    #generate satellite coverage matrix with all satellites, even those far away from the area
+    full_sat_prox_matrix, graphs = const.propagate_orbits(T, calc_fov_based_proximities)
+
+    #Remove satellites which never cover any tasks in the entire T window
+    truncated_sat_prox_matrix = np.zeros_like(full_sat_prox_matrix)
+    old_to_new_sat_mapping = {}
+    active_sats = []
+    for i in range(const.n):
+        total_sat_scaling = np.sum(full_sat_prox_matrix[i,:,:])
+        if total_sat_scaling > 0: #it has nonzero scaling on at least one task at one timestep
+            curr_sat = const.sats[i]
+            curr_sat.id = len(active_sats)
+
+            truncated_sat_prox_matrix[curr_sat.id,:,:] = full_sat_prox_matrix[i,:,:]
+
+            old_to_new_sat_mapping[i] = curr_sat.id
+            active_sats.append(curr_sat)
+    
+    const.sats = active_sats
+    truncated_sat_prox_matrix = truncated_sat_prox_matrix[:len(const.sats),:,:] #truncate unused satellites
+    
+    #update graphs to reflect new satellite numbering after removing useless sats
+    for k in range(T):
+        nodes_to_remove = [n for n in graphs[k].nodes() if n not in old_to_new_sat_mapping.keys()]
+        graphs[k].remove_nodes_from(nodes_to_remove)
+        graphs[k] = nx.relabel_nodes(graphs[k], old_to_new_sat_mapping)
+
+    print(f"Num tasks: {len(const.tasks)}")
+    print("\nNum active sats", len(const.sats))
+    return truncated_sat_prox_matrix, graphs, hex_to_task_mapping, const
+
 def get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T, fov=60, isl_dist=2500, dt=30*u.second):
     """
     Generate sat coverage area and graphs for all satellites which can
-    see a given area over the course of some 
+    see a given area over the course of some .
+
+    Also add multiple synthetic agents for each real satellite to approximate beams.
     """
     const = ConstellationSim(dt=dt, isl_dist=isl_dist)
     earth = Earth
@@ -185,24 +346,6 @@ def get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T, fov=60
     const.sats = active_sats
     sats_to_track = [deepcopy(sat) for sat in active_sats]
     truncated_sat_prox_matrix = truncated_sat_prox_matrix[:len(const.sats),:,:] #truncate unused satellites
-
-    # #Pick a satellite that starts out of view to track as it traverses the area
-    # sat_to_track = None
-    # most_timesteps_in_view = 0
-    # for sat in const.sats:
-    #     if np.sum(truncated_sat_prox_matrix[sat.id,:,0]) == 0 and sat.id != 25 and sat.id != 26:
-    #         in_view_timesteps = 0
-    #         for k in range(T):
-    #             if np.sum(truncated_sat_prox_matrix[sat.id,:,k]) > 0:
-    #                 in_view_timesteps += 1
-            
-    #         if in_view_timesteps > most_timesteps_in_view:
-    #             most_timesteps_in_view = in_view_timesteps
-    #             sat_to_track = deepcopy(sat)
-
-    # for sat in const.sats:
-    #     if sat.id == 66:
-    #         sat_to_track = deepcopy(sat)
     
     #update graphs to reflect new satellite numbering after removing useless sats
     for k in range(T):
@@ -288,90 +431,3 @@ def get_benefit_matrix_and_graphs_multitask_area(lat_range, lon_range, T, fov=60
     
     return full_sat_prox_matrix_w_synthetic_sats, graphs, T_trans, A_eqiv, \
         hex_to_task_mapping, const, sats_to_track
-
-def get_prox_mat_and_graphs_soil_moisture(num_planes, num_sats_per_plane, T, lat_range, lon_range, inc=70*u.deg, fov=60, isl_dist=2500, dt=1*u.min):
-    const = ConstellationSim(dt=dt, isl_dist=isl_dist)
-    earth = Earth
-
-    #~~~~~~~~~~~~~~~Get tasks only over land:~~~~~~~~~~~~~~~~~~~~~~
-    earth_image = mpimg.imread('experiments/figures/scaled_down_highres_earth.jpg')
-
-    # Plotting
-    fig, ax = plt.subplots(1, 1, figsize=(15, 10))
-
-    # Display the Earth image
-    ax.imshow(earth_image, extent=[-180, 180, -90, 90], aspect='auto')
-
-    hexagons = generate_global_hexagons(2, 70)
-    hexagon_polygons, centroids, hexagons = hexagons_to_geometries(hexagons)
-
-    centroid_xs = [c.x for c in centroids]
-    centroid_ys = [c.y for c in centroids]
-    ground_centroid_xs = []
-    ground_centroid_ys = []
-    ground_hexagons = []
-
-    for (centroid_x, centroid_y, hexagon) in zip(centroid_xs, centroid_ys, hexagons):
-        #if pixel in earth_image at centroid_x, centroid_y is not blue, add to the list of hexagons corresponding to ground
-        if centroid_x < lon_range[1] and centroid_x > lon_range[0] and centroid_y < lat_range[1] and centroid_y > lat_range[0]:
-            classic_blue = np.array([11, 10, 50])
-            curr_color = np.array(earth_image[int((-centroid_y+90)/180*earth_image.shape[0]), int((centroid_x+180)/360*earth_image.shape[1]), :])
-            if np.linalg.norm(classic_blue-curr_color) > 5:
-                ground_centroid_xs.append(centroid_x)
-                ground_centroid_ys.append(centroid_y)
-                ground_hexagons.append(hexagon)
-
-    #Add tasks at centroid of all hexagons
-    hex_to_task_mapping = {}
-    for lon, lat, hex in zip(ground_centroid_xs, ground_centroid_ys, ground_hexagons):
-        task_loc = SpheroidLocation(lat*u.deg, lon*u.deg, 0*u.m, earth)
-        
-        task_benefit = np.random.uniform(1, 2, size=T)
-        task = Task(task_loc, task_benefit)
-        const.add_task(task)
-
-        hex_to_task_mapping[hex] = len(const.tasks)-1
-
-    altitude=550
-    a = earth.R.to(u.km) + altitude*u.km
-    ecc = 0*u.one
-    argp = 0*u.deg
-
-    #BUILD CONSTELLATION OF SATELLITES
-    for plane_num in range(num_planes):
-        raan = plane_num*360/num_planes*u.deg
-        for sat_num in range(num_sats_per_plane):
-            ta = sat_num*360/num_sats_per_plane*u.deg
-            sat = Satellite(Orbit.from_classical(earth, a, ecc, inc, raan, argp, ta), [], [], plane_id=plane_num, fov=fov)
-            const.add_sat(sat)
-
-    #generate satellite coverage matrix with all satellites, even those far away from the area
-    full_sat_prox_matrix, graphs = const.propagate_orbits(T, calc_fov_based_proximities)
-
-    #Remove satellites which never cover any tasks in the entire T window
-    truncated_sat_prox_matrix = np.zeros_like(full_sat_prox_matrix)
-    old_to_new_sat_mapping = {}
-    active_sats = []
-    for i in range(const.n):
-        total_sat_scaling = np.sum(full_sat_prox_matrix[i,:,:])
-        if total_sat_scaling > 0: #it has nonzero scaling on at least one task at one timestep
-            curr_sat = const.sats[i]
-            curr_sat.id = len(active_sats)
-
-            truncated_sat_prox_matrix[curr_sat.id,:,:] = full_sat_prox_matrix[i,:,:]
-
-            old_to_new_sat_mapping[i] = curr_sat.id
-            active_sats.append(curr_sat)
-    
-    const.sats = active_sats
-    truncated_sat_prox_matrix = truncated_sat_prox_matrix[:len(const.sats),:,:] #truncate unused satellites
-    
-    #update graphs to reflect new satellite numbering after removing useless sats
-    for k in range(T):
-        nodes_to_remove = [n for n in graphs[k].nodes() if n not in old_to_new_sat_mapping.keys()]
-        graphs[k].remove_nodes_from(nodes_to_remove)
-        graphs[k] = nx.relabel_nodes(graphs[k], old_to_new_sat_mapping)
-
-    print(f"Num tasks: {len(const.tasks)}")
-    print("\nNum active sats", len(const.sats))
-    return truncated_sat_prox_matrix, graphs, hex_to_task_mapping, const
