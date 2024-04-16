@@ -18,8 +18,8 @@ def solve_w_efficient_haal(env, L, distributed=False, parallel=None, verbose=Fal
     m = env.sat_prox_mat.shape[1]
     T = env.sat_prox_mat.shape[2]
 
-    if graphs is None and distributed:
-        graphs = [nx.complete_graph(n) for i in range(T)]
+    if env.graphs is None and distributed:
+        env.graphs = [nx.complete_graph(n) for i in range(T)]
     
     total_iterations = 0 if distributed else None
     total_value = 0
@@ -37,9 +37,9 @@ def solve_w_efficient_haal(env, L, distributed=False, parallel=None, verbose=Fal
         all_time_interval_sequences = build_time_interval_sequences(all_time_intervals, len_window)
 
         if distributed:
-            if not nx.is_connected(graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
+            if not nx.is_connected(env.graphs[curr_tstep]): print("WARNING: GRAPH NOT CONNECTED")
             haal_d_auction = HAAL_D_Efficient_Auction(prox_mat_window, env.curr_assignment, all_time_intervals, all_time_interval_sequences, 
-                                                     eps=eps, graph=graphs[curr_tstep], lambda_=env.lambda_, 
+                                                     eps=eps, graph=env.graphs[curr_tstep], lambda_=env.lambda_, 
                                                      benefit_fn=env.benefit_fn, benefit_info=env.benefit_info)
             haal_d_auction.run_auction()
             chosen_assignment = convert_agents_to_assignment_matrix(haal_d_auction.agents)

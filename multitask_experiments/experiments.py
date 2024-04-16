@@ -38,10 +38,10 @@ def init_exp():
 
     print(sat_prox_matrix.shape)
 
-    env = MultiTaskAssignEnv(sat_prox_matrix, None, lambda_, 5, 0.9)
+    env = MultiTaskAssignEnv(sat_prox_matrix, None, lambda_, 5, 0.9, graphs=graphs)
     senv = SimpleAssignEnv(sat_prox_matrix, None, lambda_)
 
-    chosen_assignments, total_value = solve_w_efficient_haal(env, 3)
+    chosen_assignments, total_value = solve_w_efficient_haal(env, 3, distributed=True)
     print(total_value)
 
     env.reset()

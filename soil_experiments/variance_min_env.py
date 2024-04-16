@@ -26,7 +26,7 @@ class VarianceMinEnv(object):
     lambda handover penalty, a benefit function based on the variance of the task.
     """
     def __init__(self, sat_prox_mat, init_assignment, lambda_,
-                 init_task_vars=None, var_add=None, base_sensor_var=0.1):
+                 init_task_vars=None, var_add=None, base_sensor_var=0.1, graphs=None):
         #Pad benefit matrix to ensure that the number of tasks is at least as large as the number of agents
         self.unpadded_m = sat_prox_mat.shape[1]
         if sat_prox_mat.shape[1] < sat_prox_mat.shape[0]:
@@ -44,6 +44,7 @@ class VarianceMinEnv(object):
         self.lambda_ = lambda_
 
         self.k = 0
+        self.graphs = graphs
 
         #Build benefit_info
         self.benefit_info = BenefitInfo()
