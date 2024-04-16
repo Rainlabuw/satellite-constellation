@@ -16,7 +16,7 @@ import h3
 from common.methods import *
 from common.plotting_utils import generate_global_hexagons, hexagons_to_geometries
 
-def get_constellation_proxs_and_graphs_random_tasks(num_planes, num_sats_per_plane, m,T,proximity_func=calc_fov_based_proximities, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
+def get_prox_mat_and_graphs_random_tasks(num_planes, num_sats_per_plane, m,T,proximity_func=calc_fov_based_proximities, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
     Generate benefit matrix of size (num_planes*sats_per_plane) x m x T
     from a constellation of satellites, as well as
@@ -71,7 +71,7 @@ def generate_smooth_coverage_hexagons(lat_range, lon_range, res=1):
         
     return list(hexagons) #turn into a list so that you can easily index it later
 
-def get_constellation_proxs_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc,proximity_func=calc_fov_based_proximities, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
+def get_prox_mat_and_graphs_coverage(num_planes, num_sats_per_plane,T,inc,proximity_func=calc_fov_based_proximities, altitude=550, fov=60, dt=1*u.min, isl_dist=None):
     """
     Generate benefit matrix of with (num_planes*sats_per_plane)
     satellites covering the entire surface of the earth, with tasks

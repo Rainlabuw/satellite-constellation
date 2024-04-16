@@ -27,7 +27,7 @@ from multitask_experiments.multi_task_scenario import calc_multiassign_benefit_f
 from haal_experiments.simple_assign_env import SimpleAssignEnv
 
 from constellation_sim.ConstellationSim import ConstellationSim
-from constellation_sim.constellation_generators import get_constellation_proxs_and_graphs_coverage, get_constellation_proxs_and_graphs_random_tasks
+from constellation_sim.constellation_generators import get_prox_mat_and_graphs_coverage, get_prox_mat_and_graphs_random_tasks
 from constellation_sim.Satellite import Satellite
 from constellation_sim.Task import Task
 
@@ -178,8 +178,8 @@ def realistic_orbital_simulation():
         num_planes = 36
         num_sats_per_plane = 18
         if n != num_planes*num_sats_per_plane: raise Exception("Make sure n = num planes * num sats per plane")
-        # benefits, graphs = get_constellation_proxs_and_graphs_random_tasks(num_planes,num_sats_per_plane,m,T, benefit_func=calc_distance_based_proximities)
-        benefits, graphs = get_constellation_proxs_and_graphs_coverage(num_planes,num_sats_per_plane,T,70,benefit_func=calc_distance_based_proximities)
+        # benefits, graphs = get_prox_mat_and_graphs_random_tasks(num_planes,num_sats_per_plane,m,T, benefit_func=calc_distance_based_proximities)
+        benefits, graphs = get_prox_mat_and_graphs_coverage(num_planes,num_sats_per_plane,T,70,benefit_func=calc_distance_based_proximities)
 
         #Ensure all graphs are connected
         for i, graph in enumerate(graphs):
@@ -264,7 +264,7 @@ def epsilon_effect():
 
     num_avgs = 1
     for _ in tqdm(range(num_avgs)):
-        benefits, graphs = get_constellation_proxs_and_graphs_random_tasks(10,5,m,T)
+        benefits, graphs = get_prox_mat_and_graphs_random_tasks(10,5,m,T)
 
         #Distributed
         print(f"Done generating benefits, solving distributed 0.1...")
@@ -459,9 +459,9 @@ def tasking_history_plot():
     T = 20
     lambda_ = 0.75
 
-    # benefits, graphs = get_constellation_proxs_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_based_proximities)
+    # benefits, graphs = get_prox_mat_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_based_proximities)
 
-    # benefits, graphs = get_constellation_proxs_and_graphs_coverage(num_planes,num_sats_per_plane,T,5, altitude=altitude, benefit_func=calc_fov_based_proximities)
+    # benefits, graphs = get_prox_mat_and_graphs_coverage(num_planes,num_sats_per_plane,T,5, altitude=altitude, benefit_func=calc_fov_based_proximities)
 
     # with open('bens.pkl', 'wb') as f:
     #     pickle.dump(benefits, f)
@@ -673,7 +673,7 @@ def cbba_testing():
 def connectivity_testing():
     # def f(isl_dist, nm):
     #     T = 93
-    #     _, graphs = get_constellation_proxs_and_graphs_random_tasks(nm, nm, 1, T, isl_dist=isl_dist)
+    #     _, graphs = get_prox_mat_and_graphs_random_tasks(nm, nm, 1, T, isl_dist=isl_dist)
 
     #     pct_connected = sum([nx.is_connected(graph) for graph in graphs])/T
     #     return pct_connected
@@ -689,7 +689,7 @@ def connectivity_testing():
 
     # plt.show()
 
-    _, graphs = get_constellation_proxs_and_graphs_random_tasks(10, 10, 1, 93, isl_dist=4000)
+    _, graphs = get_prox_mat_and_graphs_random_tasks(10, 10, 1, 93, isl_dist=4000)
     pct_connected = sum([nx.is_connected(graph) for graph in graphs])/93
     print("\n",pct_connected)
 
@@ -984,7 +984,7 @@ def test_accelerated():
     m = 100
     n = 100
 
-    benefits, _ = get_constellation_proxs_and_graphs_random_tasks(num_planes, num_sats, m, 93)
+    benefits, _ = get_prox_mat_and_graphs_random_tasks(num_planes, num_sats, m, 93)
 
     st = time.time()
     _, val, _ = solve_w_haal(benefits, None, 0.5, 6)
@@ -1270,7 +1270,7 @@ def paper_experiment1():
     
     lambda_ = 0.5
 
-    # benefits, graphs = get_constellation_proxs_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_based_proximities, fov=fov, isl_dist=2500)
+    # benefits, graphs = get_prox_mat_and_graphs_random_tasks(num_planes, num_sats_per_plane, m, T, altitude=altitude, benefit_func=calc_fov_based_proximities, fov=fov, isl_dist=2500)
 
     # with open("experiments/haal_experiment1/paper_exp1_bens.pkl", 'wb') as f:
     #     pickle.dump(benefits,f)

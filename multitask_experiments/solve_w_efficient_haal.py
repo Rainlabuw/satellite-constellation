@@ -19,7 +19,7 @@ def solve_w_efficient_haal(env, L, distributed=False, parallel=None, verbose=Fal
     T = env.sat_prox_mat.shape[2]
 
     if env.graphs is None and distributed:
-        env.graphs = [nx.complete_graph(n) for i in range(T)]
+        env.graphs = [nx.complete_graph(n) for _ in range(T)]
     
     total_iterations = 0 if distributed else None
     total_value = 0
@@ -120,7 +120,7 @@ class HAAL_D_Efficient_Auction(object):
             self.update_price_bid_comm_packets()
 
             #Have agents within each satellite coordinate on prices
-            #TODO
+            self.intra_satellite_price_coordination()
 
             #Have each agent calculate it's prices, bids, and values
             #based on the communication packet it currently has
@@ -198,3 +198,10 @@ class HAAL_D_Efficient_Auction(object):
                 value_packets[tis] = value_packet
 
             agent.value_comm_packets = value_packets
+
+    def intra_satellite_price_coordination(self):
+        """
+        Have agents within each satellite coordinate on prices
+        """
+        for agent in self.agents:
+            agent.intra_satellite_price_coordination()

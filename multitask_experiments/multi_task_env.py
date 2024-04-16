@@ -58,7 +58,7 @@ class MultiTaskAssignEnv(object):
 
         #Adjust the graph to account for synthetic agents
         if graphs is None:
-            graphs = [nx.complete_graph(self.total_n) for _ in range(self.T)]
+            self.graphs = [nx.complete_graph(self.total_n) for _ in range(self.T)]
         else:
             if graphs[0].number_of_nodes() == self.total_n:
                 self.graphs = graphs
@@ -73,6 +73,7 @@ class MultiTaskAssignEnv(object):
                             grph.add_edge(real_sat_num, synthetic_sat_num)
                             for neigh in grph.neighbors(real_sat_num):
                                 grph.add_edge(neigh, synthetic_sat_num)
+                self.graphs = graphs
 
         self.k = 0
 

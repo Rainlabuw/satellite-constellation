@@ -19,7 +19,7 @@ def solve_w_haal(env, L, distributed=False, parallel=None, verbose=False,
     T = env.sat_prox_mat.shape[2]
 
     if env.graphs is None and distributed:
-        env.graphs = [nx.complete_graph(n) for i in range(T)]
+        env.graphs = [nx.complete_graph(n) for _ in range(T)]
     
     total_iterations = 0 if distributed else None
     total_value = 0
