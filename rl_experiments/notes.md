@@ -67,3 +67,12 @@ With regards to prices, as auctions get bigger it seems that prices being initia
 i.e. at auctions of size 10 x 10, there is a minor speedup, but at 20 x 20 if prices are initialized with noise N(0, 0.01) while prices are nominally around 0.1, then there is a 2x speedup. However, if the noise on the prices becomes large, then you can potentially hurt convergence.
 
 The other element of this is benefit. When n=m, this price initialization occurs without any penalty on the benefit of the auction. However, when n < m, then the benefit is significantly reduced because it will potentially overlook some tasks which have been intialized to overly high prices. This is, I believe, due to the error in the Zavlanos paper.
+
+#### 4/19/24
+Working again on RL in earnest. Some theoretical results seem to indicate that in a general setting there is no way to design an auction which is equivalent to the constellation-wide optimal policy. In absence of this, though, I think I'm just going to try it anyway.
+
+In previous attempts, I tried to train a pretrain a value policy to use as bids, but I determined that this does not necessarily result in the optimal policy. Instead, I think the smartest thing to do is just to go at it in a really naive way at first.
+
+Compare:
+ - directly learning what actions to complete
+ - learning bids

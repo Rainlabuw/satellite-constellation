@@ -268,8 +268,7 @@ def generate_benefits_over_time(n, m, T, width_min, width_max, scale_min=0.25, s
 
                 #how high is the benefit curve
                 benefit_scale = np.random.uniform(scale_min, scale_max)
-                if i == 0 and j == 0:
-                    print(f"benefit_scale: {benefit_scale}, time_center: {time_center}, time_spread: {time_spread}")    
+                  
                 #iterate from time zero to t_final with T steps in between
                 for t in range(T):
                     #calculate the benefit at time t

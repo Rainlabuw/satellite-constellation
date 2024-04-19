@@ -33,7 +33,7 @@ def get_local_and_neighboring_benefits(benefits, i, M):
 
     return top_local_tasks, th.from_numpy(local_benefits).float(), th.from_numpy(neighboring_benefits).float(), th.from_numpy(global_benefits).float()
 
-def solve_randomly(benefits, init_assign, lambda_, benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
+def solve_randomly(benefits, init_assign, lambda_, benefit_info=None):
     """
     Solves the assignment problem with a random assignment.
     """

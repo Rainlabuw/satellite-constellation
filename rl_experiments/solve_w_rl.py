@@ -1,11 +1,10 @@
 from common.methods import *
 
-from rl_constellation.rl_utils import get_local_and_neighboring_benefits
+from rl_experiments.rl_utils import get_local_and_neighboring_benefits
 
 from algorithms.solve_w_haal import choose_time_interval_sequence_centralized
 
-def solve_w_rl(benefits, init_assign, lambda_, policy_network, M, L, verbose=False,
-               benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None):
+def solve_w_rl(benefits, init_assign, lambda_, policy_network, M, L, verbose=False, benefit_info=None):
     n = benefits.shape[0]
     m = benefits.shape[1]
     T = benefits.shape[2]

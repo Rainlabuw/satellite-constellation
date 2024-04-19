@@ -2,7 +2,6 @@
 Master file of all experiments for RL satellite constellation.
 """
 import pickle
-import torch
 import time
 
 from common.methods import *
@@ -10,10 +9,10 @@ from common.methods import *
 from algorithms.solve_w_haal import solve_w_haal
 from algorithms.solve_wout_handover import solve_wout_handover
 
-from rl_constellation.data_generation import init_random_constellation
-from rl_constellation.networks import PolicyNetwork
-from rl_constellation.solve_w_rl import solve_w_rl
-from rl_constellation.rl_utils import solve_randomly
+from rl_experiments.data_generation import init_random_constellation
+from rl_experiments.networks import PolicyNetwork
+from rl_experiments.solve_w_rl import solve_w_rl
+from rl_experiments.rl_utils import solve_randomly
 
 def test_rl_policy():
     """

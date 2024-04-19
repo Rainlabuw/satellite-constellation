@@ -1,6 +1,6 @@
 from common.methods import *
 
-from rl_constellation.solve_w_rl import build_auction_benefits_from_rl_policy
+from rl_experiments.solve_w_rl import build_auction_benefits_from_rl_policy
 
 class ArtificalConstellationEnv(object):
     def __init__(self, n, m, T, lambda_, benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None) -> None:

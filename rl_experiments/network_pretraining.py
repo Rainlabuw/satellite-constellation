@@ -8,8 +8,8 @@ import time
 
 from common.methods import *
 
-from rl_constellation.rl_utils import get_local_and_neighboring_benefits
-from rl_constellation.networks import ValueNetwork, PolicyNetwork
+from rl_experiments.rl_utils import get_local_and_neighboring_benefits
+from rl_experiments.networks import ValueNetwork, PolicyNetwork
 
 from algorithms.solve_w_haal import solve_w_haal
 
@@ -18,7 +18,7 @@ class DynamicDataset(Dataset):
     Takes a list of benefits and assignments and generates a dataset of training data for the value and policy networks.
     """
     def __init__(self, benefits_list, assignments_list, M, L, L_max, lambda_=0.5, gamma=0.9, 
-                 benefit_fn=generic_handover_pen_benefit_fn, benefit_info=None, calc_policy_outputs=True, calc_value_outputs=True):
+                benefit_info=None, calc_policy_outputs=True, calc_value_outputs=True):
         self.benefits_list = benefits_list
         self.assignments_list = assignments_list
         self.M = M
@@ -28,7 +28,6 @@ class DynamicDataset(Dataset):
         self.lambda_ = lambda_
         self.gamma = gamma
 
-        self.benefit_fn = benefit_fn
         self.benefit_info = benefit_info
 
         self.calc_policy_outputs = calc_policy_outputs
