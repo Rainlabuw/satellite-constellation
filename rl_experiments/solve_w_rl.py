@@ -4,28 +4,26 @@ from rl_experiments.rl_utils import get_local_and_neighboring_benefits
 
 from algorithms.solve_w_haal import choose_time_interval_sequence_centralized
 
-def solve_w_rl(benefits, init_assign, lambda_, policy_network, M, L, verbose=False, benefit_info=None):
-    n = benefits.shape[0]
-    m = benefits.shape[1]
-    T = benefits.shape[2]
+def solve_w_rl(env, policy_network, M, L, verbose=False):
+    n = env.sat_prox_mat.shape[0]
+    m = env.sat_prox_mat.shape[1]
+    T = env.sat_prox_mat.shape[2]
 
+    done = False
+    total_value = 0
     chosen_assignments = []
-    for k in range(T):
-        if verbose: print(f"Solving with RL, {k}/{T}",end='\r')
-
-        #Build benefit matrix window
-        tsteps_remaining = min(L, T-k)
-        benefit_mat_window = np.zeros((n, m, L))
-        benefit_mat_window[:,:,:tsteps_remaining] = benefits[:,:,k:k+tsteps_remaining]
+    while not done:
+        if verbose: print(f"Solving with RL, {env.k}/{T}",end='\r')
+        tstep_end = min(env.k+L, T)
+        prox_mat_window = np.zeros((n,m,L)) #make sure the prox mat is always length L
+        prox_mat_window[:,:,:min(L, T-env.k)] = env.sat_prox_mat[:,:,env.k:tstep_end]
 
         #adjust benefit matrix based on handover
-        adj_benefit_mat_window = np.copy(benefit_mat_window)
-        if k > 0:
-            adj_benefit_mat_window[:,:,0] = benefit_fn(adj_benefit_mat_window[:,:,0], chosen_assignments[-1], lambda_, benefit_info)
-        elif init_assign is not None:
-            adj_benefit_mat_window[:,:,0] = benefit_fn(adj_benefit_mat_window[:,:,0], init_assign, lambda_, benefit_info)
-        else: #if it's the first time step and no initial assignment is given, just leave it alone
-            pass
+        adj_benefit_mat_window = np.copy(prox_mat_window)
+        if env.k > 0:
+            adj_benefit_mat_window = env.benefit_fn(prox_mat_window, chosen_assignments[-1], env.lambda_, env.benefit_info)
+        else:
+            adj_benefit_mat_window = env.benefit_fn(adj_benefit_mat_window, env.init_assignment, env.lambda_, env.benefit_info)
 
         auction_benefits = build_auction_benefits_from_rl_policy(policy_network, adj_benefit_mat_window, M, L)
 
@@ -34,8 +32,8 @@ def solve_w_rl(benefits, init_assign, lambda_, policy_network, M, L, verbose=Fal
 
         chosen_assignments.append(chosen_assignment)
 
-    total_value = calc_assign_seq_state_dependent_value(init_assign, chosen_assignments, benefits, lambda_, 
-                                                        benefit_fn=benefit_fn, benefit_info=benefit_info)
+        _, value, done = env.step(chosen_assignment)
+        total_value += value
     
     return chosen_assignments, total_value
 
